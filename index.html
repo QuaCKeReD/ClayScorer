@@ -10,7 +10,6 @@
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* Print Styling - Replicating CPSA Individual Scorecard Grid */
         @media print {
             .no-print { display: none !important; }
             body { 
@@ -119,13 +118,13 @@
                 <label class="text-[10px] font-black text-black uppercase flex items-center gap-1">
                     <i data-lucide="clipboard-list" size="10" class="text-black"></i> Squad / Event
                 </label>
-                <input type="text" id="event-type" placeholder="e.g. 100 ESP" class="w-full bg-slate-50 border-slate-200 rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-bold text-black" oninput="updateField('eventType', this.value)">
+                <input type="text" id="event-type" placeholder="e.g. 100 ESP" class="w-full bg-slate-50 border-none rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-bold text-black" oninput="updateField('eventType', this.value)">
             </div>
             <div class="space-y-1">
                 <label class="text-[10px] font-black text-black uppercase flex items-center gap-1">
                     <i data-lucide="layers" size="10" class="text-black"></i> Total Stands
                 </label>
-                <select id="stand-count-select" onchange="updateTotalStands(this.value)" class="w-full bg-slate-50 border-slate-200 rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-black text-black">
+                <select id="stand-count-select" onchange="updateTotalStands(this.value)" class="w-full bg-slate-50 border-none rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-black text-black">
                 </select>
             </div>
         </section>
@@ -155,7 +154,7 @@
                 <div class="flex justify-between items-center mb-2">
                     <div class="flex items-baseline gap-2">
                         <h2 id="active-stand-title" class="text-base font-black italic">Stand 1</h2>
-                        <span id="active-stand-bird-count" class="text-[9px] text-orange-400 font-black uppercase tracking-wider"></span>
+                        <span id="active-stand-bird-count" class="text-[9px] text-orange-400 font-bold uppercase tracking-wider"></span>
                     </div>
                     <div class="text-[9px] font-bold text-orange-400 uppercase italic">Rotation Active</div>
                 </div>
@@ -232,7 +231,7 @@
 
     <script>
         // --- State Management ---
-        const SAVE_KEY = 'cpsa_sporting_pro_v5';
+        const SAVE_KEY = 'cpsa_sporting_pro_v7_stable';
         let state = {
             groundName: "",
             sessionDate: new Date().toISOString().split('T')[0],
@@ -243,49 +242,66 @@
             activeStandIndex: 0
         };
 
+        // --- Core Persistence Functions ---
+        function saveSession() {
+            try {
+                localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+            } catch (e) {
+                console.error("Local storage save failed", e);
+            }
+        }
+
         function loadSession() {
             const saved = localStorage.getItem(SAVE_KEY);
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved);
-                    state = { ...state, ...parsed };
-                } catch (e) { console.error("Error loading save", e); }
+                    // Deep merge or replace
+                    state = Object.assign({}, state, parsed);
+                    return true;
+                } catch (e) {
+                    console.error("Local storage load failed", e);
+                }
             }
-            if (state.stands.length === 0) updateTotalStands(12, false);
+            return false;
         }
 
-        function saveSession() {
-            localStorage.setItem(SAVE_KEY, JSON.stringify(state));
-        }
-
-        function getOrdinal(n) {
-            let s = ["th", "st", "nd", "rd"], v = n % 100;
-            return n + (s[(v - 20) % 10] || s[v] || s[0]);
-        }
-
+        // --- Logic ---
         function updateTotalStands(count, shouldRender = true) {
             const newCount = parseInt(count);
             const currentCount = state.stands.length;
             if (newCount > currentCount) {
-                for (let i = currentCount + 1; i <= newCount; i++) state.stands.push({ id: i, targets: 8 });
+                for (let i = currentCount + 1; i <= newCount; i++) {
+                    state.stands.push({ id: i, targets: 8 });
+                }
             } else if (newCount < currentCount) {
                 state.stands = state.stands.slice(0, newCount);
                 if (state.activeStandIndex >= newCount) state.activeStandIndex = newCount - 1;
             }
-            if (shouldRender) { render(); saveSession(); }
+            if (shouldRender) { 
+                render(); 
+                saveSession(); 
+            }
         }
 
         function addShooter() {
             if (state.shooters.length >= 6) return;
-            state.shooters.push({ id: Date.now(), name: `Shooter ${state.shooters.length + 1}`, cpsaNo: "", class: "U" });
-            render(); saveSession();
+            state.shooters.push({ 
+                id: Date.now(), 
+                name: `Shooter ${state.shooters.length + 1}`,
+                cpsaNo: "",
+                class: "U"
+            });
+            render();
+            saveSession();
         }
 
         function removeShooter(id) {
             if (state.shooters.length <= 1) return;
             state.shooters = state.shooters.filter(s => s.id !== id);
             delete state.hits[id];
-            render(); saveSession();
+            render();
+            saveSession();
         }
 
         function updateShooter(id, field, value) {
@@ -307,7 +323,8 @@
             }
             const current = state.hits[shooterId][standId][targetIdx];
             state.hits[shooterId][standId][targetIdx] = (current === value) ? null : value;
-            render(); saveSession();
+            render();
+            saveSession();
         }
 
         function setTargetCount(count) {
@@ -318,51 +335,30 @@
                 if (state.hits[s.id][stand.id]) {
                     const curr = state.hits[s.id][stand.id];
                     state.hits[s.id][stand.id] = curr.length > count ? curr.slice(0, count) : [...curr, ...Array(count - curr.length).fill(null)];
-                } else { state.hits[s.id][stand.id] = Array(count).fill(null); }
+                } else {
+                    state.hits[s.id][stand.id] = Array(count).fill(null);
+                }
             });
-            render(); saveSession();
+            render();
+            saveSession();
         }
 
-        function navStand(dir) { state.activeStandIndex = Math.max(0, Math.min(state.stands.length - 1, state.activeStandIndex + dir)); render(); }
+        function navStand(dir) {
+            state.activeStandIndex = Math.max(0, Math.min(state.stands.length - 1, state.activeStandIndex + dir));
+            render();
+            saveSession();
+        }
 
-        function resetAll() { if (confirm("Clear all scorecard data?")) { localStorage.removeItem(SAVE_KEY); location.reload(); } }
+        function resetAll() {
+            if (confirm("Reset everything? All scores and squad data will be deleted.")) {
+                localStorage.removeItem(SAVE_KEY);
+                location.reload();
+            }
+        }
 
-        function exportToPDF() {
-            document.getElementById('p-ground').innerText = state.groundName || "N/A";
-            document.getElementById('p-date').innerText = state.sessionDate || "N/A";
-            document.getElementById('p-event').innerText = state.eventType || "N/A";
-
-            const grid = document.getElementById('print-grid');
-            grid.innerHTML = '';
-
-            let headerHtml = `<tr style="background:#f0f0f0">
-                <th style="width:100px; font-size:7pt">NAME</th>
-                <th style="width:30px; font-size:7pt">CL</th>
-                <th style="width:50px; font-size:7pt">CPSA</th>`;
-            state.stands.forEach(st => { headerHtml += `<th colspan="${st.targets}" class="stand-header">ST ${st.id}</th>`; });
-            headerHtml += `<th style="width:35px; font-size:7pt">TOT</th></tr>`;
-            grid.innerHTML += headerHtml;
-
-            state.shooters.forEach(s => {
-                let rowHtml = `<tr>
-                    <td class="shooter-cell"><strong>${s.name}</strong></td>
-                    <td style="font-size:7pt">${s.class}</td>
-                    <td style="font-size:7pt">${s.cpsaNo}</td>`;
-                
-                let grandTotal = 0;
-                state.stands.forEach(st => {
-                    const scores = (state.hits[s.id] && state.hits[s.id][st.id]) ? state.hits[s.id][st.id] : Array(st.targets).fill(null);
-                    scores.forEach(h => {
-                        let mark = '&nbsp;';
-                        if (h === true) { mark = '<span class="official-hit">/</span>'; grandTotal++; }
-                        if (h === false) mark = '<span class="official-miss">O</span>';
-                        rowHtml += `<td style="padding:0 !important"><div class="print-box">${mark}</div></td>`;
-                    });
-                });
-                rowHtml += `<td style="font-weight:bold; font-size:12pt">${grandTotal}</td></tr>`;
-                grid.innerHTML += rowHtml;
-            });
-            window.print();
+        function getOrdinal(n) {
+            let s = ["th", "st", "nd", "rd"], v = n % 100;
+            return n + (s[(v - 20) % 10] || s[v] || s[0]);
         }
 
         function getShooterGrandTotal(shooterId) {
@@ -375,15 +371,18 @@
             return grand;
         }
 
+        // --- Rendering ---
         function render() {
             const activeStand = state.stands[state.activeStandIndex];
             if (!activeStand) return;
 
-            document.getElementById('ground-name').value = state.groundName;
-            document.getElementById('shoot-date').value = state.sessionDate;
-            document.getElementById('event-type').value = state.eventType;
+            // Sync Header Inputs
+            document.getElementById('ground-name').value = state.groundName || "";
+            document.getElementById('shoot-date').value = state.sessionDate || "";
+            document.getElementById('event-type').value = state.eventType || "";
             document.getElementById('stand-count-select').value = state.stands.length;
             
+            // 1. Shooter Setup List
             const list = document.getElementById('shooters-list');
             list.innerHTML = '';
             state.shooters.forEach((s, idx) => {
@@ -391,25 +390,55 @@
                 div.className = "bg-white p-1 rounded-lg border border-slate-300 grid grid-cols-12 gap-1 items-center shadow-sm";
                 div.innerHTML = `
                     <div class="col-span-1 text-[7px] font-black text-black text-center">${idx + 1}</div>
-                    <div class="col-span-6"><input type="text" value="${s.name}" onchange="updateShooter(${s.id}, 'name', this.value)" class="w-full border-none px-1 py-0.5 text-[9px] font-black text-black" placeholder="Shooter Name"></div>
-                    <div class="col-span-4 flex gap-0.5"><input type="text" value="${s.cpsaNo}" onchange="updateShooter(${s.id}, 'cpsaNo', this.value)" class="w-full border border-slate-200 rounded px-0.5 py-0.5 text-[8px] font-bold text-black" placeholder="CPSA #"><select onchange="updateShooter(${s.id}, 'class', this.value)" class="border border-slate-200 rounded px-0.5 py-0.5 text-[8px] font-black text-black">${['AA', 'A', 'B', 'C', 'U'].map(c => `<option value="${c}" ${s.class === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
-                    <div class="col-span-1 text-right"><button onclick="removeShooter(${s.id})" class="text-slate-400 hover:text-red-600"><i data-lucide="x" size="10"></i></button></div>`;
+                    <div class="col-span-6">
+                        <input type="text" value="${s.name}" onchange="updateShooter(${s.id}, 'name', this.value)" 
+                            class="w-full border-none px-1 py-0.5 text-[9px] font-black text-black" placeholder="Shooter Name">
+                    </div>
+                    <div class="col-span-4 flex gap-0.5">
+                        <input type="text" value="${s.cpsaNo}" onchange="updateShooter(${s.id}, 'cpsaNo', this.value)" 
+                            class="w-full border border-slate-200 rounded px-0.5 py-0.5 text-[8px] font-bold text-black" placeholder="CPSA #">
+                        <select onchange="updateShooter(${s.id}, 'class', this.value)" class="border border-slate-200 rounded px-0.5 py-0.5 text-[8px] font-black text-black">
+                            ${['AA', 'A', 'B', 'C', 'U'].map(c => `<option value="${c}" ${s.class === c ? 'selected' : ''}>${c}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="col-span-1 text-right">
+                        <button onclick="removeShooter(${s.id})" class="text-slate-400 hover:text-red-600"><i data-lucide="x" size="10"></i></button>
+                    </div>
+                `;
                 list.appendChild(div);
             });
 
+            // 2. Stand Selector Buttons
             const selector = document.getElementById('stand-selector');
             selector.innerHTML = '';
             state.stands.forEach((s, idx) => {
                 const btn = document.createElement('button');
                 const active = state.activeStandIndex === idx;
-                btn.className = `flex-shrink-0 w-8 h-8 rounded-lg font-black text-[10px] border-2 transition-all ${active ? 'bg-orange-50 border-orange-50 text-white shadow-md' : 'bg-white border-slate-300 text-black'}`;
-                btn.innerText = s.id; btn.onclick = () => { state.activeStandIndex = idx; render(); };
+                btn.className = `flex-shrink-0 w-8 h-8 rounded-lg font-black text-[10px] border-2 transition-all ${
+                    active ? 'bg-orange-500 border-orange-500 text-white shadow-md' : 'bg-white border-slate-300 text-black'
+                }`;
+                btn.innerText = s.id;
+                btn.onclick = () => { state.activeStandIndex = idx; render(); saveSession(); };
                 selector.appendChild(btn);
             });
 
             document.getElementById('active-stand-bird-count').innerText = `${activeStand.targets} Birds`;
 
-            // Procedural Rotation Logic (based on squad entry order)
+            // Active Stand Bird Button Highlighting
+            [4, 6, 8, 10].forEach(count => {
+                const btn = document.getElementById(`btn-targets-${count}`);
+                if (btn) {
+                    if (activeStand.targets === count) {
+                        btn.classList.add('bg-orange-500', 'border-orange-500', 'text-white');
+                        btn.classList.remove('bg-slate-800', 'text-slate-300');
+                    } else {
+                        btn.classList.remove('bg-orange-500', 'border-orange-500', 'text-white');
+                        btn.classList.add('bg-slate-800', 'text-slate-300');
+                    }
+                }
+            });
+
+            // 3. Main Scoring Table (with fair procedural rotation)
             const n = state.shooters.length;
             const rotationOffset = state.activeStandIndex % n;
             const rotatedShooters = [];
@@ -422,6 +451,7 @@
                 const hitsCount = sScores.filter(h => h === true).length;
                 const tr = document.createElement('tr');
                 tr.className = "border-b border-slate-200";
+                
                 let pairHtml = '';
                 for(let p=0; p < activeStand.targets; p += 2) {
                     pairHtml += `<div class="pair-group">
@@ -444,17 +474,14 @@
                 scoringBody.appendChild(tr);
             });
 
-            // Summary Sorting Logic (Leaderboard Order)
-            const shooterPerformance = state.shooters.map(s => ({
-                ...s,
-                grandTotal: getShooterGrandTotal(s.id)
-            }));
+            // 4. Live Summary (Leaderboard Order)
+            const shooterPerformance = state.shooters.map(s => ({ ...s, grandTotal: getShooterGrandTotal(s.id) }));
             const sortedByWinning = [...shooterPerformance].sort((a, b) => b.grandTotal - a.grandTotal);
 
             const header = document.getElementById('summary-header');
-            header.innerHTML = '<th class="px-2 py-2 border-b text-black font-black w-16">STAND</th>';
+            header.innerHTML = '<th class="px-2 py-2 border-b text-black font-black w-16 text-left">STAND</th>';
             sortedByWinning.forEach(s => { 
-                header.innerHTML += `<th class="px-2 py-2 border-b text-center border-l border-slate-300 font-black"><div class="text-[8px] truncate max-w-[80px] mx-auto">${s.name}</div></th>`; 
+                header.innerHTML += `<th class="px-2 py-2 border-b text-center border-l border-slate-300 font-black"><div class="text-[8px] truncate max-w-[80px] mx-auto uppercase">${s.name}</div></th>`; 
             });
 
             const body = document.getElementById('summary-body');
@@ -470,7 +497,6 @@
                 tr.innerHTML = rowHtml; body.appendChild(tr);
             });
 
-            // Ranking Footer
             const sortedRawScores = sortedByWinning.map(s => s.grandTotal);
             const rankings = sortedByWinning.map(s => {
                 const rank = sortedRawScores.findIndex(score => score === s.grandTotal) + 1;
@@ -491,14 +517,53 @@
             lucide.createIcons();
         }
 
+        window.exportToPDF = function() {
+            document.getElementById('p-ground').innerText = state.groundName || "N/A";
+            document.getElementById('p-date').innerText = state.sessionDate || "N/A";
+            document.getElementById('p-event').innerText = state.eventType || "N/A";
+
+            const grid = document.getElementById('print-grid');
+            grid.innerHTML = '';
+
+            let headerHtml = `<tr style="background:#f0f0f0"><th style="width:140px; font-size:7pt">NAME</th>`;
+            state.stands.forEach(st => { headerHtml += `<th colspan="${st.targets}" class="stand-header">ST ${st.id}</th>`; });
+            headerHtml += `<th style="width:40px; font-size:7pt">TOTAL</th></tr>`;
+            grid.innerHTML += headerHtml;
+
+            const shooterPerformance = state.shooters.map(s => ({ ...s, grandTotal: getShooterGrandTotal(s.id) })).sort((a, b) => b.grandTotal - a.grandTotal);
+            shooterPerformance.forEach(s => {
+                let rowHtml = `<tr><td class="shooter-cell"><strong>${s.name}</strong></td>`;
+                let total = 0;
+                state.stands.forEach(st => {
+                    const scores = (state.hits[s.id] && state.hits[s.id][st.id]) ? state.hits[s.id][st.id] : Array(st.targets).fill(null);
+                    scores.forEach(h => {
+                        let mark = '&nbsp;';
+                        if (h === true) { mark = '<span class="official-hit">/</span>'; total++; }
+                        if (h === false) mark = '<span class="official-miss">O</span>';
+                        rowHtml += `<td style="padding:0 !important"><div class="print-box">${mark}</div></td>`;
+                    });
+                });
+                rowHtml += `<td style="font-weight:bold; font-size:12pt">${total}</td></tr>`;
+                grid.innerHTML += rowHtml;
+            });
+            window.print();
+        }
+
         window.onload = function() {
+            // Populate Stand Count Select
             const select = document.getElementById('stand-count-select');
             for(let i=1; i<=20; i++) {
                 const opt = document.createElement('option');
                 opt.value = i; opt.textContent = `${i} Stands`;
                 select.appendChild(opt);
             }
-            loadSession(); render();
+
+            // Persistence Chain: Load first, then initialize default if needed
+            const hasSavedData = loadSession();
+            if (!hasSavedData || state.stands.length === 0) {
+                updateTotalStands(12, false);
+            }
+            render();
         }
     </script>
 </body>
