@@ -37,6 +37,7 @@
                 text-align: center; 
                 vertical-align: middle !important; 
                 overflow: hidden;
+                height: 35px;
             }
             
             .print-header { 
@@ -48,8 +49,8 @@
                 font-size: 9pt;
             }
             
-            .official-hit { font-family: serif; font-weight: 900; font-size: 11pt; }
-            .official-miss { font-weight: 900; font-size: 10pt; }
+            .official-hit { font-family: serif; font-weight: 900; font-size: 11pt; line-height: 1; }
+            .official-miss { font-weight: 900; font-size: 10pt; line-height: 1; }
             
             .signature-section { 
                 margin-top: 10px; 
@@ -71,7 +72,7 @@
                 text-align: left; 
                 padding-left: 5px !important; 
                 vertical-align: middle !important;
-                white-space: normal !important; /* Allow wrapping for names */
+                white-space: normal !important; 
                 word-wrap: break-word;
             }
 
@@ -102,7 +103,8 @@
             padding: 4px; 
             text-align: center; 
             vertical-align: middle !important; 
-            min-height: 40px;
+            height: 50px; /* Taller rows for better mobile legibility */
+            line-height: normal;
         }
         
         .hit-bg { background-color: #16a34a; color: white; border-color: #15803d; }
@@ -280,7 +282,7 @@
             </div>
         </div>
 
-        <!-- PDF EXPORT VIEW (Black & White Traditional, WITH NOTES) -->
+        <!-- PDF EXPORT VIEW (WITH NOTES) -->
         <div class="hidden print-only" id="print-view">
             <div class="print-header">
                 <div><strong>GROUND:</strong> <span id="p-ground" style="text-decoration: underline"></span></div>
@@ -300,7 +302,7 @@
 
     <script>
         // --- State Management ---
-        const SAVE_KEY = 'cpsa_sporting_pro_v13_wrapping';
+        const SAVE_KEY = 'cpsa_sporting_pro_v14_alignment_fix';
         let state = {
             groundName: "",
             sessionDate: new Date().toISOString().split('T')[0],
@@ -424,10 +426,12 @@
             const grid = document.getElementById(targetId);
             grid.innerHTML = '';
             
-            const nameWidth = targetId === 'cap-grid' ? '200px' : '140px';
-            const fontSize = targetId === 'cap-grid' ? '10pt' : '7pt';
+            const isShare = targetId === 'cap-grid';
+            const nameWidth = isShare ? '200px' : '140px';
+            const fontSize = isShare ? '10pt' : '7pt';
+            const height = isShare ? '50px' : '35px';
 
-            let headerHtml = `<tr style="background:#f0f0f0"><th style="width:${nameWidth}; font-size:${fontSize}; border: 1pt solid black; vertical-align: middle;">NAME</th>`;
+            let headerHtml = `<tr style="background:#f0f0f0"><th style="width:${nameWidth}; font-size:${fontSize}; border: 1pt solid black; vertical-align: middle; height:${height}">NAME</th>`;
             state.stands.forEach(st => { 
                 headerHtml += `<th colspan="${st.targets}" style="font-size:${fontSize}; border: 1pt solid black; background:#f0f0f0; vertical-align: middle; white-space: nowrap;">ST ${st.id}</th>`; 
             });
@@ -436,7 +440,7 @@
 
             const shooterPerformance = state.shooters.map(s => ({ ...s, grandTotal: getShooterGrandTotal(s.id) })).sort((a, b) => b.grandTotal - a.grandTotal);
             shooterPerformance.forEach(s => {
-                let rowHtml = `<tr><td style="border: 1pt solid black; font-size: 10pt; text-align: left; padding: 5px; vertical-align: middle; white-space: normal; word-wrap: break-word;"><strong>${s.name}</strong></td>`;
+                let rowHtml = `<tr><td style="border: 1pt solid black; font-size: 10pt; text-align: left; padding: 5px; vertical-align: middle; height:${height}; white-space: normal; word-wrap: break-word;"><strong>${s.name}</strong></td>`;
                 let total = 0;
                 state.stands.forEach(st => {
                     const scores = (state.hits[s.id] && state.hits[s.id][st.id]) ? state.hits[s.id][st.id] : Array(st.targets).fill(null);
@@ -444,18 +448,19 @@
                         let mark = '&nbsp;';
                         let bg = 'transparent';
                         if (h === true) { 
-                            mark = `<span style="font-family: serif; font-weight: 900; font-size: 14pt; color: black;">/</span>`; 
+                            mark = `<span style="font-family: serif; font-weight: 900; font-size: 14pt; color: black; line-height: 1;">/</span>`; 
                             if (useColor) bg = '#4ade80';
                             total++; 
                         }
                         if (h === false) {
-                            mark = `<span style="font-weight: 900; font-size: 12pt; color: black;">O</span>`;
+                            mark = `<span style="font-weight: 900; font-size: 12pt; color: black; line-height: 1;">O</span>`;
                             if (useColor) bg = '#f87171';
                         }
-                        rowHtml += `<td style="border: 1pt solid black; padding:0 !important; width: 18px; background-color: ${bg}; vertical-align: middle; white-space: nowrap;"><div style="width:100%; display: flex; align-items: center; justify-content: center;">${mark}</div></td>`;
+                        // Vertical-align middle is critical here on the TD and the child DIV needs height:100%
+                        rowHtml += `<td style="border: 1pt solid black; padding:0 !important; width: 18px; background-color: ${bg}; vertical-align: middle; white-space: nowrap;"><div style="width:100%; height:100%; display: flex; align-items: center; justify-content: center; vertical-align: middle;">${mark}</div></td>`;
                     });
                 });
-                rowHtml += `<td style="border: 1pt solid black; font-weight:bold; font-size:16pt; text-align:center; background: #fafafa; vertical-align: middle; white-space: nowrap;">${total}</td></tr>`;
+                rowHtml += `<td style="border: 1pt solid black; font-weight:bold; font-size:16pt; text-align:center; background: #fafafa; vertical-align: middle; white-space: nowrap;"><div style="height:100%; display: flex; align-items: center; justify-content: center;">${total}</div></td></tr>`;
                 grid.innerHTML += rowHtml;
             });
         }
@@ -472,7 +477,7 @@
         window.shareAsImage = async function() {
             const btn = document.getElementById('share-btn');
             const originalContent = btn.innerHTML;
-            btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin w-4 h-4"></i> Syncing...';
+            btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin w-4 h-4"></i> Capturing...';
             lucide.createIcons();
 
             const container = document.getElementById('capture-container');
@@ -482,11 +487,17 @@
             generateGridHTML('cap-grid', true);
 
             try {
+                // html2canvas requires the container to be somewhat visible or at least have styles processed
                 const canvas = await html2canvas(container, {
                     scale: 3, 
                     backgroundColor: '#ffffff',
                     useCORS: true,
-                    logging: false
+                    logging: false,
+                    onclone: (clonedDoc) => {
+                        const clonedContainer = clonedDoc.getElementById('capture-container');
+                        clonedContainer.style.position = 'static';
+                        clonedContainer.style.left = '0';
+                    }
                 });
 
                 canvas.toBlob(async (blob) => {
@@ -499,8 +510,8 @@
                     if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
                         await navigator.share({
                             files: [file],
-                            title: 'Squad Leaderboard',
-                            text: `Live scores at ${state.groundName || 'the shoot'}`
+                            title: 'Squad Scorecard',
+                            text: `Final scores for ${state.groundName || 'the shoot'}`
                         });
                     } else {
                         const url = URL.createObjectURL(blob);
@@ -508,6 +519,12 @@
                         a.href = url;
                         a.download = `leaderboard-${state.groundName || 'shoot'}.png`;
                         a.click();
+                        // Minimal feedback
+                        const msg = document.createElement('div');
+                        msg.className = "fixed bottom-20 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-4 py-2 rounded-full text-xs font-bold z-50 animate-bounce shadow-2xl";
+                        msg.innerText = "Downloaded to gallery. Share manually.";
+                        document.body.appendChild(msg);
+                        setTimeout(() => msg.remove(), 3000);
                     }
                 });
             } catch (err) {
@@ -537,7 +554,7 @@
                     <div class="col-span-1 text-[7px] font-black text-black text-center">${idx + 1}</div>
                     <div class="col-span-6"><input type="text" value="${s.name}" onchange="updateShooter(${s.id}, 'name', this.value)" class="w-full border-none px-1 py-0.5 text-[9px] font-black text-black" placeholder="Shooter Name"></div>
                     <div class="col-span-4 flex gap-0.5"><input type="text" value="${s.cpsaNo}" onchange="updateShooter(${s.id}, 'cpsaNo', this.value)" class="w-full border border-slate-200 rounded px-0.5 py-0.5 text-[8px] font-bold text-black" placeholder="CPSA #"><select onchange="updateShooter(${s.id}, 'class', this.value)" class="border border-slate-200 rounded px-0.5 py-0.5 text-[8px] font-black text-black">${['AA', 'A', 'B', 'C', 'U'].map(c => `<option value="${c}" ${s.class === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
-                    <div class="col-span-1 text-right"><button onclick="removeShooter(${s.id})" class="text-slate-400 hover:text-red-500"><i data-lucide="x" size="10"></i></button></div>`;
+                    <div class="col-span-1 text-right"><button onclick="removeShooter(${s.id})" class="text-slate-400 hover:text-red-600"><i data-lucide="x" size="10"></i></button></div>`;
                 list.appendChild(div);
             });
 
@@ -546,7 +563,7 @@
             state.stands.forEach((s, idx) => {
                 const btn = document.createElement('button');
                 const active = state.activeStandIndex === idx;
-                btn.className = `flex-shrink-0 w-8 h-8 rounded-lg font-black text-[10px] border-2 transition-all ${active ? 'bg-orange-50 border-orange-50 text-white shadow-md' : 'bg-white border-slate-300 text-black'}`;
+                btn.className = `flex-shrink-0 w-8 h-8 rounded-lg font-black text-[10px] border-2 transition-all ${active ? 'bg-orange-500 border-orange-500 text-white shadow-md' : 'bg-white border-slate-300 text-black'}`;
                 btn.innerText = s.id; btn.onclick = () => { state.activeStandIndex = idx; render(); saveSession(); };
                 selector.appendChild(btn);
             });
