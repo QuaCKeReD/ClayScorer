@@ -35,7 +35,9 @@
                 padding: 1px !important; 
                 color: black !important; 
                 text-align: center; 
+                vertical-align: middle !important; /* Forces vertical centering */
                 overflow: hidden;
+                height: 25px;
             }
             
             .print-header { 
@@ -64,8 +66,8 @@
                 font-weight: bold; 
             }
             
-            .stand-header { font-size: 7pt !important; font-weight: bold; background: #f0f0f0 !important; -webkit-print-color-adjust: exact; }
-            .shooter-cell { font-size: 8pt !important; text-align: left; padding-left: 3px !important; }
+            .stand-header { font-size: 7pt !important; font-weight: bold; background: #f0f0f0 !important; -webkit-print-color-adjust: exact; vertical-align: middle !important; }
+            .shooter-cell { font-size: 8pt !important; text-align: left; padding-left: 3px !important; vertical-align: middle !important; }
 
             .print-notes {
                 border: 1pt solid black;
@@ -89,7 +91,13 @@
             font-family: "Courier New", Courier, monospace;
         }
         #capture-container table { width: 100%; border-collapse: collapse; border: 2pt solid black; table-layout: fixed; }
-        #capture-container th, #capture-container td { border: 1pt solid black; padding: 4px; text-align: center; }
+        #capture-container th, #capture-container td { 
+            border: 1pt solid black; 
+            padding: 4px; 
+            text-align: center; 
+            vertical-align: middle !important; /* Ensure middle alignment for image */
+            height: 35px;
+        }
         
         .hit-bg { background-color: #16a34a; color: white; border-color: #15803d; }
         .miss-bg { background-color: #ef4444; color: white; border-color: #b91c1c; }
@@ -251,7 +259,7 @@
             ></textarea>
         </section>
 
-        <!-- HIDDEN CONTAINER FOR IMAGE GENERATION (Landscape + Colors, NO NOTES) -->
+        <!-- HIDDEN CONTAINER FOR IMAGE GENERATION -->
         <div id="capture-container">
             <div style="border-bottom: 2pt solid black; padding: 10px 0; margin-bottom: 15px; display: flex; justify-content: space-between; font-size: 14pt;">
                 <div><strong>GROUND:</strong> <span id="cap-ground"></span></div>
@@ -266,7 +274,7 @@
             </div>
         </div>
 
-        <!-- PDF EXPORT VIEW (Black & White Traditional, WITH NOTES) -->
+        <!-- PDF EXPORT VIEW -->
         <div class="hidden print-only" id="print-view">
             <div class="print-header">
                 <div><strong>GROUND:</strong> <span id="p-ground" style="text-decoration: underline"></span></div>
@@ -286,7 +294,7 @@
 
     <script>
         // --- State Management ---
-        const SAVE_KEY = 'cpsa_sporting_pro_v9_share_colors';
+        const SAVE_KEY = 'cpsa_sporting_pro_v11_final_stable';
         let state = {
             groundName: "",
             sessionDate: new Date().toISOString().split('T')[0],
@@ -384,6 +392,12 @@
             if (confirm("Reset everything?")) { localStorage.removeItem(SAVE_KEY); location.reload(); }
         }
 
+        function getUKDate(dateStr) {
+            if (!dateStr) return "N/A";
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-GB'); // Formats to DD/MM/YYYY
+        }
+
         function getOrdinal(n) {
             let s = ["th", "st", "nd", "rd"], v = n % 100;
             return n + (s[(v - 20) % 10] || s[v] || s[0]);
@@ -406,17 +420,18 @@
             
             const nameWidth = targetId === 'cap-grid' ? '200px' : '140px';
             const fontSize = targetId === 'cap-grid' ? '10pt' : '7pt';
+            const tdHeight = targetId === 'cap-grid' ? '35px' : '25px';
 
-            let headerHtml = `<tr style="background:#f0f0f0"><th style="width:${nameWidth}; font-size:${fontSize}; border: 1pt solid black;">NAME</th>`;
+            let headerHtml = `<tr style="background:#f0f0f0"><th style="width:${nameWidth}; font-size:${fontSize}; border: 1pt solid black; vertical-align: middle;">NAME</th>`;
             state.stands.forEach(st => { 
-                headerHtml += `<th colspan="${st.targets}" style="font-size:${fontSize}; border: 1pt solid black; background:#f0f0f0">ST ${st.id}</th>`; 
+                headerHtml += `<th colspan="${st.targets}" style="font-size:${fontSize}; border: 1pt solid black; background:#f0f0f0; vertical-align: middle;">ST ${st.id}</th>`; 
             });
-            headerHtml += `<th style="width:60px; font-size:${fontSize}; border: 1pt solid black;">TOTAL</th></tr>`;
+            headerHtml += `<th style="width:60px; font-size:${fontSize}; border: 1pt solid black; vertical-align: middle;">TOTAL</th></tr>`;
             grid.innerHTML += headerHtml;
 
             const shooterPerformance = state.shooters.map(s => ({ ...s, grandTotal: getShooterGrandTotal(s.id) })).sort((a, b) => b.grandTotal - a.grandTotal);
             shooterPerformance.forEach(s => {
-                let rowHtml = `<tr><td style="border: 1pt solid black; font-size: 10pt; text-align: left; padding: 5px;"><strong>${s.name}</strong></td>`;
+                let rowHtml = `<tr><td style="border: 1pt solid black; font-size: 10pt; text-align: left; padding: 5px; vertical-align: middle; height: ${tdHeight}"><strong>${s.name}</strong></td>`;
                 let total = 0;
                 state.stands.forEach(st => {
                     const scores = (state.hits[s.id] && state.hits[s.id][st.id]) ? state.hits[s.id][st.id] : Array(st.targets).fill(null);
@@ -425,24 +440,24 @@
                         let bg = 'transparent';
                         if (h === true) { 
                             mark = `<span style="font-family: serif; font-weight: 900; font-size: 14pt; color: black;">/</span>`; 
-                            if (useColor) bg = '#4ade80'; // Tailwind Green-400
+                            if (useColor) bg = '#4ade80';
                             total++; 
                         }
                         if (h === false) {
                             mark = `<span style="font-weight: 900; font-size: 12pt; color: black;">O</span>`;
-                            if (useColor) bg = '#f87171'; // Tailwind Red-400
+                            if (useColor) bg = '#f87171';
                         }
-                        rowHtml += `<td style="border: 1pt solid black; padding:0 !important; width: 18px; background-color: ${bg};"><div style="width:100%; display: flex; align-items: center; justify-content: center;">${mark}</div></td>`;
+                        rowHtml += `<td style="border: 1pt solid black; padding:0 !important; width: 18px; background-color: ${bg}; vertical-align: middle;"><div style="width:100%; display: flex; align-items: center; justify-content: center; height: 100%;">${mark}</div></td>`;
                     });
                 });
-                rowHtml += `<td style="border: 1pt solid black; font-weight:bold; font-size:16pt; text-align:center; background: #fafafa;">${total}</td></tr>`;
+                rowHtml += `<td style="border: 1pt solid black; font-weight:bold; font-size:16pt; text-align:center; background: #fafafa; vertical-align: middle;">${total}</td></tr>`;
                 grid.innerHTML += rowHtml;
             });
         }
 
         window.exportToPDF = function() {
             document.getElementById('p-ground').innerText = state.groundName || "N/A";
-            document.getElementById('p-date').innerText = state.sessionDate || "N/A";
+            document.getElementById('p-date').innerText = getUKDate(state.sessionDate);
             document.getElementById('p-event').innerText = state.eventType || "N/A";
             document.getElementById('p-notes').innerText = state.notes || "None recorded.";
             generateGridHTML('print-grid', false); 
@@ -457,9 +472,9 @@
 
             const container = document.getElementById('capture-container');
             document.getElementById('cap-ground').innerText = state.groundName || "N/A";
-            document.getElementById('cap-date').innerText = state.sessionDate || "N/A";
+            document.getElementById('cap-date').innerText = getUKDate(state.sessionDate);
             document.getElementById('cap-event').innerText = state.eventType || "N/A";
-            generateGridHTML('cap-grid', true); // Enable Green/Red color for Image
+            generateGridHTML('cap-grid', true);
 
             try {
                 const canvas = await html2canvas(container, {
@@ -531,7 +546,7 @@
             state.stands.forEach((s, idx) => {
                 const btn = document.createElement('button');
                 const active = state.activeStandIndex === idx;
-                btn.className = `flex-shrink-0 w-8 h-8 rounded-lg font-black text-[10px] border-2 transition-all ${active ? 'bg-orange-50 border-orange-50 text-white shadow-md' : 'bg-white border-slate-300 text-black'}`;
+                btn.className = `flex-shrink-0 w-8 h-8 rounded-lg font-black text-[10px] border-2 transition-all ${active ? 'bg-orange-500 border-orange-500 text-white shadow-md' : 'bg-white border-slate-300 text-black'}`;
                 btn.innerText = s.id; btn.onclick = () => { state.activeStandIndex = idx; render(); saveSession(); };
                 selector.appendChild(btn);
             });
@@ -562,7 +577,7 @@
 
             const shooterPerformance = state.shooters.map(s => ({ ...s, grandTotal: getShooterGrandTotal(s.id) })).sort((a, b) => b.grandTotal - a.grandTotal);
             const header = document.getElementById('summary-header');
-            header.innerHTML = '<th class="px-2 py-2 border-b text-black font-black w-16">STAND</th>';
+            header.innerHTML = '<th class="px-2 py-2 border-b text-black font-black w-16 uppercase">STAND</th>';
             shooterPerformance.forEach(s => { header.innerHTML += `<th class="px-2 py-2 border-b text-center border-l border-slate-300 font-black"><div class="text-[8px] truncate max-w-[80px] mx-auto uppercase">${s.name}</div></th>`; });
 
             const body = document.getElementById('summary-body');
