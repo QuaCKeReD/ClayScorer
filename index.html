@@ -64,7 +64,7 @@
     <main class="max-w-6xl mx-auto p-3 space-y-4">
 
         <!-- Shoot Details -->
-        <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print grid grid-cols-2 md:grid-cols-3 gap-3">
+        <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print grid grid-cols-2 md:grid-cols-4 gap-3">
             <div class="space-y-1">
                 <label class="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
                     <i data-lucide="map-pin" size="10"></i> Ground
@@ -77,11 +77,24 @@
                 </label>
                 <input type="date" id="shoot-date" class="w-full bg-slate-50 border-none rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-medium" onchange="state.sessionDate = this.value">
             </div>
-            <div class="space-y-1 col-span-2 md:col-span-1">
+            <div class="space-y-1">
                 <label class="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
                     <i data-lucide="clipboard-list" size="10"></i> Squad / Event
                 </label>
-                <input type="text" id="event-type" placeholder="Squad 1 - 100 ESP" class="w-full bg-slate-50 border-none rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-medium" oninput="state.eventType = this.value">
+                <input type="text" id="event-type" placeholder="100 ESP" class="w-full bg-slate-50 border-none rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-medium" oninput="state.eventType = this.value">
+            </div>
+            <div class="space-y-1">
+                <label class="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
+                    <i data-lucide="layers" size="10"></i> No. of Stands
+                </label>
+                <select id="stand-count-select" onchange="updateTotalStands(this.value)" class="w-full bg-slate-50 border-none rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-bold">
+                    <option value="6">6 Stands</option>
+                    <option value="8">8 Stands</option>
+                    <option value="10">10 Stands</option>
+                    <option value="12" selected>12 Stands</option>
+                    <option value="14">14 Stands</option>
+                    <option value="15">15 Stands</option>
+                </select>
             </div>
         </section>
         
@@ -113,9 +126,7 @@
                         <h2 id="active-stand-title" class="text-lg font-black italic">Stand 1</h2>
                         <span id="active-stand-bird-count" class="text-[10px] text-slate-400 font-bold uppercase tracking-wider"></span>
                     </div>
-                    <button onclick="removeActiveStand()" class="p-1 text-slate-500 hover:text-red-400 transition-colors">
-                        <i data-lucide="trash-2" size="16"></i>
-                    </button>
+                    <div class="text-[10px] font-bold text-orange-400 uppercase italic">Rotation Active</div>
                 </div>
                 
                 <div class="flex gap-1.5">
@@ -212,16 +223,15 @@
             sessionDate: new Date().toISOString().split('T')[0],
             eventType: "",
             shooters: [
-                { id: Date.now(), name: "Shooter 1", cpsaNo: "", class: "Uncl" }
+                { id: Date.now(), name: "Shooter 1", cpsaNo: "", class: "U" }
             ],
             stands: [],
             hits: {}, 
             activeStandIndex: 0
         };
 
-        for(let i=1; i<=12; i++) {
-            state.stands.push({ id: i, targets: 8 });
-        }
+        // Initialize with default 12 stands
+        updateTotalStands(12, false);
 
         function init() {
             document.getElementById('shoot-date').value = state.sessionDate;
@@ -229,6 +239,24 @@
         }
 
         // --- Logic ---
+        function updateTotalStands(count, shouldRender = true) {
+            const newCount = parseInt(count);
+            const currentCount = state.stands.length;
+            
+            if (newCount > currentCount) {
+                for (let i = currentCount + 1; i <= newCount; i++) {
+                    state.stands.push({ id: i, targets: 8 });
+                }
+            } else if (newCount < currentCount) {
+                state.stands = state.stands.slice(0, newCount);
+                if (state.activeStandIndex >= newCount) {
+                    state.activeStandIndex = newCount - 1;
+                }
+            }
+            
+            if (shouldRender) render();
+        }
+
         function addShooter() {
             if (state.shooters.length >= 6) return;
             const id = Date.now();
@@ -236,7 +264,7 @@
                 id, 
                 name: `Shooter ${state.shooters.length + 1}`,
                 cpsaNo: "",
-                class: "Uncl"
+                class: "U"
             });
             render();
         }
@@ -279,15 +307,6 @@
             render();
         }
 
-        function removeActiveStand() {
-            if (state.stands.length <= 1) return;
-            if (confirm(`Remove Stand ${state.stands[state.activeStandIndex].id}?`)) {
-                state.stands.splice(state.activeStandIndex, 1);
-                state.activeStandIndex = Math.max(0, state.activeStandIndex - 1);
-                render();
-            }
-        }
-
         function resetAll() {
             if (confirm("Reset all scorecard data?")) {
                 state.hits = {};
@@ -305,6 +324,7 @@
         // --- Rendering ---
         function render() {
             const activeStand = state.stands[state.activeStandIndex];
+            if (!activeStand) return; // Guard
             
             // 1. Shooter List Management
             const list = document.getElementById('shooters-list');
