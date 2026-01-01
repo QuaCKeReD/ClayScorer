@@ -41,6 +41,33 @@
     </header>
 
     <main class="max-w-6xl mx-auto p-4 space-y-6">
+
+        <!-- Shoot Details -->
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 no-print grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-1">
+                <label class="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
+                    <i data-lucide="map-pin" size="14"></i> Shooting Ground
+                </label>
+                <input 
+                    type="text" 
+                    id="ground-name"
+                    placeholder="Enter shooting ground..."
+                    class="w-full bg-slate-50 border-none rounded-lg p-2 focus:ring-2 focus:ring-orange-500 outline-none font-medium transition-all"
+                    oninput="state.groundName = this.value"
+                >
+            </div>
+            <div class="space-y-1">
+                <label class="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
+                    <i data-lucide="calendar" size="14"></i> Date
+                </label>
+                <input 
+                    type="date" 
+                    id="shoot-date"
+                    class="w-full bg-slate-50 border-none rounded-lg p-2 focus:ring-2 focus:ring-orange-500 outline-none font-medium transition-all"
+                    onchange="state.sessionDate = this.value"
+                >
+            </div>
+        </section>
         
         <!-- Squad Configuration -->
         <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 no-print">
@@ -126,9 +153,10 @@
                 </button>
             </div>
             
-            <div class="p-6 hidden print-only">
-                <h1 class="text-2xl font-bold text-center mb-2">English Sporting Scorecard</h1>
-                <p id="print-date" class="text-center text-slate-500 mb-6"></p>
+            <div class="p-6 hidden print-only text-center">
+                <h1 class="text-2xl font-bold mb-1">English Sporting Scorecard</h1>
+                <h2 id="print-ground" class="text-lg font-bold text-slate-700"></h2>
+                <p id="print-date-display" class="text-sm text-slate-500 mb-6"></p>
             </div>
 
             <div class="overflow-x-auto">
@@ -153,6 +181,8 @@
     <script>
         // --- State Management ---
         let state = {
+            groundName: "",
+            sessionDate: new Date().toISOString().split('T')[0],
             shooters: [
                 { id: Date.now(), name: "Shooter 1" }
             ],
@@ -170,6 +200,7 @@
         }
 
         function init() {
+            document.getElementById('shoot-date').value = state.sessionDate;
             render();
         }
 
@@ -255,7 +286,8 @@
         }
 
         function exportToPDF() {
-            document.getElementById('print-date').innerText = "Date: " + new Date().toLocaleDateString();
+            document.getElementById('print-ground').innerText = state.groundName || "English Sporting Shoot";
+            document.getElementById('print-date-display').innerText = "Date: " + (state.sessionDate ? new Date(state.sessionDate).toLocaleDateString() : new Date().toLocaleDateString());
             window.print();
         }
 
