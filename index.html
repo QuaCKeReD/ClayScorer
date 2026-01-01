@@ -32,11 +32,14 @@
             }
             th, td { 
                 border: 0.5pt solid black !important; 
-                padding: 1px !important; 
+                padding: 0 !important; /* Reset padding for perfect centering */
                 color: black !important; 
-                text-align: center; 
+                text-align: center !important; 
                 vertical-align: middle !important; 
                 overflow: hidden;
+                /* Crucial for printing background colors */
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
             }
             
             .print-header { 
@@ -65,10 +68,10 @@
                 font-weight: bold; 
             }
             
-            .stand-header { font-size: 7pt !important; font-weight: bold; background: #f0f0f0 !important; -webkit-print-color-adjust: exact; }
+            .stand-header { font-size: 7pt !important; font-weight: bold; background: #f0f0f0 !important; vertical-align: middle !important; }
             .shooter-cell { 
                 font-size: 8pt !important; 
-                text-align: left; 
+                text-align: left !important; 
                 padding-left: 5px !important; 
                 vertical-align: middle !important;
                 white-space: normal !important; 
@@ -99,10 +102,9 @@
         #capture-container table { width: 100%; border-collapse: collapse; border: 2pt solid black; table-layout: fixed; }
         #capture-container th, #capture-container td { 
             border: 1pt solid black; 
-            padding: 4px; 
-            text-align: center; 
+            padding: 0; 
+            text-align: center !important; 
             vertical-align: middle !important; 
-            height: 35px; /* Taller rows for readability */
         }
         
         .hit-bg { background-color: #16a34a; color: white; border-color: #15803d; }
@@ -110,10 +112,6 @@
         
         .target-row { display: flex; flex-wrap: nowrap; overflow-x: auto; }
         .pair-group { display: flex; gap: 1px; padding: 1px; background: #f1f5f9; border: 1px solid #94a3b8; border-radius: 4px; }
-
-        .seq-h { color: #16a34a; font-weight: 900; }
-        .seq-m { color: #ef4444; font-weight: 900; }
-        .seq-u { color: #94a3b8; }
     </style>
 </head>
 <body class="bg-slate-50 text-black font-sans pb-24">
@@ -265,7 +263,7 @@
             ></textarea>
         </section>
 
-        <!-- HIDDEN CONTAINER FOR IMAGE GENERATION (Landscape + Colors, NO NOTES) -->
+        <!-- HIDDEN CONTAINER FOR IMAGE GENERATION -->
         <div id="capture-container">
             <div style="border-bottom: 2pt solid black; padding: 10px 0; margin-bottom: 15px; display: flex; justify-content: space-between; font-size: 14pt;">
                 <div><strong>GROUND:</strong> <span id="cap-ground"></span></div>
@@ -280,7 +278,7 @@
             </div>
         </div>
 
-        <!-- PDF EXPORT VIEW (Black & White Traditional, WITH NOTES) -->
+        <!-- PDF EXPORT VIEW -->
         <div class="hidden print-only" id="print-view">
             <div class="print-header">
                 <div><strong>GROUND:</strong> <span id="p-ground" style="text-decoration: underline"></span></div>
@@ -300,7 +298,7 @@
 
     <script>
         // --- State Management ---
-        const SAVE_KEY = 'cpsa_sporting_pro_v15_stacked_grid';
+        const SAVE_KEY = 'cpsa_sporting_pro_v16_colored_pdf';
         let state = {
             groundName: "",
             sessionDate: new Date().toISOString().split('T')[0],
@@ -328,7 +326,7 @@
             return false;
         }
 
-        // --- Core Logic ---
+        // --- Logic ---
         function updateTotalStands(count, shouldRender = true) {
             const newCount = parseInt(count);
             const currentCount = state.stands.length;
@@ -405,29 +403,29 @@
             return grand;
         }
 
-        // --- EXPORT FUNCTIONS (STAKCED PAIRS) ---
-        function generateGridHTML(targetId, useColor = false) {
+        // --- Export Functions ---
+        function generateGridHTML(targetId) {
             const grid = document.getElementById(targetId);
             grid.innerHTML = '';
             
             const isShare = targetId === 'cap-grid';
             const nameWidth = isShare ? '200px' : '120px';
             const fontSize = isShare ? '10pt' : '7pt';
-            const rowHeight = isShare ? '25px' : '15px';
+            const rowHeight = isShare ? '25px' : '18px';
 
             // Generate Header
             let headerHtml = `<tr style="background:#f0f0f0">
-                <th style="width:${nameWidth}; font-size:${fontSize}; border: 1pt solid black; vertical-align: middle;" rowspan="2">NAME</th>`;
+                <th style="width:${nameWidth}; font-size:${fontSize}; border: 1pt solid black; vertical-align: middle; text-align: center;" rowspan="2">NAME</th>`;
             state.stands.forEach(st => { 
                 const pairs = Math.ceil(st.targets / 2);
-                headerHtml += `<th colspan="${pairs}" style="font-size:${fontSize}; border: 1pt solid black; background:#f0f0f0; vertical-align: middle; white-space: nowrap;">ST ${st.id}</th>`; 
+                headerHtml += `<th colspan="${pairs}" style="font-size:${fontSize}; border: 1pt solid black; background:#f0f0f0; vertical-align: middle; text-align: center; white-space: nowrap;">ST ${st.id}</th>`; 
             });
-            headerHtml += `<th style="width:60px; font-size:${fontSize}; border: 1pt solid black; vertical-align: middle; white-space: nowrap;" rowspan="2">TOTAL</th></tr><tr>`;
+            headerHtml += `<th style="width:60px; font-size:${fontSize}; border: 1pt solid black; vertical-align: middle; text-align: center; white-space: nowrap;" rowspan="2">TOTAL</th></tr><tr>`;
             
             state.stands.forEach(st => {
                 const pairs = Math.ceil(st.targets / 2);
                 for(let p=1; p<=pairs; p++) {
-                    headerHtml += `<th style="font-size: 6pt; border: 1pt solid black; background:#fafafa; vertical-align: middle;">P${p}</th>`;
+                    headerHtml += `<th style="font-size: 6pt; border: 1pt solid black; background:#fafafa; vertical-align: middle; text-align: center;">P${p}</th>`;
                 }
             });
             headerHtml += `</tr>`;
@@ -437,12 +435,8 @@
             const shooterPerformance = state.shooters.map(s => ({ ...s, grandTotal: getShooterGrandTotal(s.id) })).sort((a, b) => b.grandTotal - a.grandTotal);
             
             shooterPerformance.forEach(s => {
-                // Top row for shooter (Birds 1, 3, 5...)
                 let row1Html = `<tr><td style="border: 1pt solid black; font-size: 10pt; text-align: left; padding: 5px; vertical-align: middle; white-space: normal; word-wrap: break-word;" rowspan="2"><strong>${s.name}</strong></td>`;
-                
-                // Bottom row for shooter (Birds 2, 4, 6...)
                 let row2Html = `<tr>`;
-
                 let grandTotal = 0;
 
                 state.stands.forEach(st => {
@@ -450,29 +444,28 @@
                     const pairs = Math.ceil(st.targets / 2);
 
                     for(let i=0; i<pairs*2; i+=2) {
-                        // Bird A (Top)
+                        // Bird Top
                         let markA = '&nbsp;';
                         let bgA = 'transparent';
                         if (i < st.targets) {
-                            if (scores[i] === true) { markA = '<span>/</span>'; if (useColor) bgA = '#4ade80'; grandTotal++; }
-                            if (scores[i] === false) { markA = '<span>O</span>'; if (useColor) bgA = '#f87171'; }
+                            if (scores[i] === true) { markA = '<span>/</span>'; bgA = '#4ade80'; grandTotal++; }
+                            if (scores[i] === false) { markA = '<span>O</span>'; bgA = '#f87171'; }
                         }
-                        row1Html += `<td style="border: 1pt solid black; padding:0 !important; width: 22px; background-color: ${bgA}; vertical-align: middle; height: ${rowHeight}; font-size: 11pt; font-weight: 900;">${markA}</td>`;
+                        row1Html += `<td style="border: 1pt solid black; padding:0 !important; width: 22px; background-color: ${bgA}; vertical-align: middle; text-align: center; height: ${rowHeight}; font-size: 11pt; font-weight: 900; -webkit-print-color-adjust: exact; print-color-adjust: exact;"><div style="display: flex; align-items: center; justify-content: center; height: 100%; width: 100%;">${markA}</div></td>`;
 
-                        // Bird B (Bottom)
+                        // Bird Bottom
                         let markB = '&nbsp;';
                         let bgB = 'transparent';
                         if (i + 1 < st.targets) {
-                            if (scores[i+1] === true) { markB = '<span>/</span>'; if (useColor) bgB = '#4ade80'; grandTotal++; }
-                            if (scores[i+1] === false) { markB = '<span>O</span>'; if (useColor) bgB = '#f87171'; }
+                            if (scores[i+1] === true) { markB = '<span>/</span>'; bgB = '#4ade80'; grandTotal++; }
+                            if (scores[i+1] === false) { markB = '<span>O</span>'; bgB = '#f87171'; }
                         }
-                        row2Html += `<td style="border: 1pt solid black; padding:0 !important; width: 22px; background-color: ${bgB}; vertical-align: middle; height: ${rowHeight}; font-size: 11pt; font-weight: 900;">${markB}</td>`;
+                        row2Html += `<td style="border: 1pt solid black; padding:0 !important; width: 22px; background-color: ${bgB}; vertical-align: middle; text-align: center; height: ${rowHeight}; font-size: 11pt; font-weight: 900; -webkit-print-color-adjust: exact; print-color-adjust: exact;"><div style="display: flex; align-items: center; justify-content: center; height: 100%; width: 100%;">${markB}</div></td>`;
                     }
                 });
 
-                row1Html += `<td style="border: 1pt solid black; font-weight:bold; font-size:16pt; text-align:center; background: #fafafa; vertical-align: middle;" rowspan="2">${grandTotal}</td></tr>`;
+                row1Html += `<td style="border: 1pt solid black; font-weight:bold; font-size:16pt; text-align:center; background: #fafafa; vertical-align: middle;" rowspan="2"><div style="display: flex; align-items: center; justify-content: center; height: 100%;">${grandTotal}</div></td></tr>`;
                 row2Html += `</tr>`;
-                
                 grid.innerHTML += row1Html + row2Html;
             });
         }
@@ -482,7 +475,7 @@
             document.getElementById('p-date').innerText = getUKDate(state.sessionDate);
             document.getElementById('p-event').innerText = state.eventType || "N/A";
             document.getElementById('p-notes').innerText = state.notes || "None recorded.";
-            generateGridHTML('print-grid', false); 
+            generateGridHTML('print-grid'); 
             window.print();
         }
 
@@ -496,17 +489,18 @@
             document.getElementById('cap-ground').innerText = state.groundName || "N/A";
             document.getElementById('cap-date').innerText = getUKDate(state.sessionDate);
             document.getElementById('cap-event').innerText = state.eventType || "N/A";
-            generateGridHTML('cap-grid', true);
+            generateGridHTML('cap-grid');
 
             try {
                 const canvas = await html2canvas(container, {
-                    scale: 2.5, 
+                    scale: 3, 
                     backgroundColor: '#ffffff',
                     useCORS: true,
                     logging: false,
                     onclone: (clonedDoc) => {
-                        clonedDoc.getElementById('capture-container').style.position = 'static';
-                        clonedDoc.getElementById('capture-container').style.left = '0';
+                        const cap = clonedDoc.getElementById('capture-container');
+                        cap.style.position = 'static';
+                        cap.style.left = '0';
                     }
                 });
 
@@ -515,7 +509,7 @@
                     if (!blob) return;
                     const file = new File([blob], `leaderboard-${Date.now()}.png`, { type: 'image/png' });
                     if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                        await navigator.share({ files: [file], title: 'Squad Scorecard' });
+                        await navigator.share({ files: [file], title: 'Squad Leaderboard' });
                     } else {
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a'); a.href = url; a.download = `scorecard.png`; a.click();
@@ -557,7 +551,7 @@
             state.stands.forEach((s, idx) => {
                 const btn = document.createElement('button');
                 const active = state.activeStandIndex === idx;
-                btn.className = `flex-shrink-0 w-8 h-8 rounded-lg font-black text-[10px] border-2 transition-all ${active ? 'bg-orange-500 border-orange-500 text-white shadow-md' : 'bg-white border-slate-300 text-black'}`;
+                btn.className = `flex-shrink-0 w-8 h-8 rounded-lg font-black text-[10px] border-2 transition-all ${active ? 'bg-orange-50 border-orange-50 text-white shadow-md' : 'bg-white border-slate-300 text-black'}`;
                 btn.innerText = s.id; btn.onclick = () => { state.activeStandIndex = idx; render(); saveSession(); };
                 selector.appendChild(btn);
             });
