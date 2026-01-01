@@ -64,7 +64,7 @@
     <main class="max-w-6xl mx-auto p-3 space-y-4">
 
         <!-- Shoot Details -->
-        <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print grid grid-cols-1 md:grid-cols-3 gap-3">
+        <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print grid grid-cols-2 md:grid-cols-4 gap-3">
             <div class="space-y-1">
                 <label class="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
                     <i data-lucide="map-pin" size="10"></i> Ground
@@ -82,6 +82,19 @@
                     <i data-lucide="clipboard-list" size="10"></i> Squad / Event
                 </label>
                 <input type="text" id="event-type" placeholder="100 ESP" class="w-full bg-slate-50 border-none rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-medium" oninput="state.eventType = this.value">
+            </div>
+            <div class="space-y-1">
+                <label class="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
+                    <i data-lucide="layers" size="10"></i> Total Stands
+                </label>
+                <select id="stand-count-select" onchange="updateTotalStands(this.value)" class="w-full bg-slate-50 border-none rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-bold">
+                    <!-- Dropdown options from 1 to 20 -->
+                    <script>
+                        for(let i=1; i<=20; i++) {
+                            document.write(`<option value="${i}" ${i === 12 ? 'selected' : ''}>${i} Stands</option>`);
+                        }
+                    </script>
+                </select>
             </div>
         </section>
         
@@ -105,9 +118,6 @@
             <div id="stand-selector" class="flex items-center gap-1.5">
                 <!-- Dynamic Stand Buttons -->
             </div>
-            <button onclick="addStand()" class="flex-shrink-0 w-9 h-9 rounded-lg border-2 border-dashed border-slate-300 text-slate-400 flex items-center justify-center hover:border-orange-500 hover:text-orange-500 transition-all ml-1" title="Add Stand">
-                <i data-lucide="plus" size="18"></i>
-            </button>
         </div>
 
         <!-- Scoring Table -->
@@ -120,9 +130,6 @@
                     </div>
                     <div class="flex items-center gap-2">
                         <div class="text-[10px] font-bold text-orange-400 uppercase italic">Rotation Active</div>
-                        <button onclick="removeActiveStand()" class="p-1 text-slate-500 hover:text-red-400 transition-colors" title="Delete Stand">
-                            <i data-lucide="trash-2" size="16"></i>
-                        </button>
                     </div>
                 </div>
                 
@@ -222,12 +229,13 @@
             shooters: [
                 { id: Date.now(), name: "Shooter 1", cpsaNo: "", class: "U" }
             ],
-            stands: [
-                { id: 1, targets: 8 }
-            ],
+            stands: [],
             hits: {}, 
             activeStandIndex: 0
         };
+
+        // Initialize with default 12 stands
+        updateTotalStands(12, false);
 
         function init() {
             document.getElementById('shoot-date').value = state.sessionDate;
@@ -235,17 +243,23 @@
         }
 
         // --- Logic ---
-        function addStand() {
-            const nextId = state.stands.length > 0 ? Math.max(...state.stands.map(s => s.id)) + 1 : 1;
-            state.stands.push({ id: nextId, targets: 8 });
-            state.activeStandIndex = state.stands.length - 1;
-            render();
+        function updateTotalStands(count, shouldRender = true) {
+            const newCount = parseInt(count);
+            const currentCount = state.stands.length;
             
-            // Scroll the selector to the new stand
-            setTimeout(() => {
-                const container = document.getElementById('stand-selector-container');
-                container.scrollLeft = container.scrollWidth;
-            }, 50);
+            if (newCount > currentCount) {
+                for (let i = currentCount + 1; i <= newCount; i++) {
+                    state.stands.push({ id: i, targets: 8 });
+                }
+            } else if (newCount < currentCount) {
+                // If reducing count, potentially alert or just slice
+                state.stands = state.stands.slice(0, newCount);
+                if (state.activeStandIndex >= newCount) {
+                    state.activeStandIndex = newCount - 1;
+                }
+            }
+            
+            if (shouldRender) render();
         }
 
         function addShooter() {
@@ -288,7 +302,17 @@
             stand.targets = count;
             state.shooters.forEach(s => {
                 if (!state.hits[s.id]) state.hits[s.id] = {};
-                state.hits[s.id][stand.id] = Array(count).fill(null);
+                // If scores already exist, we need to adjust the array size
+                if (state.hits[s.id][stand.id]) {
+                    const current = state.hits[s.id][stand.id];
+                    if (current.length > count) {
+                        state.hits[s.id][stand.id] = current.slice(0, count);
+                    } else if (current.length < count) {
+                        state.hits[s.id][stand.id] = [...current, ...Array(count - current.length).fill(null)];
+                    }
+                } else {
+                    state.hits[s.id][stand.id] = Array(count).fill(null);
+                }
             });
             render();
         }
@@ -296,18 +320,6 @@
         function navStand(dir) {
             state.activeStandIndex = Math.max(0, Math.min(state.stands.length - 1, state.activeStandIndex + dir));
             render();
-        }
-
-        function removeActiveStand() {
-            if (state.stands.length <= 1) {
-                alert("Cannot remove the last stand.");
-                return;
-            }
-            if (confirm(`Remove Stand ${state.stands[state.activeStandIndex].id}?`)) {
-                state.stands.splice(state.activeStandIndex, 1);
-                state.activeStandIndex = Math.max(0, state.activeStandIndex - 1);
-                render();
-            }
         }
 
         function resetAll() {
@@ -371,6 +383,20 @@
 
             // Update bird count text
             document.getElementById('active-stand-bird-count').innerText = `${activeStand.targets} Birds (${activeStand.targets / 2} Pairs)`;
+
+            // Update bird select button highlight
+            [4, 6, 8, 10].forEach(count => {
+                const btn = document.getElementById(`btn-targets-${count}`);
+                if (btn) {
+                    if (activeStand.targets === count) {
+                        btn.classList.add('bg-orange-500', 'border-orange-500', 'text-white');
+                        btn.classList.remove('bg-slate-800', 'text-slate-300');
+                    } else {
+                        btn.classList.remove('bg-orange-500', 'border-orange-500', 'text-white');
+                        btn.classList.add('bg-slate-800', 'text-slate-300');
+                    }
+                }
+            });
 
             // 3. Main Scoring Table
             const n = state.shooters.length;
