@@ -64,18 +64,31 @@
 
         <!-- Scoring Table (Rotated) -->
         <section id="scoring-section" class="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden no-print">
-            <div class="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
-                <div class="flex flex-col">
-                    <h2 id="active-stand-title" class="text-lg font-bold text-slate-800">Stand 1</h2>
-                    <p id="active-stand-subtitle" class="text-xs text-slate-500 font-medium">Rotation Active</p>
-                </div>
-                <div class="flex items-center gap-3">
-                    <div class="flex bg-slate-200 rounded-lg p-1 items-center">
-                        <button onclick="updateTargetCount(-1)" class="p-1 text-slate-600 hover:bg-slate-300 rounded"><i data-lucide="minus" size="16"></i></button>
-                        <span id="active-stand-targets" class="px-2 font-bold text-slate-700 min-w-[2ch] text-center">8</span>
-                        <button onclick="updateTargetCount(1)" class="p-1 text-slate-600 hover:bg-slate-300 rounded"><i data-lucide="plus" size="16"></i></button>
+            <div class="bg-slate-50 p-4 border-b border-slate-200">
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex flex-col">
+                        <h2 id="active-stand-title" class="text-lg font-bold text-slate-800">Stand 1</h2>
+                        <p id="active-stand-subtitle" class="text-xs text-slate-500 font-medium">Set stand targets below:</p>
                     </div>
-                    <button onclick="removeActiveStand()" class="p-2 text-red-400 hover:text-red-600 transition-colors"><i data-lucide="trash-2" size="20"></i></button>
+                    <button onclick="removeActiveStand()" class="p-2 text-red-400 hover:text-red-600 transition-colors">
+                        <i data-lucide="trash-2" size="20"></i>
+                    </button>
+                </div>
+                
+                <!-- Quick Target Selection -->
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="setTargetCount(4)" class="target-btn flex-1 bg-white border-2 border-slate-200 py-2 rounded-xl text-sm font-bold text-slate-600 hover:border-orange-500 hover:text-orange-500 transition-all active:scale-95" id="btn-targets-4">
+                        4 <span class="text-[10px] block opacity-60">2 Pairs</span>
+                    </button>
+                    <button onclick="setTargetCount(6)" class="target-btn flex-1 bg-white border-2 border-slate-200 py-2 rounded-xl text-sm font-bold text-slate-600 hover:border-orange-500 hover:text-orange-500 transition-all active:scale-95" id="btn-targets-6">
+                        6 <span class="text-[10px] block opacity-60">3 Pairs</span>
+                    </button>
+                    <button onclick="setTargetCount(8)" class="target-btn flex-1 bg-white border-2 border-slate-200 py-2 rounded-xl text-sm font-bold text-slate-600 hover:border-orange-500 hover:text-orange-500 transition-all active:scale-95" id="btn-targets-8">
+                        8 <span class="text-[10px] block opacity-60">4 Pairs</span>
+                    </button>
+                    <button onclick="setTargetCount(10)" class="target-btn flex-1 bg-white border-2 border-slate-200 py-2 rounded-xl text-sm font-bold text-slate-600 hover:border-orange-500 hover:text-orange-500 transition-all active:scale-95" id="btn-targets-10">
+                        10 <span class="text-[10px] block opacity-60">5 Pairs</span>
+                    </button>
                 </div>
             </div>
 
@@ -199,14 +212,22 @@
             render();
         }
 
-        function updateTargetCount(delta) {
+        function setTargetCount(count) {
             const stand = state.stands[state.activeStandIndex];
-            stand.targets = Math.max(1, stand.targets + delta);
+            stand.targets = count;
             
-            // Clean up existing scores if target count reduced
+            // Clean up existing scores if target count changed
             state.shooters.forEach(s => {
-                if (state.hits[s.id] && state.hits[s.id][stand.id]) {
-                    state.hits[s.id][stand.id] = state.hits[s.id][stand.id].slice(0, stand.targets);
+                if (!state.hits[s.id]) state.hits[s.id] = {};
+                if (!state.hits[s.id][stand.id]) {
+                    state.hits[s.id][stand.id] = Array(count).fill(null);
+                } else {
+                    const currentHits = state.hits[s.id][stand.id];
+                    if (currentHits.length > count) {
+                        state.hits[s.id][stand.id] = currentHits.slice(0, count);
+                    } else if (currentHits.length < count) {
+                        state.hits[s.id][stand.id] = [...currentHits, ...Array(count - currentHits.length).fill(null)];
+                    }
                 }
             });
             render();
@@ -215,6 +236,15 @@
         function navStand(dir) {
             state.activeStandIndex = Math.max(0, Math.min(state.stands.length - 1, state.activeStandIndex + dir));
             render();
+        }
+
+        function removeActiveStand() {
+            if (state.stands.length <= 1) return;
+            if (confirm(`Remove Stand ${state.stands[state.activeStandIndex].id}?`)) {
+                state.stands.splice(state.activeStandIndex, 1);
+                state.activeStandIndex = Math.max(0, state.activeStandIndex - 1);
+                render();
+            }
         }
 
         function resetAll() {
@@ -233,6 +263,20 @@
         function render() {
             const activeStand = state.stands[state.activeStandIndex];
             
+            // Update quick select buttons style
+            [4, 6, 8, 10].forEach(count => {
+                const btn = document.getElementById(`btn-targets-${count}`);
+                if (btn) {
+                    if (activeStand.targets === count) {
+                        btn.classList.add('bg-orange-500', 'border-orange-500', 'text-white');
+                        btn.classList.remove('bg-white', 'text-slate-600');
+                    } else {
+                        btn.classList.remove('bg-orange-500', 'border-orange-500', 'text-white');
+                        btn.classList.add('bg-white', 'text-slate-600');
+                    }
+                }
+            });
+
             // 1. Shooter Config List
             const list = document.getElementById('shooters-list');
             list.innerHTML = '';
@@ -271,7 +315,6 @@
             selector.appendChild(addS);
 
             // 3. Active Scoring Table with ROTATION
-            // Rotation Logic: Stand 1 (Index 0) starts with Shooter 0. Stand 2 (Index 1) starts with Shooter 1.
             const n = state.shooters.length;
             const rotationOffset = state.activeStandIndex % n;
             const rotatedShooters = [];
@@ -280,7 +323,6 @@
             }
 
             document.getElementById('active-stand-title').innerText = `Stand ${activeStand.id}`;
-            document.getElementById('active-stand-targets').innerText = activeStand.targets;
             document.getElementById('prev-btn').disabled = state.activeStandIndex === 0;
             document.getElementById('next-btn').disabled = state.activeStandIndex === state.stands.length -1;
 
@@ -297,20 +339,22 @@
                 for(let i=0; i < activeStand.targets; i++) {
                     const status = sScores[i];
                     cellsHtml += `
-                        <button onclick="toggleHit(${s.id}, ${activeStand.id}, ${i}, true)" 
-                            class="w-8 h-8 rounded font-bold text-xs border ${status === true ? 'hit-bg' : 'bg-slate-50 text-slate-300'}">H</button>
-                        <button onclick="toggleHit(${s.id}, ${activeStand.id}, ${i}, false)" 
-                            class="w-8 h-8 rounded font-bold text-xs border ${status === false ? 'miss-bg' : 'bg-slate-50 text-slate-300'}">M</button>
+                        <div class="flex flex-col gap-1">
+                            <button onclick="toggleHit(${s.id}, ${activeStand.id}, ${i}, true)" 
+                                class="w-8 h-7 rounded font-bold text-[10px] border ${status === true ? 'hit-bg' : 'bg-slate-50 text-slate-300'}">H</button>
+                            <button onclick="toggleHit(${s.id}, ${activeStand.id}, ${i}, false)" 
+                                class="w-8 h-7 rounded font-bold text-[10px] border ${status === false ? 'miss-bg' : 'bg-slate-50 text-slate-300'}">M</button>
+                        </div>
                     `;
                 }
 
                 tr.innerHTML = `
                     <td class="px-4 py-4">
-                        <div class="font-bold text-slate-800">${s.name}</div>
-                        <div class="text-[10px] text-slate-400 font-bold uppercase">Order: ${displayOrder + 1}</div>
+                        <div class="font-bold text-slate-800 text-sm">${s.name}</div>
+                        <div class="text-[9px] text-slate-400 font-bold uppercase">Pos: ${displayOrder + 1}</div>
                     </td>
                     <td class="px-4 py-4">
-                        <div class="flex flex-wrap gap-1 max-w-[280px]">
+                        <div class="flex flex-wrap gap-1.5 max-w-[280px]">
                             ${cellsHtml}
                         </div>
                     </td>
