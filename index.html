@@ -37,7 +37,6 @@
                 text-align: center; 
                 vertical-align: middle !important; 
                 overflow: hidden;
-                height: 35px;
             }
             
             .print-header { 
@@ -66,7 +65,7 @@
                 font-weight: bold; 
             }
             
-            .stand-header { font-size: 7pt !important; font-weight: bold; background: #f0f0f0 !important; -webkit-print-color-adjust: exact; vertical-align: middle !important; }
+            .stand-header { font-size: 7pt !important; font-weight: bold; background: #f0f0f0 !important; -webkit-print-color-adjust: exact; }
             .shooter-cell { 
                 font-size: 8pt !important; 
                 text-align: left; 
@@ -103,8 +102,7 @@
             padding: 4px; 
             text-align: center; 
             vertical-align: middle !important; 
-            height: 50px; /* Taller rows for better mobile legibility */
-            line-height: normal;
+            height: 35px; /* Taller rows for readability */
         }
         
         .hit-bg { background-color: #16a34a; color: white; border-color: #15803d; }
@@ -282,7 +280,7 @@
             </div>
         </div>
 
-        <!-- PDF EXPORT VIEW (WITH NOTES) -->
+        <!-- PDF EXPORT VIEW (Black & White Traditional, WITH NOTES) -->
         <div class="hidden print-only" id="print-view">
             <div class="print-header">
                 <div><strong>GROUND:</strong> <span id="p-ground" style="text-decoration: underline"></span></div>
@@ -302,7 +300,7 @@
 
     <script>
         // --- State Management ---
-        const SAVE_KEY = 'cpsa_sporting_pro_v14_alignment_fix';
+        const SAVE_KEY = 'cpsa_sporting_pro_v15_stacked_grid';
         let state = {
             groundName: "",
             sessionDate: new Date().toISOString().split('T')[0],
@@ -330,7 +328,7 @@
             return false;
         }
 
-        // --- Logic ---
+        // --- Core Logic ---
         function updateTotalStands(count, shouldRender = true) {
             const newCount = parseInt(count);
             const currentCount = state.stands.length;
@@ -362,10 +360,7 @@
             saveSession();
         }
 
-        function updateField(key, val) {
-            state[key] = val;
-            saveSession();
-        }
+        function updateField(key, val) { state[key] = val; saveSession(); }
 
         function toggleHit(shooterId, standId, targetIdx, value) {
             if (!state.hits[shooterId]) state.hits[shooterId] = {};
@@ -396,20 +391,9 @@
             render(); saveSession();
         }
 
-        function resetAll() {
-            if (confirm("Reset everything?")) { localStorage.removeItem(SAVE_KEY); location.reload(); }
-        }
+        function resetAll() { if (confirm("Reset everything?")) { localStorage.removeItem(SAVE_KEY); location.reload(); } }
 
-        function getUKDate(dateStr) {
-            if (!dateStr) return "N/A";
-            const date = new Date(dateStr);
-            return date.toLocaleDateString('en-GB'); 
-        }
-
-        function getOrdinal(n) {
-            let s = ["th", "st", "nd", "rd"], v = n % 100;
-            return n + (s[(v - 20) % 10] || s[v] || s[0]);
-        }
+        function getUKDate(dateStr) { if (!dateStr) return "N/A"; const date = new Date(dateStr); return date.toLocaleDateString('en-GB'); }
 
         function getShooterGrandTotal(shooterId) {
             let grand = 0;
@@ -421,47 +405,75 @@
             return grand;
         }
 
-        // --- Export Functions ---
+        // --- EXPORT FUNCTIONS (STAKCED PAIRS) ---
         function generateGridHTML(targetId, useColor = false) {
             const grid = document.getElementById(targetId);
             grid.innerHTML = '';
             
             const isShare = targetId === 'cap-grid';
-            const nameWidth = isShare ? '200px' : '140px';
+            const nameWidth = isShare ? '200px' : '120px';
             const fontSize = isShare ? '10pt' : '7pt';
-            const height = isShare ? '50px' : '35px';
+            const rowHeight = isShare ? '25px' : '15px';
 
-            let headerHtml = `<tr style="background:#f0f0f0"><th style="width:${nameWidth}; font-size:${fontSize}; border: 1pt solid black; vertical-align: middle; height:${height}">NAME</th>`;
+            // Generate Header
+            let headerHtml = `<tr style="background:#f0f0f0">
+                <th style="width:${nameWidth}; font-size:${fontSize}; border: 1pt solid black; vertical-align: middle;" rowspan="2">NAME</th>`;
             state.stands.forEach(st => { 
-                headerHtml += `<th colspan="${st.targets}" style="font-size:${fontSize}; border: 1pt solid black; background:#f0f0f0; vertical-align: middle; white-space: nowrap;">ST ${st.id}</th>`; 
+                const pairs = Math.ceil(st.targets / 2);
+                headerHtml += `<th colspan="${pairs}" style="font-size:${fontSize}; border: 1pt solid black; background:#f0f0f0; vertical-align: middle; white-space: nowrap;">ST ${st.id}</th>`; 
             });
-            headerHtml += `<th style="width:60px; font-size:${fontSize}; border: 1pt solid black; vertical-align: middle; white-space: nowrap;">TOTAL</th></tr>`;
+            headerHtml += `<th style="width:60px; font-size:${fontSize}; border: 1pt solid black; vertical-align: middle; white-space: nowrap;" rowspan="2">TOTAL</th></tr><tr>`;
+            
+            state.stands.forEach(st => {
+                const pairs = Math.ceil(st.targets / 2);
+                for(let p=1; p<=pairs; p++) {
+                    headerHtml += `<th style="font-size: 6pt; border: 1pt solid black; background:#fafafa; vertical-align: middle;">P${p}</th>`;
+                }
+            });
+            headerHtml += `</tr>`;
             grid.innerHTML += headerHtml;
 
+            // Generate Shooter Rows (Stacked Pairs)
             const shooterPerformance = state.shooters.map(s => ({ ...s, grandTotal: getShooterGrandTotal(s.id) })).sort((a, b) => b.grandTotal - a.grandTotal);
+            
             shooterPerformance.forEach(s => {
-                let rowHtml = `<tr><td style="border: 1pt solid black; font-size: 10pt; text-align: left; padding: 5px; vertical-align: middle; height:${height}; white-space: normal; word-wrap: break-word;"><strong>${s.name}</strong></td>`;
-                let total = 0;
+                // Top row for shooter (Birds 1, 3, 5...)
+                let row1Html = `<tr><td style="border: 1pt solid black; font-size: 10pt; text-align: left; padding: 5px; vertical-align: middle; white-space: normal; word-wrap: break-word;" rowspan="2"><strong>${s.name}</strong></td>`;
+                
+                // Bottom row for shooter (Birds 2, 4, 6...)
+                let row2Html = `<tr>`;
+
+                let grandTotal = 0;
+
                 state.stands.forEach(st => {
                     const scores = (state.hits[s.id] && state.hits[s.id][st.id]) ? state.hits[s.id][st.id] : Array(st.targets).fill(null);
-                    scores.forEach(h => {
-                        let mark = '&nbsp;';
-                        let bg = 'transparent';
-                        if (h === true) { 
-                            mark = `<span style="font-family: serif; font-weight: 900; font-size: 14pt; color: black; line-height: 1;">/</span>`; 
-                            if (useColor) bg = '#4ade80';
-                            total++; 
+                    const pairs = Math.ceil(st.targets / 2);
+
+                    for(let i=0; i<pairs*2; i+=2) {
+                        // Bird A (Top)
+                        let markA = '&nbsp;';
+                        let bgA = 'transparent';
+                        if (i < st.targets) {
+                            if (scores[i] === true) { markA = '<span>/</span>'; if (useColor) bgA = '#4ade80'; grandTotal++; }
+                            if (scores[i] === false) { markA = '<span>O</span>'; if (useColor) bgA = '#f87171'; }
                         }
-                        if (h === false) {
-                            mark = `<span style="font-weight: 900; font-size: 12pt; color: black; line-height: 1;">O</span>`;
-                            if (useColor) bg = '#f87171';
+                        row1Html += `<td style="border: 1pt solid black; padding:0 !important; width: 22px; background-color: ${bgA}; vertical-align: middle; height: ${rowHeight}; font-size: 11pt; font-weight: 900;">${markA}</td>`;
+
+                        // Bird B (Bottom)
+                        let markB = '&nbsp;';
+                        let bgB = 'transparent';
+                        if (i + 1 < st.targets) {
+                            if (scores[i+1] === true) { markB = '<span>/</span>'; if (useColor) bgB = '#4ade80'; grandTotal++; }
+                            if (scores[i+1] === false) { markB = '<span>O</span>'; if (useColor) bgB = '#f87171'; }
                         }
-                        // Vertical-align middle is critical here on the TD and the child DIV needs height:100%
-                        rowHtml += `<td style="border: 1pt solid black; padding:0 !important; width: 18px; background-color: ${bg}; vertical-align: middle; white-space: nowrap;"><div style="width:100%; height:100%; display: flex; align-items: center; justify-content: center; vertical-align: middle;">${mark}</div></td>`;
-                    });
+                        row2Html += `<td style="border: 1pt solid black; padding:0 !important; width: 22px; background-color: ${bgB}; vertical-align: middle; height: ${rowHeight}; font-size: 11pt; font-weight: 900;">${markB}</td>`;
+                    }
                 });
-                rowHtml += `<td style="border: 1pt solid black; font-weight:bold; font-size:16pt; text-align:center; background: #fafafa; vertical-align: middle; white-space: nowrap;"><div style="height:100%; display: flex; align-items: center; justify-content: center;">${total}</div></td></tr>`;
-                grid.innerHTML += rowHtml;
+
+                row1Html += `<td style="border: 1pt solid black; font-weight:bold; font-size:16pt; text-align:center; background: #fafafa; vertical-align: middle;" rowspan="2">${grandTotal}</td></tr>`;
+                row2Html += `</tr>`;
+                
+                grid.innerHTML += row1Html + row2Html;
             });
         }
 
@@ -487,51 +499,33 @@
             generateGridHTML('cap-grid', true);
 
             try {
-                // html2canvas requires the container to be somewhat visible or at least have styles processed
                 const canvas = await html2canvas(container, {
-                    scale: 3, 
+                    scale: 2.5, 
                     backgroundColor: '#ffffff',
                     useCORS: true,
                     logging: false,
                     onclone: (clonedDoc) => {
-                        const clonedContainer = clonedDoc.getElementById('capture-container');
-                        clonedContainer.style.position = 'static';
-                        clonedContainer.style.left = '0';
+                        clonedDoc.getElementById('capture-container').style.position = 'static';
+                        clonedDoc.getElementById('capture-container').style.left = '0';
                     }
                 });
 
                 canvas.toBlob(async (blob) => {
-                    btn.innerHTML = originalContent;
-                    lucide.createIcons();
-
+                    btn.innerHTML = originalContent; lucide.createIcons();
                     if (!blob) return;
                     const file = new File([blob], `leaderboard-${Date.now()}.png`, { type: 'image/png' });
-                    
                     if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                        await navigator.share({
-                            files: [file],
-                            title: 'Squad Scorecard',
-                            text: `Final scores for ${state.groundName || 'the shoot'}`
-                        });
+                        await navigator.share({ files: [file], title: 'Squad Scorecard' });
                     } else {
                         const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `leaderboard-${state.groundName || 'shoot'}.png`;
-                        a.click();
-                        // Minimal feedback
+                        const a = document.createElement('a'); a.href = url; a.download = `scorecard.png`; a.click();
                         const msg = document.createElement('div');
-                        msg.className = "fixed bottom-20 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-4 py-2 rounded-full text-xs font-bold z-50 animate-bounce shadow-2xl";
-                        msg.innerText = "Downloaded to gallery. Share manually.";
-                        document.body.appendChild(msg);
+                        msg.className = "fixed bottom-20 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-4 py-2 rounded-full text-xs font-bold z-50 animate-bounce";
+                        msg.innerText = "Downloaded to gallery."; document.body.appendChild(msg);
                         setTimeout(() => msg.remove(), 3000);
                     }
                 });
-            } catch (err) {
-                console.error("Image generation failed", err);
-                btn.innerHTML = originalContent;
-                lucide.createIcons();
-            }
+            } catch (err) { console.error(err); btn.innerHTML = originalContent; lucide.createIcons(); }
         }
 
         // --- Rendering ---
@@ -588,7 +582,7 @@
                 tr.innerHTML = `
                     <td class="pl-3 pr-2 py-1.5"><div class="font-black text-black text-[10px] truncate w-24">${s.name} <span class="text-[7px] text-orange-600 font-black">${s.class}</span></div><div class="text-[7px] text-black font-bold uppercase tracking-tighter">Pos: ${displayOrder + 1}</div></td>
                     <td class="px-2 py-1.5"><div class="target-row gap-1 scrollbar-hide">${pairHtml}</div></td>
-                    <td class="pr-3 pl-2 py-1.5 text-right font-black text-base text-black leading-none">${hitsCount}</td>`;
+                    <td class="pr-3 pl-2 py-1.5 text-right font-black text-base text-black">${hitsCount}</td>`;
                 scoringBody.appendChild(tr);
             });
 
