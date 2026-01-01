@@ -6,10 +6,13 @@
     <title>CPSA Sporting - Squad Scorecard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Library to convert HTML to Image -->
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <style>
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
         
+        /* Print Styling - Traditional CPSA Layout */
         @media print {
             .no-print { display: none !important; }
             body { 
@@ -48,7 +51,7 @@
             .official-miss { font-weight: 900; font-size: 10pt; line-height: 1; }
             
             .signature-section { 
-                margin-top: 15px; 
+                margin-top: 10px; 
                 display: flex; 
                 justify-content: flex-end; 
             }
@@ -63,7 +66,30 @@
             
             .stand-header { font-size: 7pt !important; font-weight: bold; background: #f0f0f0 !important; -webkit-print-color-adjust: exact; }
             .shooter-cell { font-size: 8pt !important; text-align: left; padding-left: 3px !important; }
+
+            .print-notes {
+                border: 1pt solid black;
+                margin-top: 10px;
+                padding: 5px;
+                font-size: 8pt;
+                min-height: 40px;
+                word-wrap: break-word;
+            }
         }
+
+        /* Helper for Image Capturing - Landscape Layout */
+        #capture-container {
+            position: absolute;
+            left: -9999px;
+            top: 0;
+            width: 1200px; /* Fixed Landscape width */
+            background: white;
+            padding: 30px;
+            color: black;
+            font-family: "Courier New", Courier, monospace;
+        }
+        #capture-container table { width: 100%; border-collapse: collapse; border: 2pt solid black; table-layout: fixed; }
+        #capture-container th, #capture-container td { border: 1pt solid black; padding: 4px; text-align: center; }
         
         .hit-bg { background-color: #16a34a; color: white; border-color: #15803d; }
         .miss-bg { background-color: #ef4444; color: white; border-color: #b91c1c; }
@@ -90,9 +116,12 @@
                     </div>
                 </div>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
+                <button id="share-btn" onclick="window.shareAsImage()" class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-lg">
+                    <i data-lucide="share-2" size="14"></i> Share Image
+                </button>
                 <button onclick="window.exportToPDF()" class="bg-orange-500 hover:bg-orange-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-lg">
-                    <i data-lucide="printer" size="14"></i> Export PDF
+                    <i data-lucide="printer" size="14"></i> PDF
                 </button>
             </div>
         </div>
@@ -154,7 +183,7 @@
                 <div class="flex justify-between items-center mb-2">
                     <div class="flex items-baseline gap-2">
                         <h2 id="active-stand-title" class="text-base font-black italic">Stand 1</h2>
-                        <span id="active-stand-bird-count" class="text-[9px] text-orange-400 font-bold uppercase tracking-wider"></span>
+                        <span id="active-stand-bird-count" class="text-[9px] text-orange-400 font-black uppercase tracking-wider"></span>
                     </div>
                     <div class="text-[9px] font-bold text-orange-400 uppercase italic">Rotation Active</div>
                 </div>
@@ -192,15 +221,15 @@
         </section>
 
         <!-- Live Master Scorecard Summary -->
-        <section class="bg-white rounded-xl shadow-sm border border-slate-300 overflow-hidden card-shadow">
-            <div class="p-2 bg-slate-100 border-b border-slate-300 font-black text-black flex justify-between items-center no-print">
+        <section class="bg-white rounded-xl shadow-sm border border-slate-300 overflow-hidden card-shadow no-print">
+            <div class="p-2 bg-slate-100 border-b border-slate-300 font-black text-black flex justify-between items-center">
                 <span class="text-[10px] uppercase tracking-wide">Live Summary (Leaderboard Order)</span>
                 <button onclick="resetAll()" class="text-[9px] text-red-600 font-bold flex items-center gap-1 hover:underline">
                    <i data-lucide="trash-2" size="10"></i> Reset
                 </button>
             </div>
             
-            <div class="overflow-x-auto no-print">
+            <div class="overflow-x-auto">
                 <table class="w-full text-left text-[9px]" id="full-scorecard">
                     <thead><tr class="bg-slate-100 text-black font-black uppercase border-b border-slate-300" id="summary-header"></tr></thead>
                     <tbody id="summary-body" class="text-black"></tbody>
@@ -209,20 +238,46 @@
             </div>
         </section>
 
-        <!-- PROFESSIONAL EXPORT VIEW (Hidden in App) -->
+        <!-- Notes Box -->
+        <section class="bg-white rounded-xl shadow-sm border border-slate-300 p-3 no-print">
+            <label class="text-[10px] font-black text-black uppercase flex items-center gap-1 mb-1">
+                <i data-lucide="sticky-note" size="10" class="text-black"></i> Round Notes
+            </label>
+            <textarea 
+                id="app-notes" 
+                placeholder="Enter notes about this round (weather, target types, feedback)..."
+                class="w-full h-24 bg-slate-50 border border-slate-200 rounded-md p-2 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-bold text-black resize-none"
+                oninput="updateField('notes', this.value)"
+            ></textarea>
+        </section>
+
+        <!-- HIDDEN CONTAINER FOR IMAGE GENERATION (Landscape + Colors, NO NOTES) -->
+        <div id="capture-container">
+            <div style="border-bottom: 2pt solid black; padding: 10px 0; margin-bottom: 15px; display: flex; justify-content: space-between; font-size: 14pt;">
+                <div><strong>GROUND:</strong> <span id="cap-ground"></span></div>
+                <div style="text-align:center"><strong>SPORTING SCORE LEADERBOARD</strong></div>
+                <div><strong>DATE:</strong> <span id="cap-date"></span></div>
+            </div>
+            <div style="font-size: 12pt; margin-bottom: 10px;"><strong>EVENT:</strong> <span id="cap-event"></span></div>
+            <table id="cap-grid"></table>
+            <div style="margin-top: 25px; display: flex; justify-content: space-between; align-items: center; font-size: 10pt; font-weight: bold;">
+                <span>Generated by Sporting Pro App</span>
+                <div style="border-top: 1pt solid black; width: 250px; text-align: center; padding-top: 5px;">SCORER / SHOOTER SIGNATURE</div>
+            </div>
+        </div>
+
+        <!-- PDF EXPORT VIEW (Black & White Traditional, WITH NOTES) -->
         <div class="hidden print-only" id="print-view">
             <div class="print-header">
                 <div><strong>GROUND:</strong> <span id="p-ground" style="text-decoration: underline"></span></div>
                 <div style="text-align:center"><strong>OFFICIAL CPSA SCORECARD</strong></div>
                 <div style="text-align:right"><strong>DATE:</strong> <span id="p-date" style="text-decoration: underline"></span></div>
             </div>
-            
             <div style="font-size: 8pt; margin-bottom: 5px;"><strong>EVENT:</strong> <span id="p-event"></span></div>
-
-            <table id="print-grid">
-                <!-- Populated by JS -->
-            </table>
-
+            <table id="print-grid"></table>
+            <div class="print-notes" id="print-notes-container">
+                <strong>NOTES:</strong> <span id="p-notes"></span>
+            </div>
             <div class="signature-section">
                 <div class="sig-line">SCORER / SHOOTER SIGNATURE</div>
             </div>
@@ -231,24 +286,20 @@
 
     <script>
         // --- State Management ---
-        const SAVE_KEY = 'cpsa_sporting_pro_v7_stable';
+        const SAVE_KEY = 'cpsa_sporting_pro_v8_landscape_no_notes';
         let state = {
             groundName: "",
             sessionDate: new Date().toISOString().split('T')[0],
             eventType: "",
+            notes: "",
             shooters: [{ id: Date.now(), name: "Shooter 1", cpsaNo: "", class: "U" }],
             stands: [],
             hits: {}, 
             activeStandIndex: 0
         };
 
-        // --- Core Persistence Functions ---
         function saveSession() {
-            try {
-                localStorage.setItem(SAVE_KEY, JSON.stringify(state));
-            } catch (e) {
-                console.error("Local storage save failed", e);
-            }
+            try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) { console.error("Save failed", e); }
         }
 
         function loadSession() {
@@ -256,12 +307,9 @@
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved);
-                    // Deep merge or replace
                     state = Object.assign({}, state, parsed);
                     return true;
-                } catch (e) {
-                    console.error("Local storage load failed", e);
-                }
+                } catch (e) { console.error("Load failed", e); }
             }
             return false;
         }
@@ -271,37 +319,25 @@
             const newCount = parseInt(count);
             const currentCount = state.stands.length;
             if (newCount > currentCount) {
-                for (let i = currentCount + 1; i <= newCount; i++) {
-                    state.stands.push({ id: i, targets: 8 });
-                }
+                for (let i = currentCount + 1; i <= newCount; i++) state.stands.push({ id: i, targets: 8 });
             } else if (newCount < currentCount) {
                 state.stands = state.stands.slice(0, newCount);
                 if (state.activeStandIndex >= newCount) state.activeStandIndex = newCount - 1;
             }
-            if (shouldRender) { 
-                render(); 
-                saveSession(); 
-            }
+            if (shouldRender) { render(); saveSession(); }
         }
 
         function addShooter() {
             if (state.shooters.length >= 6) return;
-            state.shooters.push({ 
-                id: Date.now(), 
-                name: `Shooter ${state.shooters.length + 1}`,
-                cpsaNo: "",
-                class: "U"
-            });
-            render();
-            saveSession();
+            state.shooters.push({ id: Date.now(), name: `Shooter ${state.shooters.length + 1}`, cpsaNo: "", class: "U" });
+            render(); saveSession();
         }
 
         function removeShooter(id) {
             if (state.shooters.length <= 1) return;
             state.shooters = state.shooters.filter(s => s.id !== id);
             delete state.hits[id];
-            render();
-            saveSession();
+            render(); saveSession();
         }
 
         function updateShooter(id, field, value) {
@@ -323,8 +359,7 @@
             }
             const current = state.hits[shooterId][standId][targetIdx];
             state.hits[shooterId][standId][targetIdx] = (current === value) ? null : value;
-            render();
-            saveSession();
+            render(); saveSession();
         }
 
         function setTargetCount(count) {
@@ -335,25 +370,18 @@
                 if (state.hits[s.id][stand.id]) {
                     const curr = state.hits[s.id][stand.id];
                     state.hits[s.id][stand.id] = curr.length > count ? curr.slice(0, count) : [...curr, ...Array(count - curr.length).fill(null)];
-                } else {
-                    state.hits[s.id][stand.id] = Array(count).fill(null);
-                }
+                } else { state.hits[s.id][stand.id] = Array(count).fill(null); }
             });
-            render();
-            saveSession();
+            render(); saveSession();
         }
 
         function navStand(dir) {
             state.activeStandIndex = Math.max(0, Math.min(state.stands.length - 1, state.activeStandIndex + dir));
-            render();
-            saveSession();
+            render(); saveSession();
         }
 
         function resetAll() {
-            if (confirm("Reset everything? All scores and squad data will be deleted.")) {
-                localStorage.removeItem(SAVE_KEY);
-                location.reload();
-            }
+            if (confirm("Reset everything?")) { localStorage.removeItem(SAVE_KEY); location.reload(); }
         }
 
         function getOrdinal(n) {
@@ -371,18 +399,120 @@
             return grand;
         }
 
+        // --- Export Functions ---
+        function generateGridHTML(targetId, useColor = false) {
+            const grid = document.getElementById(targetId);
+            grid.innerHTML = '';
+            
+            const nameWidth = targetId === 'cap-grid' ? '200px' : '140px';
+            const fontSize = targetId === 'cap-grid' ? '10pt' : '7pt';
+
+            let headerHtml = `<tr style="background:#f0f0f0"><th style="width:${nameWidth}; font-size:${fontSize}; border: 1pt solid black;">NAME</th>`;
+            state.stands.forEach(st => { 
+                headerHtml += `<th colspan="${st.targets}" style="font-size:${fontSize}; border: 1pt solid black; background:#f0f0f0">ST ${st.id}</th>`; 
+            });
+            headerHtml += `<th style="width:60px; font-size:${fontSize}; border: 1pt solid black;">TOTAL</th></tr>`;
+            grid.innerHTML += headerHtml;
+
+            const shooterPerformance = state.shooters.map(s => ({ ...s, grandTotal: getShooterGrandTotal(s.id) })).sort((a, b) => b.grandTotal - a.grandTotal);
+            shooterPerformance.forEach(s => {
+                let rowHtml = `<tr><td style="border: 1pt solid black; font-size: 10pt; text-align: left; padding: 5px;"><strong>${s.name}</strong></td>`;
+                let total = 0;
+                state.stands.forEach(st => {
+                    const scores = (state.hits[s.id] && state.hits[s.id][st.id]) ? state.hits[s.id][st.id] : Array(st.targets).fill(null);
+                    scores.forEach(h => {
+                        let mark = '&nbsp;';
+                        if (h === true) { 
+                            const color = useColor ? '#16a34a' : 'black';
+                            mark = `<span style="font-family: serif; font-weight: 900; font-size: 14pt; color: ${color};">/</span>`; 
+                            total++; 
+                        }
+                        if (h === false) {
+                            const color = useColor ? '#ef4444' : 'black';
+                            mark = `<span style="font-weight: 900; font-size: 12pt; color: ${color};">O</span>`;
+                        }
+                        rowHtml += `<td style="border: 1pt solid black; padding:0 !important; width: 18px;"><div style="width:100%; display: flex; align-items: center; justify-content: center;">${mark}</div></td>`;
+                    });
+                });
+                rowHtml += `<td style="border: 1pt solid black; font-weight:bold; font-size:16pt; text-align:center; background: #fafafa;">${total}</td></tr>`;
+                grid.innerHTML += rowHtml;
+            });
+        }
+
+        window.exportToPDF = function() {
+            document.getElementById('p-ground').innerText = state.groundName || "N/A";
+            document.getElementById('p-date').innerText = state.sessionDate || "N/A";
+            document.getElementById('p-event').innerText = state.eventType || "N/A";
+            document.getElementById('p-notes').innerText = state.notes || "None recorded.";
+            generateGridHTML('print-grid', false); 
+            window.print();
+        }
+
+        window.shareAsImage = async function() {
+            const btn = document.getElementById('share-btn');
+            const originalContent = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin w-4 h-4"></i> Generating...';
+            lucide.createIcons();
+
+            const container = document.getElementById('capture-container');
+            document.getElementById('cap-ground').innerText = state.groundName || "N/A";
+            document.getElementById('cap-date').innerText = state.sessionDate || "N/A";
+            document.getElementById('cap-event').innerText = state.eventType || "N/A";
+            // No notes setting here for Share Image
+            generateGridHTML('cap-grid', true);
+
+            try {
+                const canvas = await html2canvas(container, {
+                    scale: 3, 
+                    backgroundColor: '#ffffff',
+                    useCORS: true,
+                    logging: false
+                });
+
+                canvas.toBlob(async (blob) => {
+                    btn.innerHTML = originalContent;
+                    lucide.createIcons();
+
+                    if (!blob) return;
+                    const file = new File([blob], `leaderboard-${Date.now()}.png`, { type: 'image/png' });
+                    
+                    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                        await navigator.share({
+                            files: [file],
+                            title: 'Squad Leaderboard',
+                            text: `Final scores at ${state.groundName || 'the shoot'}`
+                        });
+                    } else {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `scorecard-${state.groundName || 'shoot'}.png`;
+                        a.click();
+                        const msg = document.createElement('div');
+                        msg.className = "fixed bottom-20 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-4 py-2 rounded-full text-xs font-bold z-50 animate-bounce";
+                        msg.innerText = "Downloaded to gallery. Share manually to WhatsApp.";
+                        document.body.appendChild(msg);
+                        setTimeout(() => msg.remove(), 3000);
+                    }
+                });
+            } catch (err) {
+                console.error("Image generation failed", err);
+                btn.innerHTML = originalContent;
+                lucide.createIcons();
+            }
+        }
+
         // --- Rendering ---
         function render() {
             const activeStand = state.stands[state.activeStandIndex];
             if (!activeStand) return;
 
-            // Sync Header Inputs
             document.getElementById('ground-name').value = state.groundName || "";
             document.getElementById('shoot-date').value = state.sessionDate || "";
             document.getElementById('event-type').value = state.eventType || "";
+            document.getElementById('app-notes').value = state.notes || "";
             document.getElementById('stand-count-select').value = state.stands.length;
             
-            // 1. Shooter Setup List
             const list = document.getElementById('shooters-list');
             list.innerHTML = '';
             state.shooters.forEach((s, idx) => {
@@ -390,60 +520,28 @@
                 div.className = "bg-white p-1 rounded-lg border border-slate-300 grid grid-cols-12 gap-1 items-center shadow-sm";
                 div.innerHTML = `
                     <div class="col-span-1 text-[7px] font-black text-black text-center">${idx + 1}</div>
-                    <div class="col-span-6">
-                        <input type="text" value="${s.name}" onchange="updateShooter(${s.id}, 'name', this.value)" 
-                            class="w-full border-none px-1 py-0.5 text-[9px] font-black text-black" placeholder="Shooter Name">
-                    </div>
-                    <div class="col-span-4 flex gap-0.5">
-                        <input type="text" value="${s.cpsaNo}" onchange="updateShooter(${s.id}, 'cpsaNo', this.value)" 
-                            class="w-full border border-slate-200 rounded px-0.5 py-0.5 text-[8px] font-bold text-black" placeholder="CPSA #">
-                        <select onchange="updateShooter(${s.id}, 'class', this.value)" class="border border-slate-200 rounded px-0.5 py-0.5 text-[8px] font-black text-black">
-                            ${['AA', 'A', 'B', 'C', 'U'].map(c => `<option value="${c}" ${s.class === c ? 'selected' : ''}>${c}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div class="col-span-1 text-right">
-                        <button onclick="removeShooter(${s.id})" class="text-slate-400 hover:text-red-600"><i data-lucide="x" size="10"></i></button>
-                    </div>
-                `;
+                    <div class="col-span-6"><input type="text" value="${s.name}" onchange="updateShooter(${s.id}, 'name', this.value)" class="w-full border-none px-1 py-0.5 text-[9px] font-black text-black" placeholder="Shooter Name"></div>
+                    <div class="col-span-4 flex gap-0.5"><input type="text" value="${s.cpsaNo}" onchange="updateShooter(${s.id}, 'cpsaNo', this.value)" class="w-full border border-slate-200 rounded px-0.5 py-0.5 text-[8px] font-bold text-black" placeholder="CPSA #"><select onchange="updateShooter(${s.id}, 'class', this.value)" class="border border-slate-200 rounded px-0.5 py-0.5 text-[8px] font-black text-black">${['AA', 'A', 'B', 'C', 'U'].map(c => `<option value="${c}" ${s.class === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
+                    <div class="col-span-1 text-right"><button onclick="removeShooter(${s.id})" class="text-slate-400 hover:text-red-600"><i data-lucide="x" size="10"></i></button></div>`;
                 list.appendChild(div);
             });
 
-            // 2. Stand Selector Buttons
             const selector = document.getElementById('stand-selector');
             selector.innerHTML = '';
             state.stands.forEach((s, idx) => {
                 const btn = document.createElement('button');
                 const active = state.activeStandIndex === idx;
-                btn.className = `flex-shrink-0 w-8 h-8 rounded-lg font-black text-[10px] border-2 transition-all ${
-                    active ? 'bg-orange-500 border-orange-500 text-white shadow-md' : 'bg-white border-slate-300 text-black'
-                }`;
-                btn.innerText = s.id;
-                btn.onclick = () => { state.activeStandIndex = idx; render(); saveSession(); };
+                btn.className = `flex-shrink-0 w-8 h-8 rounded-lg font-black text-[10px] border-2 transition-all ${active ? 'bg-orange-50 border-orange-50 text-white shadow-md' : 'bg-white border-slate-300 text-black'}`;
+                btn.innerText = s.id; btn.onclick = () => { state.activeStandIndex = idx; render(); saveSession(); };
                 selector.appendChild(btn);
             });
 
-            document.getElementById('active-stand-bird-count').innerText = `${activeStand.targets} Birds`;
-
-            // Active Stand Bird Button Highlighting
-            [4, 6, 8, 10].forEach(count => {
-                const btn = document.getElementById(`btn-targets-${count}`);
-                if (btn) {
-                    if (activeStand.targets === count) {
-                        btn.classList.add('bg-orange-500', 'border-orange-500', 'text-white');
-                        btn.classList.remove('bg-slate-800', 'text-slate-300');
-                    } else {
-                        btn.classList.remove('bg-orange-500', 'border-orange-500', 'text-white');
-                        btn.classList.add('bg-slate-800', 'text-slate-300');
-                    }
-                }
-            });
-
-            // 3. Main Scoring Table (with fair procedural rotation)
             const n = state.shooters.length;
             const rotationOffset = state.activeStandIndex % n;
             const rotatedShooters = [];
             for (let i = 0; i < n; i++) rotatedShooters.push(state.shooters[(i + rotationOffset) % n]);
 
+            document.getElementById('active-stand-bird-count').innerText = `${activeStand.targets} Birds`;
             const scoringBody = document.getElementById('scoring-body');
             scoringBody.innerHTML = '';
             rotatedShooters.forEach((s, displayOrder) => {
@@ -451,118 +549,53 @@
                 const hitsCount = sScores.filter(h => h === true).length;
                 const tr = document.createElement('tr');
                 tr.className = "border-b border-slate-200";
-                
                 let pairHtml = '';
                 for(let p=0; p < activeStand.targets; p += 2) {
-                    pairHtml += `<div class="pair-group">
-                        <div class="flex flex-col gap-0.5">
-                            <span class="text-[6px] font-black text-black text-center leading-none">${p+1}</span>
-                            <button onclick="toggleHit(${s.id}, ${activeStand.id}, ${p}, true)" class="w-6 h-6 rounded font-black text-[8px] border ${sScores[p] === true ? 'hit-bg' : 'bg-white border-slate-300 text-slate-300'}">H</button>
-                            <button onclick="toggleHit(${s.id}, ${activeStand.id}, ${p}, false)" class="w-6 h-6 rounded font-black text-[8px] border ${sScores[p] === false ? 'miss-bg' : 'bg-white border-slate-300 text-slate-300'}">M</button>
-                        </div>
-                        <div class="flex flex-col gap-0.5">
-                            <span class="text-[6px] font-black text-black text-center leading-none">${p+2}</span>
-                            <button onclick="toggleHit(${s.id}, ${activeStand.id}, ${p+1}, true)" class="w-6 h-6 rounded font-black text-[8px] border ${sScores[p+1] === true ? 'hit-bg' : 'bg-white border-slate-300 text-slate-300'}">H</button>
-                            <button onclick="toggleHit(${s.id}, ${activeStand.id}, ${p+1}, false)" class="w-6 h-6 rounded font-black text-[8px] border ${sScores[p+1] === false ? 'miss-bg' : 'bg-white border-slate-300 text-slate-300'}">M</button>
-                        </div>
-                    </div>`;
+                    pairHtml += `<div class="pair-group"><div class="flex flex-col gap-0.5"><span class="text-[6px] font-black text-black text-center leading-none">${p+1}</span><button onclick="toggleHit(${s.id}, ${activeStand.id}, ${p}, true)" class="w-6 h-6 rounded font-black text-[8px] border ${sScores[p] === true ? 'hit-bg shadow-sm' : 'bg-white border-slate-300 text-slate-300'}">H</button><button onclick="toggleHit(${s.id}, ${activeStand.id}, ${p}, false)" class="w-6 h-6 rounded font-black text-[8px] border ${sScores[p] === false ? 'miss-bg shadow-sm' : 'bg-white border-slate-300 text-slate-300'}">M</button></div><div class="flex flex-col gap-0.5"><span class="text-[6px] font-black text-black text-center leading-none">${p+2}</span><button onclick="toggleHit(${s.id}, ${activeStand.id}, ${p+1}, true)" class="w-6 h-6 rounded font-black text-[8px] border ${sScores[p+1] === true ? 'hit-bg shadow-sm' : 'bg-white border-slate-300 text-slate-300'}">H</button><button onclick="toggleHit(${s.id}, ${activeStand.id}, ${p+1}, false)" class="w-6 h-6 rounded font-black text-[8px] border ${sScores[p+1] === false ? 'miss-bg shadow-sm' : 'bg-white border-slate-300 text-slate-300'}">M</button></div></div>`;
                 }
                 tr.innerHTML = `
-                    <td class="pl-3 pr-2 py-1.5"><div class="font-black text-black text-[10px] truncate w-24">${s.name} <span class="text-[7px] text-orange-600 uppercase font-black">${s.class}</span></div><div class="text-[7px] text-black font-bold uppercase tracking-tighter">Pos: ${displayOrder + 1}</div></td>
+                    <td class="pl-3 pr-2 py-1.5"><div class="font-black text-black text-[10px] truncate w-24">${s.name} <span class="text-[7px] text-orange-600 font-black">${s.class}</span></div><div class="text-[7px] text-black font-bold">Pos: ${displayOrder + 1}</div></td>
                     <td class="px-2 py-1.5"><div class="target-row gap-1 scrollbar-hide">${pairHtml}</div></td>
-                    <td class="pr-3 pl-2 py-1.5 text-right font-black text-base text-black leading-none">${hitsCount}</td>`;
+                    <td class="pr-3 pl-2 py-1.5 text-right font-black text-base text-black">${hitsCount}</td>`;
                 scoringBody.appendChild(tr);
             });
 
-            // 4. Live Summary (Leaderboard Order)
-            const shooterPerformance = state.shooters.map(s => ({ ...s, grandTotal: getShooterGrandTotal(s.id) }));
-            const sortedByWinning = [...shooterPerformance].sort((a, b) => b.grandTotal - a.grandTotal);
-
+            const shooterPerformance = state.shooters.map(s => ({ ...s, grandTotal: getShooterGrandTotal(s.id) })).sort((a, b) => b.grandTotal - a.grandTotal);
             const header = document.getElementById('summary-header');
-            header.innerHTML = '<th class="px-2 py-2 border-b text-black font-black w-16 text-left">STAND</th>';
-            sortedByWinning.forEach(s => { 
-                header.innerHTML += `<th class="px-2 py-2 border-b text-center border-l border-slate-300 font-black"><div class="text-[8px] truncate max-w-[80px] mx-auto uppercase">${s.name}</div></th>`; 
-            });
+            header.innerHTML = '<th class="px-2 py-2 border-b text-black font-black w-16">STAND</th>';
+            shooterPerformance.forEach(s => { header.innerHTML += `<th class="px-2 py-2 border-b text-center border-l border-slate-300 font-black"><div class="text-[8px] truncate max-w-[80px] mx-auto uppercase">${s.name}</div></th>`; });
 
             const body = document.getElementById('summary-body');
             body.innerHTML = '';
             state.stands.forEach((stand, idx) => {
                 const tr = document.createElement('tr');
                 tr.className = idx === state.activeStandIndex ? "bg-orange-50 font-bold" : "border-b border-slate-200";
-                let rowHtml = `<td class="px-2 py-1.5 text-black font-bold whitespace-nowrap">St ${stand.id} <span class="text-[7px] font-normal text-black opacity-60">(${stand.targets})</span></td>`;
-                sortedByWinning.forEach(s => {
+                let rowHtml = `<td class="px-2 py-1.5 text-black font-bold whitespace-nowrap">St ${stand.id} <span class="text-[7px] font-normal opacity-60">(${stand.targets})</span></td>`;
+                shooterPerformance.forEach(s => {
                     const hits = (state.hits[s.id] && state.hits[s.id][stand.id]) ? state.hits[s.id][stand.id].filter(h => h === true).length : 0;
-                    rowHtml += `<td class="px-2 py-1.5 text-center font-bold text-xs border-l border-slate-300">${hits}</td>`;
+                    rowHtml += `<td class="px-2 py-1.5 text-center font-bold text-xs border-l border-slate-200">${hits}</td>`;
                 });
                 tr.innerHTML = rowHtml; body.appendChild(tr);
             });
 
-            const sortedRawScores = sortedByWinning.map(s => s.grandTotal);
-            const rankings = sortedByWinning.map(s => {
-                const rank = sortedRawScores.findIndex(score => score === s.grandTotal) + 1;
-                return getOrdinal(rank);
-            });
-
             const footer = document.getElementById('summary-footer');
-            let totalRow = `<tr class="bg-slate-900 text-white font-black border-t-2 border-black"><td class="px-2 py-2 uppercase text-[8px]">TOTAL</td>`;
-            sortedByWinning.forEach(s => { totalRow += `<td class="px-2 py-2 text-center text-sm border-l border-slate-700">${s.grandTotal}</td>`; });
-            
-            let rankRow = `<tr class="bg-orange-500 text-white font-black"><td class="px-2 py-2 uppercase text-[8px]">RANK</td>`;
-            rankings.forEach(r => { rankRow += `<td class="px-2 py-2 text-center text-xs border-l border-orange-400">${r}</td>`; });
-
-            footer.innerHTML = totalRow + '</tr>' + rankRow + '</tr>';
+            let totalRow = `<tr class="bg-slate-900 text-white font-black"><td class="px-2 py-2 uppercase text-[8px]">TOTAL</td>`;
+            shooterPerformance.forEach(s => { totalRow += `<td class="px-2 py-2 text-center text-sm border-l border-slate-700">${s.grandTotal}</td>`; });
+            footer.innerHTML = totalRow + '</tr>';
 
             document.getElementById('prev-btn').disabled = state.activeStandIndex === 0;
             document.getElementById('next-btn').disabled = state.activeStandIndex === state.stands.length -1;
             lucide.createIcons();
         }
 
-        window.exportToPDF = function() {
-            document.getElementById('p-ground').innerText = state.groundName || "N/A";
-            document.getElementById('p-date').innerText = state.sessionDate || "N/A";
-            document.getElementById('p-event').innerText = state.eventType || "N/A";
-
-            const grid = document.getElementById('print-grid');
-            grid.innerHTML = '';
-
-            let headerHtml = `<tr style="background:#f0f0f0"><th style="width:140px; font-size:7pt">NAME</th>`;
-            state.stands.forEach(st => { headerHtml += `<th colspan="${st.targets}" class="stand-header">ST ${st.id}</th>`; });
-            headerHtml += `<th style="width:40px; font-size:7pt">TOTAL</th></tr>`;
-            grid.innerHTML += headerHtml;
-
-            const shooterPerformance = state.shooters.map(s => ({ ...s, grandTotal: getShooterGrandTotal(s.id) })).sort((a, b) => b.grandTotal - a.grandTotal);
-            shooterPerformance.forEach(s => {
-                let rowHtml = `<tr><td class="shooter-cell"><strong>${s.name}</strong></td>`;
-                let total = 0;
-                state.stands.forEach(st => {
-                    const scores = (state.hits[s.id] && state.hits[s.id][st.id]) ? state.hits[s.id][st.id] : Array(st.targets).fill(null);
-                    scores.forEach(h => {
-                        let mark = '&nbsp;';
-                        if (h === true) { mark = '<span class="official-hit">/</span>'; total++; }
-                        if (h === false) mark = '<span class="official-miss">O</span>';
-                        rowHtml += `<td style="padding:0 !important"><div class="print-box">${mark}</div></td>`;
-                    });
-                });
-                rowHtml += `<td style="font-weight:bold; font-size:12pt">${total}</td></tr>`;
-                grid.innerHTML += rowHtml;
-            });
-            window.print();
-        }
-
         window.onload = function() {
-            // Populate Stand Count Select
             const select = document.getElementById('stand-count-select');
             for(let i=1; i<=20; i++) {
                 const opt = document.createElement('option');
                 opt.value = i; opt.textContent = `${i} Stands`;
                 select.appendChild(opt);
             }
-
-            // Persistence Chain: Load first, then initialize default if needed
-            const hasSavedData = loadSession();
-            if (!hasSavedData || state.stands.length === 0) {
-                updateTotalStands(12, false);
-            }
+            if (!loadSession()) updateTotalStands(12, false);
             render();
         }
     </script>
