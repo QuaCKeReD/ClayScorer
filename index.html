@@ -62,7 +62,6 @@
                 font-weight: bold; 
             }
             
-            /* Tighten stand headers for A4 width */
             .stand-header { font-size: 7pt !important; font-weight: bold; background: #f0f0f0 !important; -webkit-print-color-adjust: exact; }
             .shooter-cell { font-size: 8pt !important; text-align: left; padding-left: 3px !important; }
         }
@@ -126,7 +125,7 @@
                 <label class="text-[10px] font-black text-black uppercase flex items-center gap-1">
                     <i data-lucide="layers" size="10" class="text-black"></i> Total Stands
                 </label>
-                <select id="stand-count-select" onchange="updateTotalStands(this.value)" class="w-full bg-slate-50 border-none rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-black text-black">
+                <select id="stand-count-select" onchange="updateTotalStands(this.value)" class="w-full bg-slate-50 border-slate-200 rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-black text-black">
                 </select>
             </div>
         </section>
@@ -196,8 +195,8 @@
         <!-- Live Master Scorecard Summary -->
         <section class="bg-white rounded-xl shadow-sm border border-slate-300 overflow-hidden card-shadow">
             <div class="p-2 bg-slate-100 border-b border-slate-300 font-black text-black flex justify-between items-center no-print">
-                <span class="text-[10px] uppercase tracking-wide">Live Master Scorecard</span>
-                <button onclick="resetAll()" class="text-[9px] text-red-500 flex items-center gap-1 hover:underline">
+                <span class="text-[10px] uppercase tracking-wide">Live Summary (Leaderboard Order)</span>
+                <button onclick="resetAll()" class="text-[9px] text-red-600 font-bold flex items-center gap-1 hover:underline">
                    <i data-lucide="trash-2" size="10"></i> Reset
                 </button>
             </div>
@@ -233,7 +232,7 @@
 
     <script>
         // --- State Management ---
-        const SAVE_KEY = 'cpsa_sporting_pro_v4';
+        const SAVE_KEY = 'cpsa_sporting_pro_v5';
         let state = {
             groundName: "",
             sessionDate: new Date().toISOString().split('T')[0],
@@ -366,6 +365,16 @@
             window.print();
         }
 
+        function getShooterGrandTotal(shooterId) {
+            let grand = 0;
+            state.stands.forEach(st => {
+                if (state.hits[shooterId] && state.hits[shooterId][st.id]) {
+                    grand += state.hits[shooterId][st.id].filter(h => h === true).length;
+                }
+            });
+            return grand;
+        }
+
         function render() {
             const activeStand = state.stands[state.activeStandIndex];
             if (!activeStand) return;
@@ -393,13 +402,14 @@
             state.stands.forEach((s, idx) => {
                 const btn = document.createElement('button');
                 const active = state.activeStandIndex === idx;
-                btn.className = `flex-shrink-0 w-8 h-8 rounded-lg font-black text-[10px] border-2 transition-all ${active ? 'bg-orange-500 border-orange-500 text-white shadow-md' : 'bg-white border-slate-300 text-black'}`;
+                btn.className = `flex-shrink-0 w-8 h-8 rounded-lg font-black text-[10px] border-2 transition-all ${active ? 'bg-orange-50 border-orange-50 text-white shadow-md' : 'bg-white border-slate-300 text-black'}`;
                 btn.innerText = s.id; btn.onclick = () => { state.activeStandIndex = idx; render(); };
                 selector.appendChild(btn);
             });
 
             document.getElementById('active-stand-bird-count').innerText = `${activeStand.targets} Birds`;
 
+            // Procedural Rotation Logic (based on squad entry order)
             const n = state.shooters.length;
             const rotationOffset = state.activeStandIndex % n;
             const rotatedShooters = [];
@@ -434,9 +444,18 @@
                 scoringBody.appendChild(tr);
             });
 
+            // Summary Sorting Logic (Leaderboard Order)
+            const shooterPerformance = state.shooters.map(s => ({
+                ...s,
+                grandTotal: getShooterGrandTotal(s.id)
+            }));
+            const sortedByWinning = [...shooterPerformance].sort((a, b) => b.grandTotal - a.grandTotal);
+
             const header = document.getElementById('summary-header');
             header.innerHTML = '<th class="px-2 py-2 border-b text-black font-black w-16">STAND</th>';
-            state.shooters.forEach(s => { header.innerHTML += `<th class="px-2 py-2 border-b text-center border-l border-slate-300 font-black"><div class="text-[8px] truncate max-w-[80px] mx-auto">${s.name}</div></th>`; });
+            sortedByWinning.forEach(s => { 
+                header.innerHTML += `<th class="px-2 py-2 border-b text-center border-l border-slate-300 font-black"><div class="text-[8px] truncate max-w-[80px] mx-auto">${s.name}</div></th>`; 
+            });
 
             const body = document.getElementById('summary-body');
             body.innerHTML = '';
@@ -444,29 +463,27 @@
                 const tr = document.createElement('tr');
                 tr.className = idx === state.activeStandIndex ? "bg-orange-50 font-bold" : "border-b border-slate-200";
                 let rowHtml = `<td class="px-2 py-1.5 text-black font-bold whitespace-nowrap">St ${stand.id} <span class="text-[7px] font-normal text-black opacity-60">(${stand.targets})</span></td>`;
-                state.shooters.forEach(s => {
+                sortedByWinning.forEach(s => {
                     const hits = (state.hits[s.id] && state.hits[s.id][stand.id]) ? state.hits[s.id][stand.id].filter(h => h === true).length : 0;
-                    rowHtml += `<td class="px-2 py-1.5 text-center font-bold text-xs border-l border-slate-200">${hits}</td>`;
+                    rowHtml += `<td class="px-2 py-1.5 text-center font-bold text-xs border-l border-slate-300">${hits}</td>`;
                 });
                 tr.innerHTML = rowHtml; body.appendChild(tr);
             });
 
-            const shooterScores = state.shooters.map(s => {
-                let score = 0;
-                state.stands.forEach(st => { if (state.hits[s.id] && state.hits[s.id][st.id]) score += state.hits[s.id][st.id].filter(h => h === true).length; });
-                return { id: s.id, score };
-            });
-            const sortedScores = [...shooterScores].sort((a, b) => b.score - a.score);
-            const rankings = shooterScores.map(s => {
-                const rank = sortedScores.findIndex(x => x.score === s.score) + 1;
+            // Ranking Footer
+            const sortedRawScores = sortedByWinning.map(s => s.grandTotal);
+            const rankings = sortedByWinning.map(s => {
+                const rank = sortedRawScores.findIndex(score => score === s.grandTotal) + 1;
                 return getOrdinal(rank);
             });
 
             const footer = document.getElementById('summary-footer');
             let totalRow = `<tr class="bg-slate-900 text-white font-black border-t-2 border-black"><td class="px-2 py-2 uppercase text-[8px]">TOTAL</td>`;
-            shooterScores.forEach(s => { totalRow += `<td class="px-2 py-2 text-center text-sm border-l border-slate-700">${s.score}</td>`; });
+            sortedByWinning.forEach(s => { totalRow += `<td class="px-2 py-2 text-center text-sm border-l border-slate-700">${s.grandTotal}</td>`; });
+            
             let rankRow = `<tr class="bg-orange-500 text-white font-black"><td class="px-2 py-2 uppercase text-[8px]">RANK</td>`;
             rankings.forEach(r => { rankRow += `<td class="px-2 py-2 text-center text-xs border-l border-orange-400">${r}</td>`; });
+
             footer.innerHTML = totalRow + '</tr>' + rankRow + '</tr>';
 
             document.getElementById('prev-btn').disabled = state.activeStandIndex === 0;
