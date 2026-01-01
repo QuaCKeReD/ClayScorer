@@ -3,358 +3,363 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sporting Pro - Scoring App</title>
+    <title>Sporting Pro - Squad Scorecard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-        [touch-action="none"] { touch-action: none; }
-        .transition-all { transition: all 0.2s ease-in-out; }
+        
+        @media print {
+            .no-print { display: none !important; }
+            body { background-color: white !important; padding-bottom: 0 !important; }
+            .print-only { display: block !important; }
+            .card-shadow { border: 1px solid #e2e8f0 !important; box-shadow: none !important; }
+            table { border-collapse: collapse !important; }
+            th, td { border: 1px solid #cbd5e1 !important; }
+        }
+        
+        .hit-bg { background-color: #16a34a; color: white; }
+        .miss-bg { background-color: #ef4444; color: white; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans pb-24">
 
     <!-- Header -->
-    <header class="bg-slate-900 text-white p-4 sticky top-0 z-10 shadow-md">
-        <div class="max-w-4xl mx-auto flex justify-between items-center">
+    <header class="bg-slate-900 text-white p-4 sticky top-0 z-10 shadow-md no-print">
+        <div class="max-w-6xl mx-auto flex justify-between items-center">
             <div class="flex items-center gap-2">
                 <i data-lucide="target" class="text-orange-500"></i>
-                <h1 class="text-xl font-bold tracking-tight">Sporting Pro</h1>
+                <h1 class="text-xl font-bold tracking-tight">Sporting Pro Squad</h1>
             </div>
-            <div class="text-right">
-                <div class="text-xs uppercase text-slate-400 font-semibold">Live Score</div>
-                <div class="text-2xl font-black text-orange-400" id="header-score">0<span class="text-slate-500 text-sm font-normal">/100</span></div>
+            <div class="flex items-center gap-4">
+                <button onclick="exportToPDF()" class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-all">
+                    <i data-lucide="file-down" size="16"></i> Export PDF
+                </button>
             </div>
         </div>
     </header>
 
-    <main class="max-w-4xl mx-auto p-4 space-y-6">
-        <!-- Shooter Info Card -->
-        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="space-y-1">
-                <label class="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
-                    <i data-lucide="user" size="14"></i> Shooter Name
-                </label>
-                <input 
-                    type="text" 
-                    id="shooter-name"
-                    placeholder="Enter name..."
-                    class="w-full bg-slate-50 border-none rounded-lg p-2 focus:ring-2 focus:ring-orange-500 outline-none font-medium transition-all"
-                >
+    <main class="max-w-6xl mx-auto p-4 space-y-6">
+        
+        <!-- Squad Configuration -->
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 no-print">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-slate-700 flex items-center gap-2">
+                    <i data-lucide="users" size="18"></i> Squad Management (Max 6)
+                </h3>
+                <button id="add-shooter-btn" onclick="addShooter()" class="text-sm bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded-lg font-bold transition-all flex items-center gap-1">
+                    <i data-lucide="plus" size="14"></i> Add Shooter
+                </button>
             </div>
-            <div class="space-y-1">
-                <label class="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
-                    <i data-lucide="calendar" size="14"></i> Date
-                </label>
-                <input 
-                    type="date" 
-                    id="session-date"
-                    class="w-full bg-slate-50 border-none rounded-lg p-2 focus:ring-2 focus:ring-orange-500 outline-none font-medium transition-all"
-                >
+            <div id="shooters-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <!-- Dynamic Shooters -->
             </div>
         </section>
 
-        <!-- Stats Dashboard -->
-        <div class="grid grid-cols-3 gap-3">
-            <div class="bg-white p-3 rounded-xl border border-slate-200 text-center">
-                <div class="text-[10px] font-bold text-slate-400 uppercase">Hits</div>
-                <div id="stat-hits" class="text-xl font-bold text-green-600">0</div>
-            </div>
-            <div class="bg-white p-3 rounded-xl border border-slate-200 text-center">
-                <div class="text-[10px] font-bold text-slate-400 uppercase">Misses</div>
-                <div id="stat-misses" class="text-xl font-bold text-red-500">0</div>
-            </div>
-            <div class="bg-white p-3 rounded-xl border border-slate-200 text-center">
-                <div class="text-[10px] font-bold text-slate-400 uppercase">Avg %</div>
-                <div id="stat-percent" class="text-xl font-bold text-blue-600">0%</div>
-            </div>
-        </div>
-
-        <!-- Navigation - Stand Selector -->
-        <div id="stand-selector" class="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-hide no-scrollbar px-1">
+        <!-- Active Stand Controls -->
+        <div id="stand-selector" class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide no-scrollbar px-1 no-print">
             <!-- Dynamic Stand Buttons -->
         </div>
 
-        <!-- Active Stand Scoring -->
-        <section id="active-stand-card" class="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
-            <!-- Dynamic Active Stand Content -->
-        </section>
+        <!-- Scoring Table (Rotated) -->
+        <section id="scoring-section" class="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden no-print">
+            <div class="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
+                <div class="flex flex-col">
+                    <h2 id="active-stand-title" class="text-lg font-bold text-slate-800">Stand 1</h2>
+                    <p id="active-stand-subtitle" class="text-xs text-slate-500 font-medium">Rotation Active</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="flex bg-slate-200 rounded-lg p-1 items-center">
+                        <button onclick="updateTargetCount(-1)" class="p-1 text-slate-600 hover:bg-slate-300 rounded"><i data-lucide="minus" size="16"></i></button>
+                        <span id="active-stand-targets" class="px-2 font-bold text-slate-700 min-w-[2ch] text-center">8</span>
+                        <button onclick="updateTargetCount(1)" class="p-1 text-slate-600 hover:bg-slate-300 rounded"><i data-lucide="plus" size="16"></i></button>
+                    </div>
+                    <button onclick="removeActiveStand()" class="p-2 text-red-400 hover:text-red-600 transition-colors"><i data-lucide="trash-2" size="20"></i></button>
+                </div>
+            </div>
 
-        <!-- Summary Table -->
-        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div class="p-4 bg-slate-50 border-b border-slate-200 font-bold text-slate-700 flex justify-between items-center">
-                <span>Detailed Scorecard</span>
-                <button id="reset-btn" class="text-xs text-red-500 flex items-center gap-1 hover:underline">
-                   <i data-lucide="rotate-ccw" size="14"></i> Reset Score
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead class="bg-slate-50 border-b border-slate-100">
+                        <tr>
+                            <th class="px-4 py-3 text-xs font-bold text-slate-400 uppercase">Shooter (Order)</th>
+                            <th class="px-4 py-3 text-xs font-bold text-slate-400 uppercase">Targets</th>
+                            <th class="px-4 py-3 text-xs font-bold text-slate-400 uppercase text-right">Score</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scoring-body">
+                        <!-- Dynamic Rotated Scoring Rows -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="bg-slate-50 p-4 flex gap-3 border-t border-slate-100">
+                <button onclick="navStand(-1)" id="prev-btn" class="flex-1 flex items-center justify-center gap-2 bg-white border border-slate-200 py-3 rounded-xl font-bold text-slate-600 disabled:opacity-30 transition-all">
+                    <i data-lucide="chevron-left" size="20"></i> Previous
+                </button>
+                <button onclick="navStand(1)" id="next-btn" class="flex-1 flex items-center justify-center gap-2 bg-slate-900 text-white py-3 rounded-xl font-bold disabled:opacity-30 transition-all">
+                    Next Stand <i data-lucide="chevron-right" size="20"></i>
                 </button>
             </div>
+        </section>
+
+        <!-- Final Scorecard Summary -->
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden card-shadow">
+            <div class="p-4 bg-slate-50 border-b border-slate-200 font-bold text-slate-700 flex justify-between items-center no-print">
+                <span>Squad Master Scorecard</span>
+                <button onclick="resetAll()" class="text-xs text-red-500 flex items-center gap-1 hover:underline">
+                   <i data-lucide="rotate-ccw" size="14"></i> Reset All
+                </button>
+            </div>
+            
+            <div class="p-6 hidden print-only">
+                <h1 class="text-2xl font-bold text-center mb-2">English Sporting Scorecard</h1>
+                <p id="print-date" class="text-center text-slate-500 mb-6"></p>
+            </div>
+
             <div class="overflow-x-auto">
-                <table class="w-full text-left text-sm">
+                <table class="w-full text-left text-sm" id="full-scorecard">
                     <thead>
-                        <tr class="bg-slate-50/50 text-slate-400 font-medium">
-                            <th class="px-4 py-2 border-b whitespace-nowrap">Stand</th>
-                            <th class="px-4 py-2 border-b whitespace-nowrap">Targets</th>
-                            <th class="px-4 py-2 border-b whitespace-nowrap">Score</th>
-                            <th class="px-4 py-2 border-b whitespace-nowrap">Progress</th>
+                        <tr class="bg-slate-100 text-slate-600 font-bold" id="summary-header">
+                            <th class="px-4 py-3 border-b">Stand</th>
+                            <!-- Dynamic Shooter Headers -->
                         </tr>
                     </thead>
                     <tbody id="summary-body">
-                        <!-- Dynamic Table Rows -->
+                        <!-- Dynamic Summary Rows -->
                     </tbody>
-                    <tfoot>
-                        <tr class="bg-slate-900 text-white font-bold">
-                            <td class="px-4 py-3" colSpan="2">TOTAL ROUND</td>
-                            <td class="px-4 py-3" id="footer-score">0/100</td>
-                            <td class="px-4 py-3" id="footer-percent">0%</td>
-                        </tr>
+                    <tfoot id="summary-footer">
+                        <!-- Dynamic Totals -->
                     </tfoot>
                 </table>
             </div>
         </section>
     </main>
 
-    <!-- Floating Save Button -->
-    <div class="fixed bottom-6 right-6 flex flex-col gap-3">
-        <button 
-            id="save-btn"
-            class="bg-orange-500 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
-            title="Save results"
-        >
-            <i data-lucide="save" size="24"></i>
-        </button>
-    </div>
-
-    <!-- Footer Branding -->
-    <div class="text-center p-8 text-slate-400 text-xs">
-        <p>© 2025 Clay Counter • English Sporting Pro</p>
-    </div>
-
     <script>
-        // State Management
+        // --- State Management ---
         let state = {
-            shooterName: "",
-            sessionDate: new Date().toISOString().split('T')[0],
-            stands: [
-                { id: 1, targets: 8, hits: Array(8).fill(null) },
-                { id: 2, targets: 8, hits: Array(8).fill(null) },
-                { id: 3, targets: 8, hits: Array(8).fill(null) },
-                { id: 4, targets: 8, hits: Array(8).fill(null) },
-                { id: 5, targets: 8, hits: Array(8).fill(null) },
-                { id: 6, targets: 8, hits: Array(8).fill(null) },
-                { id: 7, targets: 8, hits: Array(8).fill(null) },
-                { id: 8, targets: 8, hits: Array(8).fill(null) },
-                { id: 9, targets: 9, hits: Array(9).fill(null) },
-                { id: 10, targets: 9, hits: Array(9).fill(null) },
-                { id: 11, targets: 9, hits: Array(9).fill(null) },
-                { id: 12, targets: 9, hits: Array(9).fill(null) }
+            shooters: [
+                { id: Date.now(), name: "Shooter 1" }
             ],
+            stands: [
+                { id: 1, targets: 8 }
+            ],
+            // hits structure: { shooterId: { standId: [true, false, null...] } }
+            hits: {}, 
             activeStandIndex: 0
         };
 
-        // Initialize
+        // Initialize 12 stands
+        for(let i=2; i<=12; i++) {
+            state.stands.push({ id: i, targets: 8 });
+        }
+
         function init() {
-            document.getElementById('session-date').value = state.sessionDate;
-            render();
-            
-            // Events
-            document.getElementById('shooter-name').addEventListener('input', (e) => state.shooterName = e.target.value);
-            document.getElementById('session-date').addEventListener('change', (e) => state.sessionDate = e.target.value);
-            document.getElementById('reset-btn').addEventListener('click', resetScores);
-            document.getElementById('save-btn').addEventListener('click', saveSession);
-        }
-
-        function calculateStats() {
-            let hits = 0;
-            let total = 0;
-            let attempted = 0;
-
-            state.stands.forEach(stand => {
-                total += stand.targets;
-                stand.hits.forEach(h => {
-                    if (h === true) hits++;
-                    if (h !== null) attempted++;
-                });
-            });
-
-            return {
-                hits,
-                total,
-                misses: attempted - hits,
-                percent: total > 0 ? Math.round((hits / total) * 100) : 0
-            };
-        }
-
-        function render() {
-            const stats = calculateStats();
-            const activeStand = state.stands[state.activeStandIndex];
-
-            // Header & Dashboard
-            document.getElementById('header-score').innerHTML = `${stats.hits}<span class="text-slate-500 text-sm font-normal">/${stats.total}</span>`;
-            document.getElementById('stat-hits').innerText = stats.hits;
-            document.getElementById('stat-misses').innerText = stats.misses;
-            document.getElementById('stat-percent').innerText = `${stats.percent}%`;
-            document.getElementById('footer-score').innerText = `${stats.hits}/${stats.total}`;
-            document.getElementById('footer-percent').innerText = `${stats.percent}%`;
-
-            // Stand Selector
-            const selector = document.getElementById('stand-selector');
-            selector.innerHTML = '';
-            state.stands.forEach((stand, idx) => {
-                const btn = document.createElement('button');
-                const isActive = state.activeStandIndex === idx;
-                btn.className = `flex-shrink-0 w-12 h-12 rounded-xl font-bold flex flex-col items-center justify-center transition-all border-2 ${
-                    isActive ? 'bg-orange-500 border-orange-500 text-white shadow-lg scale-105' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-                }`;
-                btn.innerHTML = `<span class="text-[10px] opacity-70 leading-none">S</span><span class="leading-none">${stand.id}</span>`;
-                btn.onclick = () => { state.activeStandIndex = idx; render(); };
-                selector.appendChild(btn);
-            });
-
-            // Add Stand Button
-            const addBtn = document.createElement('button');
-            addBtn.className = 'flex-shrink-0 w-12 h-12 rounded-xl border-2 border-dashed border-slate-300 text-slate-400 flex items-center justify-center hover:border-orange-400 hover:text-orange-400 transition-all';
-            addBtn.innerHTML = '<i data-lucide="plus-circle"></i>';
-            addBtn.onclick = addStand;
-            selector.appendChild(addBtn);
-
-            // Active Stand Card
-            const card = document.getElementById('active-stand-card');
-            if (!activeStand) {
-                card.innerHTML = `
-                    <div class="p-12 text-center border-2 border-dashed border-slate-200 m-4 rounded-2xl">
-                        <p class="text-slate-400 font-medium">No stands created.</p>
-                        <button onclick="addStand()" class="mt-4 text-orange-500 font-bold flex items-center gap-2 mx-auto">
-                            Create first stand
-                        </button>
-                    </div>`;
-            } else {
-                card.innerHTML = `
-                    <div class="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
-                        <div class="flex flex-col">
-                            <h2 class="text-lg font-bold text-slate-800">Stand ${activeStand.id}</h2>
-                            <p class="text-xs text-slate-500 font-medium">${activeStand.targets} Targets</p>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <div class="flex bg-slate-200 rounded-lg p-1 items-center">
-                                <button onclick="updateTargetCount(-1)" class="p-1 text-slate-600 hover:bg-slate-300 rounded"><i data-lucide="minus" size="16"></i></button>
-                                <span class="px-2 font-bold text-slate-700 min-w-[2ch] text-center">${activeStand.targets}</span>
-                                <button onclick="updateTargetCount(1)" class="p-1 text-slate-600 hover:bg-slate-300 rounded"><i data-lucide="plus" size="16"></i></button>
-                            </div>
-                            <button onclick="removeActiveStand()" class="p-2 text-red-400 hover:text-red-600 transition-colors"><i data-lucide="trash-2" size="20"></i></button>
-                        </div>
-                    </div>
-                    <div class="p-6 space-y-4">
-                        ${activeStand.hits.map((status, tIdx) => `
-                            <div class="flex items-center justify-between gap-4 py-2 border-b border-slate-50 last:border-0">
-                                <span class="font-bold text-slate-400 w-8">#${tIdx + 1}</span>
-                                <div class="flex-1 flex gap-2">
-                                    <button onclick="toggleHit(${tIdx}, true)" class="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all ${status === true ? 'bg-green-600 text-white shadow-md' : 'bg-slate-50 text-slate-400 border border-slate-100'}">
-                                        <i data-lucide="check-circle-2" size="18"></i> Hit
-                                    </button>
-                                    <button onclick="toggleHit(${tIdx}, false)" class="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all ${status === false ? 'bg-red-500 text-white shadow-md' : 'bg-slate-50 text-slate-400 border border-slate-100'}">
-                                        <i data-lucide="x-circle" size="18"></i> Miss
-                                    </button>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                    <div class="bg-slate-50 p-4 flex gap-3">
-                        <button onclick="navStand(-1)" ${state.activeStandIndex === 0 ? 'disabled' : ''} class="flex-1 flex items-center justify-center gap-2 bg-white border border-slate-200 py-3 rounded-xl font-bold text-slate-600 disabled:opacity-30">
-                            <i data-lucide="chevron-left" size="20"></i> Previous
-                        </button>
-                        <button onclick="navStand(1)" ${state.activeStandIndex === state.stands.length - 1 ? 'disabled' : ''} class="flex-1 flex items-center justify-center gap-2 bg-slate-900 text-white py-3 rounded-xl font-bold disabled:opacity-30">
-                            Next Stand <i data-lucide="chevron-right" size="20"></i>
-                        </button>
-                    </div>`;
-            }
-
-            // Summary Table
-            const tbody = document.getElementById('summary-body');
-            tbody.innerHTML = '';
-            state.stands.forEach((s, idx) => {
-                const sHits = s.hits.filter(h => h === true).length;
-                const sAtt = s.hits.filter(h => h !== null).length;
-                const sPct = Math.round((sAtt / s.targets) * 100);
-                const row = document.createElement('tr');
-                row.className = `border-b border-slate-50 ${state.activeStandIndex === idx ? 'bg-orange-50' : ''}`;
-                row.innerHTML = `
-                    <td class="px-4 py-3 font-bold">Stand ${s.id}</td>
-                    <td class="px-4 py-3 text-slate-500">${s.targets}</td>
-                    <td class="px-4 py-3 font-mono font-bold">${sHits}/${s.targets}</td>
-                    <td class="px-4 py-3 min-w-[100px]">
-                        <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                            <div class="bg-orange-400 h-full transition-all duration-500" style="width: ${sPct}%"></div>
-                        </div>
-                    </td>`;
-                tbody.appendChild(row);
-            });
-
-            // Re-render icons
-            lucide.createIcons();
-        }
-
-        // Logic Functions
-        function toggleHit(targetIdx, value) {
-            const stand = state.stands[state.activeStandIndex];
-            if (stand.hits[targetIdx] === value) {
-                stand.hits[targetIdx] = null;
-            } else {
-                stand.hits[targetIdx] = value;
-            }
             render();
         }
 
-        function updateTargetCount(delta) {
-            const stand = state.stands[state.activeStandIndex];
-            const newCount = Math.max(1, stand.targets + delta);
-            const currentCount = stand.targets;
-            
-            if (newCount > currentCount) {
-                stand.hits = [...stand.hits, ...Array(newCount - currentCount).fill(null)];
-            } else {
-                stand.hits = stand.hits.slice(0, newCount);
+        // --- Logic ---
+        function addShooter() {
+            if (state.shooters.length >= 6) return;
+            const id = Date.now();
+            state.shooters.push({ id, name: `Shooter ${state.shooters.length + 1}` });
+            render();
+        }
+
+        function removeShooter(id) {
+            if (state.shooters.length <= 1) return;
+            state.shooters = state.shooters.filter(s => s.id !== id);
+            delete state.hits[id];
+            render();
+        }
+
+        function updateShooterName(id, name) {
+            const s = state.shooters.find(x => x.id === id);
+            if (s) s.name = name;
+        }
+
+        function toggleHit(shooterId, standId, targetIdx, value) {
+            if (!state.hits[shooterId]) state.hits[shooterId] = {};
+            if (!state.hits[shooterId][standId]) {
+                const targets = state.stands.find(s => s.id === standId).targets;
+                state.hits[shooterId][standId] = Array(targets).fill(null);
             }
-            stand.targets = newCount;
+            
+            const current = state.hits[shooterId][standId][targetIdx];
+            state.hits[shooterId][standId][targetIdx] = (current === value) ? null : value;
             render();
         }
 
         function addStand() {
             const newId = state.stands.length > 0 ? Math.max(...state.stands.map(s => s.id)) + 1 : 1;
-            state.stands.push({ id: newId, targets: 8, hits: Array(8).fill(null) });
+            state.stands.push({ id: newId, targets: 8 });
             state.activeStandIndex = state.stands.length - 1;
             render();
         }
 
-        function removeActiveStand() {
-            if (state.stands.length <= 1) return;
-            if (confirm(`Remove Stand ${state.stands[state.activeStandIndex].id}?`)) {
-                state.stands.splice(state.activeStandIndex, 1);
-                state.activeStandIndex = Math.max(0, state.activeStandIndex - 1);
-                render();
-            }
+        function updateTargetCount(delta) {
+            const stand = state.stands[state.activeStandIndex];
+            stand.targets = Math.max(1, stand.targets + delta);
+            
+            // Clean up existing scores if target count reduced
+            state.shooters.forEach(s => {
+                if (state.hits[s.id] && state.hits[s.id][stand.id]) {
+                    state.hits[s.id][stand.id] = state.hits[s.id][stand.id].slice(0, stand.targets);
+                }
+            });
+            render();
         }
 
         function navStand(dir) {
-            const next = state.activeStandIndex + dir;
-            if (next >= 0 && next < state.stands.length) {
-                state.activeStandIndex = next;
+            state.activeStandIndex = Math.max(0, Math.min(state.stands.length - 1, state.activeStandIndex + dir));
+            render();
+        }
+
+        function resetAll() {
+            if (confirm("Wipe all data and start fresh?")) {
+                state.hits = {};
                 render();
             }
         }
 
-        function resetScores() {
-            if (confirm("Clear all scores?")) {
-                state.stands.forEach(s => s.hits.fill(null));
-                render();
-            }
+        function exportToPDF() {
+            document.getElementById('print-date').innerText = "Date: " + new Date().toLocaleDateString();
+            window.print();
         }
 
-        function saveSession() {
-            const stats = calculateStats();
-            const summary = `Round for ${state.shooterName || 'Unnamed Shooter'}\nScore: ${stats.hits}/${stats.total}\nDate: ${state.sessionDate}`;
-            alert(summary + "\n\nSession saved locally.");
-            console.log("Full session data:", state);
+        // --- Rendering ---
+        function render() {
+            const activeStand = state.stands[state.activeStandIndex];
+            
+            // 1. Shooter Config List
+            const list = document.getElementById('shooters-list');
+            list.innerHTML = '';
+            state.shooters.forEach((s, idx) => {
+                const div = document.createElement('div');
+                div.className = "flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-100";
+                div.innerHTML = `
+                    <span class="text-xs font-bold text-slate-400 w-4">${idx + 1}</span>
+                    <input type="text" value="${s.name}" onchange="updateShooterName(${s.id}, this.value)" 
+                        class="flex-1 bg-transparent border-none focus:ring-0 font-bold text-sm">
+                    <button onclick="removeShooter(${s.id})" class="text-slate-300 hover:text-red-500">
+                        <i data-lucide="x" size="16"></i>
+                    </button>
+                `;
+                list.appendChild(div);
+            });
+            document.getElementById('add-shooter-btn').disabled = state.shooters.length >= 6;
+
+            // 2. Stand Selector
+            const selector = document.getElementById('stand-selector');
+            selector.innerHTML = '';
+            state.stands.forEach((s, idx) => {
+                const btn = document.createElement('button');
+                const active = state.activeStandIndex === idx;
+                btn.className = `flex-shrink-0 w-10 h-10 rounded-lg font-bold text-sm border-2 transition-all ${
+                    active ? 'bg-orange-500 border-orange-500 text-white scale-110 shadow-lg' : 'bg-white border-slate-200 text-slate-500'
+                }`;
+                btn.innerText = s.id;
+                btn.onclick = () => { state.activeStandIndex = idx; render(); };
+                selector.appendChild(btn);
+            });
+            const addS = document.createElement('button');
+            addS.className = "flex-shrink-0 w-10 h-10 rounded-lg border-2 border-dashed border-slate-300 text-slate-300 flex items-center justify-center";
+            addS.innerHTML = '<i data-lucide="plus" size="18"></i>';
+            addS.onclick = addStand;
+            selector.appendChild(addS);
+
+            // 3. Active Scoring Table with ROTATION
+            // Rotation Logic: Stand 1 (Index 0) starts with Shooter 0. Stand 2 (Index 1) starts with Shooter 1.
+            const n = state.shooters.length;
+            const rotationOffset = state.activeStandIndex % n;
+            const rotatedShooters = [];
+            for (let i = 0; i < n; i++) {
+                rotatedShooters.push(state.shooters[(i + rotationOffset) % n]);
+            }
+
+            document.getElementById('active-stand-title').innerText = `Stand ${activeStand.id}`;
+            document.getElementById('active-stand-targets').innerText = activeStand.targets;
+            document.getElementById('prev-btn').disabled = state.activeStandIndex === 0;
+            document.getElementById('next-btn').disabled = state.activeStandIndex === state.stands.length -1;
+
+            const scoringBody = document.getElementById('scoring-body');
+            scoringBody.innerHTML = '';
+            rotatedShooters.forEach((s, displayOrder) => {
+                const sScores = (state.hits[s.id] && state.hits[s.id][activeStand.id]) ? state.hits[s.id][activeStand.id] : Array(activeStand.targets).fill(null);
+                const hitsCount = sScores.filter(h => h === true).length;
+                
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-slate-50";
+                
+                let cellsHtml = '';
+                for(let i=0; i < activeStand.targets; i++) {
+                    const status = sScores[i];
+                    cellsHtml += `
+                        <button onclick="toggleHit(${s.id}, ${activeStand.id}, ${i}, true)" 
+                            class="w-8 h-8 rounded font-bold text-xs border ${status === true ? 'hit-bg' : 'bg-slate-50 text-slate-300'}">H</button>
+                        <button onclick="toggleHit(${s.id}, ${activeStand.id}, ${i}, false)" 
+                            class="w-8 h-8 rounded font-bold text-xs border ${status === false ? 'miss-bg' : 'bg-slate-50 text-slate-300'}">M</button>
+                    `;
+                }
+
+                tr.innerHTML = `
+                    <td class="px-4 py-4">
+                        <div class="font-bold text-slate-800">${s.name}</div>
+                        <div class="text-[10px] text-slate-400 font-bold uppercase">Order: ${displayOrder + 1}</div>
+                    </td>
+                    <td class="px-4 py-4">
+                        <div class="flex flex-wrap gap-1 max-w-[280px]">
+                            ${cellsHtml}
+                        </div>
+                    </td>
+                    <td class="px-4 py-4 text-right">
+                        <div class="font-black text-lg">${hitsCount}<span class="text-slate-300 text-xs font-normal">/${activeStand.targets}</span></div>
+                    </td>
+                `;
+                scoringBody.appendChild(tr);
+            });
+
+            // 4. Summary Table
+            const summaryHeader = document.getElementById('summary-header');
+            summaryHeader.innerHTML = '<th class="px-4 py-3 border-b">Stand</th>';
+            state.shooters.forEach(s => {
+                summaryHeader.innerHTML += `<th class="px-4 py-3 border-b">${s.name}</th>`;
+            });
+
+            const summaryBody = document.getElementById('summary-body');
+            summaryBody.innerHTML = '';
+            state.stands.forEach((stand, idx) => {
+                const tr = document.createElement('tr');
+                tr.className = idx === state.activeStandIndex ? "bg-orange-50/50" : "border-b border-slate-50";
+                let rowHtml = `<td class="px-4 py-3 font-bold text-slate-500">Stand ${stand.id} <span class="text-[10px] font-normal">(${stand.targets})</span></td>`;
+                
+                state.shooters.forEach(s => {
+                    const hits = (state.hits[s.id] && state.hits[s.id][stand.id]) ? state.hits[s.id][stand.id].filter(h => h === true).length : 0;
+                    rowHtml += `<td class="px-4 py-3 font-mono font-bold">${hits}</td>`;
+                });
+                tr.innerHTML = rowHtml;
+                summaryBody.appendChild(tr);
+            });
+
+            const summaryFooter = document.getElementById('summary-footer');
+            let footHtml = `<tr class="bg-slate-900 text-white font-bold"><td class="px-4 py-4">TOTAL</td>`;
+            state.shooters.forEach(s => {
+                let grandTotal = 0;
+                let maxPossible = 0;
+                state.stands.forEach(stand => {
+                    maxPossible += stand.targets;
+                    if (state.hits[s.id] && state.hits[s.id][stand.id]) {
+                        grandTotal += state.hits[s.id][stand.id].filter(h => h === true).length;
+                    }
+                });
+                footHtml += `<td class="px-4 py-4">${grandTotal}<span class="text-slate-500 font-normal text-xs">/${maxPossible}</span></td>`;
+            });
+            footHtml += '</tr>';
+            summaryFooter.innerHTML = footHtml;
+
+            lucide.createIcons();
         }
 
         window.onload = init;
