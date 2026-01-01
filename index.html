@@ -87,7 +87,7 @@
             }
         }
 
-        /* Helper for Image Capturing - Enhanced for html2canvas vertical centering */
+        /* Helper for Image Capturing - Landscape Layout */
         #capture-container {
             position: absolute;
             left: -9999px;
@@ -108,7 +108,7 @@
         #capture-container th, #capture-container td { 
             border: 1pt solid black; 
             padding: 0; 
-            text-align: center; 
+            text-align: center !important; 
             vertical-align: middle;
             box-sizing: border-box;
         }
@@ -427,20 +427,24 @@
             const nameWidth = isShare ? '220px' : '140px';
             const fontSize = isShare ? '11pt' : '8pt';
             const rowHeight = isShare ? '32px' : '22px';
+            const headPadding = isShare ? '10px 4px' : '4px 2px'; // Added extra padding for share mode
 
             // Generate Header
             let headerHtml = `<tr style="background:#f0f0f0">
-                <th style="width:${nameWidth}; font-size:${fontSize}; border: 1pt solid black; vertical-align: middle; text-align: center;" rowspan="2">NAME</th>`;
+                <th style="width:${nameWidth}; font-size:${fontSize}; border: 1pt solid black; vertical-align: middle; text-align: center; padding: ${headPadding};" rowspan="2">NAME</th>`;
             state.stands.forEach(st => { 
                 const pairs = Math.ceil(st.targets / 2);
-                headerHtml += `<th colspan="${pairs}" style="font-size:${fontSize}; border: 1pt solid black; background:#f0f0f0; vertical-align: middle; text-align: center; white-space: nowrap;">ST ${st.id}</th>`; 
+                headerHtml += `<th colspan="${pairs}" style="font-size:${fontSize}; border: 1pt solid black; background:#f0f0f0; vertical-align: middle; text-align: center; white-space: nowrap; padding: ${headPadding};">ST ${st.id}</th>`; 
             });
-            headerHtml += `<th style="width:65px; font-size:${fontSize}; border: 1pt solid black; vertical-align: middle; text-align: center; white-space: nowrap;" rowspan="2">TOTAL</th></tr><tr>`;
+            headerHtml += `<th style="width:65px; font-size:${fontSize}; border: 1pt solid black; vertical-align: middle; text-align: center; white-space: nowrap; padding: ${headPadding};" rowspan="2">TOTAL</th></tr><tr>`;
             
             state.stands.forEach(st => {
                 const pairs = Math.ceil(st.targets / 2);
                 for(let p=1; p<=pairs; p++) {
-                    headerHtml += `<th style="font-size: 6pt; border: 1pt solid black; background:#fafafa; vertical-align: middle; text-align: center; height: 15px;">P${p}</th>`;
+                    // Added height and font bump for P1Indicators row
+                    const pHeight = isShare ? '28px' : '18px';
+                    const pFontSize = isShare ? '7.5pt' : '6pt';
+                    headerHtml += `<th style="font-size: ${pFontSize}; border: 1pt solid black; background:#fafafa; vertical-align: middle; text-align: center; height: ${pHeight};">P${p}</th>`;
                 }
             });
             headerHtml += `</tr>`;
@@ -449,7 +453,6 @@
             const shooterPerformance = state.shooters.map(s => ({ ...s, grandTotal: getShooterGrandTotal(s.id) })).sort((a, b) => b.grandTotal - a.grandTotal);
             
             shooterPerformance.forEach(s => {
-                // Shooter Name and Score use rowspan="2"
                 let row1Html = `<tr><td style="border: 1pt solid black; font-size: 10pt; text-align: left; padding: 0;" rowspan="2"><div class="flex-center-wrap" style="justify-content: flex-start; padding-left: 8px; white-space: normal; word-wrap: break-word;"><strong>${s.name}</strong></div></td>`;
                 let row2Html = `<tr>`;
                 let grandTotal = 0;
