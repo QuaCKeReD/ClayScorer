@@ -16,7 +16,7 @@
             .print-only { display: block !important; }
             .card-shadow { border: none !important; box-shadow: none !important; }
             table { width: 100% !important; border-collapse: collapse !important; border: 2px solid black !important; }
-            th, td { border: 1px solid black !important; padding: 4px !important; font-size: 8pt !important; color: black !important; }
+            th, td { border: 1px solid black !important; padding: 4px !important; font-size: 10pt !important; color: black !important; }
             th { background-color: #f1f5f9 !important; -webkit-print-color-adjust: exact; }
             .print-header { display: flex !important; flex-wrap: wrap; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
             .print-header div { flex: 1; min-width: 200px; }
@@ -27,6 +27,7 @@
         .hit-bg { background-color: #16a34a; color: white; border-color: #15803d; }
         .miss-bg { background-color: #ef4444; color: white; border-color: #b91c1c; }
         
+        /* Ensure targets stay in a single row */
         .target-row {
             display: flex;
             flex-wrap: nowrap;
@@ -35,19 +36,12 @@
 
         .pair-group {
             display: flex;
-            gap: 1px;
-            padding: 1px;
+            gap: 2px;
+            padding: 2px;
             background: #f8fafc;
             border: 1px solid #e2e8f0;
-            border-radius: 4px;
+            border-radius: 6px;
         }
-
-        .seq-h { color: #16a34a; font-weight: 900; }
-        .seq-m { color: #ef4444; font-weight: 900; }
-        .seq-u { color: #cbd5e1; }
-
-        .sync-spinner { animation: spin 2s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans pb-24">
@@ -57,22 +51,17 @@
         <div class="max-w-6xl mx-auto flex justify-between items-center">
             <div class="flex items-center gap-2">
                 <i data-lucide="target" class="text-orange-500 w-5 h-5"></i>
-                <div>
-                    <h1 class="text-lg font-bold tracking-tight uppercase italic leading-none">CPSA Sporting</h1>
-                    <div id="sync-status" class="text-[8px] uppercase text-slate-400 mt-0.5 flex items-center gap-1">
-                        <i data-lucide="cloud-off" class="w-2 h-2"></i> Offline Mode
-                    </div>
-                </div>
+                <h1 class="text-lg font-bold tracking-tight uppercase italic">CPSA Sporting</h1>
             </div>
             <div class="flex items-center gap-3">
-                <button onclick="window.exportToPDF()" class="bg-orange-500 hover:bg-orange-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-lg">
+                <button onclick="exportToPDF()" class="bg-orange-500 hover:bg-orange-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-lg">
                     <i data-lucide="printer" size="14"></i> Export
                 </button>
             </div>
         </div>
     </header>
 
-    <main class="max-w-6xl mx-auto p-2 space-y-3">
+    <main class="max-w-6xl mx-auto p-3 space-y-4">
 
         <!-- Shoot Details -->
         <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -80,37 +69,42 @@
                 <label class="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
                     <i data-lucide="map-pin" size="10"></i> Ground
                 </label>
-                <input type="text" id="ground-name" placeholder="Bisley..." class="w-full bg-slate-50 border-none rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-medium" oninput="window.updateGround(this.value)">
+                <input type="text" id="ground-name" placeholder="Bisley..." class="w-full bg-slate-50 border-none rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-medium" oninput="state.groundName = this.value">
             </div>
             <div class="space-y-1">
                 <label class="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
                     <i data-lucide="calendar" size="10"></i> Date
                 </label>
-                <input type="date" id="shoot-date" class="w-full bg-slate-50 border-none rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-medium" onchange="window.updateDate(this.value)">
+                <input type="date" id="shoot-date" class="w-full bg-slate-50 border-none rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-medium" onchange="state.sessionDate = this.value">
             </div>
             <div class="space-y-1">
                 <label class="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
                     <i data-lucide="clipboard-list" size="10"></i> Squad / Event
                 </label>
-                <input type="text" id="event-type" placeholder="100 ESP" class="w-full bg-slate-50 border-none rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-medium" oninput="window.updateEvent(this.value)">
+                <input type="text" id="event-type" placeholder="100 ESP" class="w-full bg-slate-50 border-none rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-medium" oninput="state.eventType = this.value">
             </div>
             <div class="space-y-1">
                 <label class="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
                     <i data-lucide="layers" size="10"></i> Total Stands
                 </label>
-                <select id="stand-count-select" onchange="window.updateTotalStands(this.value)" class="w-full bg-slate-50 border-none rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-bold">
-                    <!-- JS will populate options -->
+                <select id="stand-count-select" onchange="updateTotalStands(this.value)" class="w-full bg-slate-50 border-none rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-bold">
+                    <!-- Dropdown options from 1 to 20 -->
+                    <script>
+                        for(let i=1; i<=20; i++) {
+                            document.write(`<option value="${i}" ${i === 12 ? 'selected' : ''}>${i} Stands</option>`);
+                        }
+                    </script>
                 </select>
             </div>
         </section>
         
         <!-- Squad Configuration -->
-        <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-2 no-print">
-            <div class="flex justify-between items-center mb-1.5">
+        <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print">
+            <div class="flex justify-between items-center mb-2">
                 <h3 class="text-xs font-bold text-slate-700 flex items-center gap-1.5 uppercase tracking-wide">
                     <i data-lucide="users" size="14"></i> Squad (Max 6)
                 </h3>
-                <button id="add-shooter-btn" onclick="window.addShooter()" class="text-[10px] bg-slate-800 hover:bg-slate-900 text-white px-2 py-0.5 rounded font-bold transition-all flex items-center gap-1">
+                <button id="add-shooter-btn" onclick="addShooter()" class="text-[10px] bg-slate-800 hover:bg-slate-900 text-white px-2 py-1 rounded font-bold transition-all flex items-center gap-1">
                     <i data-lucide="user-plus" size="12"></i> Add
                 </button>
             </div>
@@ -120,28 +114,30 @@
         </section>
 
         <!-- Active Stand Controls -->
-        <div id="stand-selector-container" class="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-hide no-scrollbar px-1 no-print">
-            <div id="stand-selector" class="flex items-center gap-1">
+        <div id="stand-selector-container" class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide no-scrollbar px-1 no-print">
+            <div id="stand-selector" class="flex items-center gap-1.5">
                 <!-- Dynamic Stand Buttons -->
             </div>
         </div>
 
         <!-- Scoring Table -->
-        <section id="scoring-section" class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden no-print">
-            <div class="bg-slate-900 px-3 py-2 text-white">
+        <section id="scoring-section" class="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden no-print">
+            <div class="bg-slate-900 px-4 py-3 text-white">
                 <div class="flex justify-between items-center mb-2">
                     <div class="flex items-baseline gap-2">
-                        <h2 id="active-stand-title" class="text-base font-black italic">Stand 1</h2>
-                        <span id="active-stand-bird-count" class="text-[9px] text-slate-400 font-bold uppercase tracking-wider"></span>
+                        <h2 id="active-stand-title" class="text-lg font-black italic">Stand 1</h2>
+                        <span id="active-stand-bird-count" class="text-[10px] text-slate-400 font-bold uppercase tracking-wider"></span>
                     </div>
-                    <div class="text-[9px] font-bold text-orange-400 uppercase italic">Rotation Active</div>
+                    <div class="flex items-center gap-2">
+                        <div class="text-[10px] font-bold text-orange-400 uppercase italic">Rotation Active</div>
+                    </div>
                 </div>
                 
-                <div class="flex gap-1">
-                    <button onclick="window.setTargetCount(4)" class="target-btn flex-1 bg-slate-800 border border-slate-700 py-1 rounded-md text-[9px] font-bold text-slate-300 hover:border-orange-500 transition-all" id="btn-targets-4">2 Pairs</button>
-                    <button onclick="window.setTargetCount(6)" class="target-btn flex-1 bg-slate-800 border border-slate-700 py-1 rounded-md text-[9px] font-bold text-slate-300 hover:border-orange-500 transition-all" id="btn-targets-6">3 Pairs</button>
-                    <button onclick="window.setTargetCount(8)" class="target-btn flex-1 bg-slate-800 border border-slate-700 py-1 rounded-md text-[9px] font-bold text-slate-300 hover:border-orange-500 transition-all" id="btn-targets-8">4 Pairs</button>
-                    <button onclick="window.setTargetCount(10)" class="target-btn flex-1 bg-slate-800 border border-slate-700 py-1 rounded-md text-[9px] font-bold text-slate-300 hover:border-orange-500 transition-all" id="btn-targets-10">5 Pairs</button>
+                <div class="flex gap-1.5">
+                    <button onclick="setTargetCount(4)" class="target-btn flex-1 bg-slate-800 border border-slate-700 py-1.5 rounded-lg text-[10px] font-bold text-slate-300 hover:border-orange-500 transition-all" id="btn-targets-4">2 Pairs</button>
+                    <button onclick="setTargetCount(6)" class="target-btn flex-1 bg-slate-800 border border-slate-700 py-1.5 rounded-lg text-[10px] font-bold text-slate-300 hover:border-orange-500 transition-all" id="btn-targets-6">3 Pairs</button>
+                    <button onclick="setTargetCount(8)" class="target-btn flex-1 bg-slate-800 border border-slate-700 py-1.5 rounded-lg text-[10px] font-bold text-slate-300 hover:border-orange-500 transition-all" id="btn-targets-8">4 Pairs</button>
+                    <button onclick="setTargetCount(10)" class="target-btn flex-1 bg-slate-800 border border-slate-700 py-1.5 rounded-lg text-[10px] font-bold text-slate-300 hover:border-orange-500 transition-all" id="btn-targets-10">5 Pairs</button>
                 </div>
             </div>
 
@@ -149,9 +145,9 @@
                 <table class="w-full text-left">
                     <thead class="bg-slate-50 border-b border-slate-100">
                         <tr>
-                            <th class="pl-3 pr-2 py-1.5 text-[9px] font-bold text-slate-400 uppercase w-24">Shooter</th>
-                            <th class="px-2 py-1.5 text-[9px] font-bold text-slate-400 uppercase">Birds (By Pair)</th>
-                            <th class="pr-3 pl-2 py-1.5 text-[9px] font-bold text-slate-400 uppercase text-right w-12">Total</th>
+                            <th class="pl-4 pr-2 py-2 text-[10px] font-bold text-slate-400 uppercase w-24">Shooter</th>
+                            <th class="px-2 py-2 text-[10px] font-bold text-slate-400 uppercase">Birds (By Pair)</th>
+                            <th class="pr-4 pl-2 py-2 text-[10px] font-bold text-slate-400 uppercase text-right w-16">Score</th>
                         </tr>
                     </thead>
                     <tbody id="scoring-body">
@@ -160,11 +156,11 @@
                 </table>
             </div>
 
-            <div class="bg-slate-50 p-2 flex gap-2 border-t border-slate-100">
-                <button onclick="window.navStand(-1)" id="prev-btn" class="flex-1 flex items-center justify-center gap-1 bg-white border border-slate-200 py-2 rounded-lg text-xs font-bold text-slate-600 disabled:opacity-30">
+            <div class="bg-slate-50 p-3 flex gap-2 border-t border-slate-100">
+                <button onclick="navStand(-1)" id="prev-btn" class="flex-1 flex items-center justify-center gap-1 bg-white border border-slate-200 py-2.5 rounded-lg text-xs font-bold text-slate-600 disabled:opacity-30">
                     <i data-lucide="chevron-left" size="16"></i> Prev
                 </button>
-                <button onclick="window.navStand(1)" id="next-btn" class="flex-1 flex items-center justify-center gap-1 bg-slate-900 text-white py-2 rounded-lg text-xs font-bold disabled:opacity-30">
+                <button onclick="navStand(1)" id="next-btn" class="flex-1 flex items-center justify-center gap-1 bg-slate-900 text-white py-2.5 rounded-lg text-xs font-bold disabled:opacity-30">
                     Next <i data-lucide="chevron-right" size="16"></i>
                 </button>
             </div>
@@ -172,36 +168,36 @@
 
         <!-- Official Scorecard Summary (Print Optimized) -->
         <section class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden card-shadow">
-            <div class="p-2 bg-slate-50 border-b border-slate-200 font-bold text-slate-700 flex justify-between items-center no-print">
-                <span class="text-[10px] uppercase tracking-wide">Squad Master Scorecard</span>
-                <button onclick="window.resetAll()" class="text-[9px] text-red-500 flex items-center gap-1 hover:underline">
-                   <i data-lucide="trash-2" size="10"></i> Reset
+            <div class="p-3 bg-slate-50 border-b border-slate-200 font-bold text-slate-700 flex justify-between items-center no-print">
+                <span class="text-xs uppercase tracking-wide">Full Scorecard</span>
+                <button onclick="resetAll()" class="text-[10px] text-red-500 flex items-center gap-1 hover:underline">
+                   <i data-lucide="trash-2" size="12"></i> Reset
                 </button>
             </div>
             
             <div class="p-8 hidden print-only">
                 <div class="print-header">
                     <div>
-                        <p class="text-[10px] font-bold">VENUE / GROUND:</p>
-                        <p id="print-ground" class="text-lg font-bold uppercase"></p>
+                        <p class="text-xs font-bold">VENUE / GROUND:</p>
+                        <p id="print-ground" class="text-xl font-bold uppercase"></p>
                     </div>
                     <div>
-                        <p class="text-[10px] font-bold">DATE:</p>
-                        <p id="print-date-display" class="text-lg font-bold"></p>
+                        <p class="text-xs font-bold">DATE:</p>
+                        <p id="print-date-display" class="text-xl font-bold"></p>
                     </div>
                     <div>
-                        <p class="text-[10px] font-bold">EVENT / SQUAD NO:</p>
-                        <p id="print-event" class="text-lg font-bold"></p>
+                        <p class="text-xs font-bold">EVENT / SQUAD NO:</p>
+                        <p id="print-event" class="text-xl font-bold"></p>
                     </div>
                 </div>
-                <h1 class="text-xl font-black text-center mb-4 tracking-widest border-2 border-black p-2 bg-slate-100 uppercase italic">CPSA Official Squad Scorecard</h1>
+                <h1 class="text-2xl font-black text-center mb-6 tracking-widest border-2 border-black p-2 bg-slate-100 uppercase italic">CPSA Official Squad Scorecard</h1>
             </div>
 
             <div class="overflow-x-auto">
-                <table class="w-full text-left text-[9px]" id="full-scorecard">
+                <table class="w-full text-left text-xs" id="full-scorecard">
                     <thead>
                         <tr class="bg-slate-100 text-slate-700 font-bold uppercase" id="summary-header">
-                            <th class="px-2 py-2 border-b">Stand</th>
+                            <th class="px-3 py-2 border-b">Stand</th>
                             <!-- Dynamic Shooter Headers -->
                         </tr>
                     </thead>
@@ -214,28 +210,17 @@
                 </table>
             </div>
 
-            <div class="hidden print-only p-6">
+            <div class="hidden print-only p-8">
                 <div class="signature-block">
-                    <div class="sig-line text-[7px] uppercase font-bold">Referee Signature</div>
-                    <div class="sig-line text-[7px] uppercase font-bold">Scorer Signature</div>
-                    <div class="sig-line text-[7px] uppercase font-bold">Date Signed</div>
+                    <div class="sig-line text-[8px] uppercase font-bold">Referee Signature</div>
+                    <div class="sig-line text-[8px] uppercase font-bold">Scorer Signature</div>
+                    <div class="sig-line text-[8px] uppercase font-bold">Date / Time Signed</div>
                 </div>
             </div>
         </section>
     </main>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // --- Firebase Configuration ---
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'clay-pigeon-squad';
-
+    <script>
         // --- State Management ---
         let state = {
             groundName: "",
@@ -249,101 +234,59 @@
             activeStandIndex: 0
         };
 
-        let user = null;
-        let isSyncing = false;
+        // Initialize with default 12 stands
+        updateTotalStands(12, false);
 
-        // --- Cloud Persistence ---
-        async function saveToCloud() {
-            if (!user) return;
-            isSyncing = true;
-            updateSyncStatus('Syncing...');
-            try {
-                const sessionRef = doc(db, 'artifacts', appId, 'users', user.uid, 'persistence', 'current_session');
-                await setDoc(sessionRef, {
-                    state: state,
-                    lastUpdated: new Date().toISOString()
-                });
-                updateSyncStatus('Cloud Saved', true);
-            } catch (error) {
-                console.error("Save failed", error);
-                updateSyncStatus('Sync Error', false);
-            } finally {
-                isSyncing = false;
-            }
-        }
-
-        function updateSyncStatus(text, success = null) {
-            const statusEl = document.getElementById('sync-status');
-            if (!statusEl) return;
-            
-            let icon = 'cloud-off';
-            let color = 'text-slate-400';
-            
-            if (isSyncing) {
-                icon = 'refresh-cw';
-                color = 'text-orange-400';
-            } else if (success === true) {
-                icon = 'cloud-check';
-                color = 'text-green-500';
-            } else if (success === false) {
-                icon = 'alert-circle';
-                color = 'text-red-500';
-            }
-
-            statusEl.className = `text-[8px] uppercase ${color} mt-0.5 flex items-center gap-1`;
-            statusEl.innerHTML = `<i data-lucide="${icon}" class="w-2 h-2 ${isSyncing ? 'sync-spinner' : ''}"></i> ${text}`;
-            lucide.createIcons();
+        function init() {
+            document.getElementById('shoot-date').value = state.sessionDate;
+            render();
         }
 
         // --- Logic ---
-        window.updateTotalStands = function(count, shouldRender = true) {
+        function updateTotalStands(count, shouldRender = true) {
             const newCount = parseInt(count);
             const currentCount = state.stands.length;
+            
             if (newCount > currentCount) {
                 for (let i = currentCount + 1; i <= newCount; i++) {
                     state.stands.push({ id: i, targets: 8 });
                 }
             } else if (newCount < currentCount) {
+                // If reducing count, potentially alert or just slice
                 state.stands = state.stands.slice(0, newCount);
-                if (state.activeStandIndex >= newCount) state.activeStandIndex = newCount - 1;
+                if (state.activeStandIndex >= newCount) {
+                    state.activeStandIndex = newCount - 1;
+                }
             }
-            if (shouldRender) {
-                render();
-                saveToCloud();
-            }
+            
+            if (shouldRender) render();
         }
 
-        window.addShooter = function() {
+        function addShooter() {
             if (state.shooters.length >= 6) return;
+            const id = Date.now();
             state.shooters.push({ 
-                id: Date.now(), 
-                name: `S${state.shooters.length + 1}`,
+                id, 
+                name: `Shooter ${state.shooters.length + 1}`,
                 cpsaNo: "",
                 class: "U"
             });
             render();
-            saveToCloud();
         }
 
-        window.removeShooter = function(id) {
+        function removeShooter(id) {
             if (state.shooters.length <= 1) return;
             state.shooters = state.shooters.filter(s => s.id !== id);
             delete state.hits[id];
             render();
-            saveToCloud();
         }
 
-        window.updateShooter = function(id, field, value) {
+        function updateShooter(id, field, value) {
             const s = state.shooters.find(x => x.id === id);
             if (s) s[field] = value;
-            saveToCloud();
         }
 
-        window.updateGround = function(val) { state.groundName = val; saveToCloud(); }
-        window.updateDate = function(val) { state.sessionDate = val; saveToCloud(); }
-        window.updateEvent = function(val) { state.eventType = val; saveToCloud(); }
-
-        window.toggleHit = function(shooterId, standId, targetIdx, value) {
+        function toggleHit(shooterId, standId, targetIdx, value) {
             if (!state.hits[shooterId]) state.hits[shooterId] = {};
             if (!state.hits[shooterId][standId]) {
                 const targets = state.stands.find(s => s.id === standId).targets;
@@ -352,43 +295,44 @@
             const current = state.hits[shooterId][standId][targetIdx];
             state.hits[shooterId][standId][targetIdx] = (current === value) ? null : value;
             render();
-            saveToCloud();
         }
 
-        window.setTargetCount = function(count) {
+        function setTargetCount(count) {
             const stand = state.stands[state.activeStandIndex];
             stand.targets = count;
             state.shooters.forEach(s => {
                 if (!state.hits[s.id]) state.hits[s.id] = {};
+                // If scores already exist, we need to adjust the array size
                 if (state.hits[s.id][stand.id]) {
-                    const curr = state.hits[s.id][stand.id];
-                    state.hits[s.id][stand.id] = curr.length > count ? curr.slice(0, count) : [...curr, ...Array(count - curr.length).fill(null)];
+                    const current = state.hits[s.id][stand.id];
+                    if (current.length > count) {
+                        state.hits[s.id][stand.id] = current.slice(0, count);
+                    } else if (current.length < count) {
+                        state.hits[s.id][stand.id] = [...current, ...Array(count - current.length).fill(null)];
+                    }
                 } else {
                     state.hits[s.id][stand.id] = Array(count).fill(null);
                 }
             });
             render();
-            saveToCloud();
         }
 
-        window.navStand = function(dir) {
+        function navStand(dir) {
             state.activeStandIndex = Math.max(0, Math.min(state.stands.length - 1, state.activeStandIndex + dir));
             render();
-            saveToCloud();
         }
 
-        window.resetAll = function() {
-            if (confirm("Reset all scorecard data?")) { 
-                state.hits = {}; 
-                render(); 
-                saveToCloud();
+        function resetAll() {
+            if (confirm("Reset all scorecard data?")) {
+                state.hits = {};
+                render();
             }
         }
 
-        window.exportToPDF = function() {
+        function exportToPDF() {
             document.getElementById('print-ground').innerText = state.groundName || "UK SHOOTING GROUND";
             document.getElementById('print-date-display').innerText = state.sessionDate ? new Date(state.sessionDate).toLocaleDateString('en-GB') : "N/A";
-            document.getElementById('print-event').innerText = state.eventType || "SPORTING ROUND";
+            document.getElementById('print-event').innerText = state.eventType || "SPORTING 100";
             window.print();
         }
 
@@ -397,43 +341,39 @@
             const activeStand = state.stands[state.activeStandIndex];
             if (!activeStand) return;
             
-            // Sync inputs with state
-            document.getElementById('ground-name').value = state.groundName;
-            document.getElementById('shoot-date').value = state.sessionDate;
-            document.getElementById('event-type').value = state.eventType;
-            document.getElementById('stand-count-select').value = state.stands.length;
-
+            // 1. Shooter List Management
             const list = document.getElementById('shooters-list');
             list.innerHTML = '';
             state.shooters.forEach((s, idx) => {
                 const div = document.createElement('div');
-                div.className = "bg-white p-1 rounded-lg border border-slate-200 grid grid-cols-12 gap-1 items-center";
+                div.className = "bg-white p-2 rounded-lg border border-slate-200 grid grid-cols-12 gap-1 items-center";
                 div.innerHTML = `
-                    <div class="col-span-1 text-[7px] font-black text-slate-300 text-center">${idx + 1}</div>
+                    <div class="col-span-1 text-[8px] font-black text-slate-300 text-center">${idx + 1}</div>
                     <div class="col-span-6">
-                        <input type="text" value="${s.name}" onchange="window.updateShooter(${s.id}, 'name', this.value)" 
-                            class="w-full border border-slate-100 rounded px-1 py-0.5 text-[9px] font-bold" placeholder="Name">
+                        <input type="text" value="${s.name}" onchange="updateShooter(${s.id}, 'name', this.value)" 
+                            class="w-full border border-slate-100 rounded px-1.5 py-0.5 text-[10px] font-bold" placeholder="Name">
                     </div>
-                    <div class="col-span-4 flex gap-0.5">
-                        <input type="text" value="${s.cpsaNo}" onchange="window.updateShooter(${s.id}, 'cpsaNo', this.value)" 
-                            class="w-full border border-slate-100 rounded px-0.5 py-0.5 text-[8px]" placeholder="CPSA">
-                        <select onchange="window.updateShooter(${s.id}, 'class', this.value)" class="border border-slate-100 rounded px-0 py-0.5 text-[8px] font-bold">
+                    <div class="col-span-4 flex gap-1">
+                        <input type="text" value="${s.cpsaNo}" onchange="updateShooter(${s.id}, 'cpsaNo', this.value)" 
+                            class="w-full border border-slate-100 rounded px-1 py-0.5 text-[9px]" placeholder="CPSA">
+                        <select onchange="updateShooter(${s.id}, 'class', this.value)" class="border border-slate-100 rounded px-0.5 py-0.5 text-[9px] font-bold">
                             ${['AA', 'A', 'B', 'C', 'U'].map(c => `<option value="${c}" ${s.class === c ? 'selected' : ''}>${c}</option>`).join('')}
                         </select>
                     </div>
                     <div class="col-span-1 text-right">
-                        <button onclick="window.removeShooter(${s.id})" class="text-slate-200 hover:text-red-500"><i data-lucide="x" size="10"></i></button>
+                        <button onclick="removeShooter(${s.id})" class="text-slate-300 hover:text-red-500"><i data-lucide="x" size="12"></i></button>
                     </div>
                 `;
                 list.appendChild(div);
             });
 
+            // 2. Stand Selector
             const selector = document.getElementById('stand-selector');
             selector.innerHTML = '';
             state.stands.forEach((s, idx) => {
                 const btn = document.createElement('button');
                 const active = state.activeStandIndex === idx;
-                btn.className = `flex-shrink-0 w-8 h-8 rounded-lg font-bold text-[10px] border-2 transition-all ${
+                btn.className = `flex-shrink-0 w-9 h-9 rounded-lg font-bold text-xs border-2 transition-all ${
                     active ? 'bg-orange-500 border-orange-500 text-white shadow-md' : 'bg-white border-slate-200 text-slate-400'
                 }`;
                 btn.innerText = s.id;
@@ -441,8 +381,24 @@
                 selector.appendChild(btn);
             });
 
+            // Update bird count text
             document.getElementById('active-stand-bird-count').innerText = `${activeStand.targets} Birds (${activeStand.targets / 2} Pairs)`;
 
+            // Update bird select button highlight
+            [4, 6, 8, 10].forEach(count => {
+                const btn = document.getElementById(`btn-targets-${count}`);
+                if (btn) {
+                    if (activeStand.targets === count) {
+                        btn.classList.add('bg-orange-500', 'border-orange-500', 'text-white');
+                        btn.classList.remove('bg-slate-800', 'text-slate-300');
+                    } else {
+                        btn.classList.remove('bg-orange-500', 'border-orange-500', 'text-white');
+                        btn.classList.add('bg-slate-800', 'text-slate-300');
+                    }
+                }
+            });
+
+            // 3. Main Scoring Table
             const n = state.shooters.length;
             const rotationOffset = state.activeStandIndex % n;
             const rotatedShooters = [];
@@ -454,20 +410,51 @@
             rotatedShooters.forEach((s, displayOrder) => {
                 const sScores = (state.hits[s.id] && state.hits[s.id][activeStand.id]) ? state.hits[s.id][activeStand.id] : Array(activeStand.targets).fill(null);
                 const hitsCount = sScores.filter(h => h === true).length;
+                
                 const tr = document.createElement('tr');
-                tr.className = "border-b border-slate-50";
+                tr.className = "border-b border-slate-50 hover:bg-slate-50/50";
+                
                 let pairHtml = '';
                 for(let p=0; p < activeStand.targets; p += 2) {
-                    pairHtml += `<div class="pair-group"><div class="flex flex-col gap-0.5"><span class="text-[6px] font-black text-slate-300 text-center leading-none">${p+1}</span><button onclick="window.toggleHit(${s.id}, ${activeStand.id}, ${p}, true)" class="w-6 h-6 rounded font-black text-[8px] border ${sScores[p] === true ? 'hit-bg shadow-sm' : 'bg-white text-slate-200'}">H</button><button onclick="window.toggleHit(${s.id}, ${activeStand.id}, ${p}, false)" class="w-6 h-6 rounded font-black text-[8px] border ${sScores[p] === false ? 'miss-bg shadow-sm' : 'bg-white text-slate-200'}">M</button></div><div class="flex flex-col gap-0.5"><span class="text-[6px] font-black text-slate-300 text-center leading-none">${p+2}</span><button onclick="window.toggleHit(${s.id}, ${activeStand.id}, ${p+1}, true)" class="w-6 h-6 rounded font-black text-[8px] border ${sScores[p+1] === true ? 'hit-bg shadow-sm' : 'bg-white text-slate-200'}">H</button><button onclick="window.toggleHit(${s.id}, ${activeStand.id}, ${p+1}, false)" class="w-6 h-6 rounded font-black text-[8px] border ${sScores[p+1] === false ? 'miss-bg shadow-sm' : 'bg-white text-slate-200'}">M</button></div></div>`;
+                    pairHtml += `
+                        <div class="pair-group">
+                            <div class="flex flex-col gap-0.5">
+                                <span class="text-[7px] font-black text-slate-300 text-center leading-none">${p+1}</span>
+                                <button onclick="toggleHit(${s.id}, ${activeStand.id}, ${p}, true)" class="w-7 h-7 rounded font-black text-[9px] border ${sScores[p] === true ? 'hit-bg shadow-sm' : 'bg-white text-slate-200'}">H</button>
+                                <button onclick="toggleHit(${s.id}, ${activeStand.id}, ${p}, false)" class="w-7 h-7 rounded font-black text-[9px] border ${sScores[p] === false ? 'miss-bg shadow-sm' : 'bg-white text-slate-200'}">M</button>
+                            </div>
+                            <div class="flex flex-col gap-0.5">
+                                <span class="text-[7px] font-black text-slate-300 text-center leading-none">${p+2}</span>
+                                <button onclick="toggleHit(${s.id}, ${activeStand.id}, ${p+1}, true)" class="w-7 h-7 rounded font-black text-[9px] border ${sScores[p+1] === true ? 'hit-bg shadow-sm' : 'bg-white text-slate-200'}">H</button>
+                                <button onclick="toggleHit(${s.id}, ${activeStand.id}, ${p+1}, false)" class="w-7 h-7 rounded font-black text-[9px] border ${sScores[p+1] === false ? 'miss-bg shadow-sm' : 'bg-white text-slate-200'}">M</button>
+                            </div>
+                        </div>
+                    `;
                 }
-                tr.innerHTML = `<td class="pl-3 pr-2 py-1.5"><div class="font-bold text-slate-800 text-[10px] truncate w-24">${s.name} <span class="text-[7px] text-slate-300 uppercase">${s.class}</span></div><div class="text-[7px] text-slate-400 font-bold uppercase tracking-tighter">Pos: ${displayOrder + 1}</div></td><td class="px-2 py-1.5"><div class="target-row gap-1 scrollbar-hide">${pairHtml}</div></td><td class="pr-3 pl-2 py-1.5 text-right font-black text-base text-slate-900 leading-none">${hitsCount}</td>`;
+
+                tr.innerHTML = `
+                    <td class="pl-4 pr-2 py-2">
+                        <div class="font-bold text-slate-800 text-[11px] truncate w-20">${s.name}</div>
+                        <div class="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">Pos: ${displayOrder + 1}</div>
+                    </td>
+                    <td class="px-2 py-2">
+                        <div class="target-row gap-1.5 scrollbar-hide">
+                            ${pairHtml}
+                        </div>
+                    </td>
+                    <td class="pr-4 pl-2 py-2 text-right">
+                        <div class="font-black text-lg text-slate-900 leading-none">${hitsCount}</div>
+                        <div class="text-[8px] text-slate-300 font-normal">/${activeStand.targets}</div>
+                    </td>
+                `;
                 scoringBody.appendChild(tr);
             });
 
+            // 4. Summary Table
             const summaryHeader = document.getElementById('summary-header');
-            summaryHeader.innerHTML = '<th class="px-2 py-2 border-b text-slate-400 w-16">STAND</th>';
+            summaryHeader.innerHTML = '<th class="px-3 py-2 border-b text-slate-400 w-24">STAND</th>';
             state.shooters.forEach(s => {
-                summaryHeader.innerHTML += `<th class="px-2 py-2 border-b text-center border-l border-slate-200"><div class="text-[8px] truncate max-w-[80px] mx-auto">${s.name}</div></th>`;
+                summaryHeader.innerHTML += `<th class="px-2 py-2 border-b text-center"><div class="text-[9px] truncate max-w-[60px] mx-auto">${s.name}</div></th>`;
             });
 
             const summaryBody = document.getElementById('summary-body');
@@ -475,65 +462,39 @@
             state.stands.forEach((stand, idx) => {
                 const tr = document.createElement('tr');
                 tr.className = idx === state.activeStandIndex ? "bg-orange-50 font-bold" : "border-b border-slate-100";
-                let rowHtml = `<td class="px-2 py-1 text-slate-500 whitespace-nowrap">St ${stand.id} <span class="text-[8px] opacity-40">(${stand.targets})</span></td>`;
+                let rowHtml = `<td class="px-3 py-1.5 text-slate-500">Stand ${stand.id} <span class="text-[8px] opacity-40">(${stand.targets})</span></td>`;
                 state.shooters.forEach(s => {
                     const hits = (state.hits[s.id] && state.hits[s.id][stand.id]) ? state.hits[s.id][stand.id].filter(h => h === true).length : 0;
-                    rowHtml += `<td class="px-2 py-1 text-center font-bold text-xs border-l border-slate-100">${hits}</td>`;
+                    rowHtml += `<td class="px-2 py-1.5 text-center font-mono">${hits}</td>`;
                 });
                 tr.innerHTML = rowHtml;
                 summaryBody.appendChild(tr);
             });
 
             const summaryFooter = document.getElementById('summary-footer');
-            let footHtml = `<tr class="bg-slate-900 text-white font-black"><td class="px-2 py-3 uppercase text-[8px]">TOTAL</td>`;
+            let footHtml = `<tr class="bg-slate-900 text-white font-black"><td class="px-3 py-3 uppercase text-[10px]">TOTAL</td>`;
             state.shooters.forEach(s => {
-                let grand = 0;
-                state.stands.forEach(stand => { if (state.hits[s.id] && state.hits[s.id][stand.id]) grand += state.hits[s.id][stand.id].filter(h => h === true).length; });
-                footHtml += `<td class="px-2 py-3 text-center text-sm font-bold border-l border-slate-700">${grand}</td>`;
+                let grandTotal = 0;
+                let maxPossible = 0;
+                state.stands.forEach(stand => {
+                    maxPossible += stand.targets;
+                    if (state.hits[s.id] && state.hits[s.id][stand.id]) {
+                        grandTotal += state.hits[s.id][stand.id].filter(h => h === true).length;
+                    }
+                });
+                footHtml += `<td class="px-2 py-3 text-center text-sm">${grandTotal}</td>`;
             });
             footHtml += '</tr>';
             summaryFooter.innerHTML = footHtml;
 
+            // Nav buttons
             document.getElementById('prev-btn').disabled = state.activeStandIndex === 0;
             document.getElementById('next-btn').disabled = state.activeStandIndex === state.stands.length -1;
+
             lucide.createIcons();
         }
 
-        // --- Init ---
-        async function startApp() {
-            // Populate Stand Count Select
-            const select = document.getElementById('stand-count-select');
-            for(let i=1; i<=20; i++) {
-                const opt = document.createElement('option');
-                opt.value = i;
-                opt.textContent = `${i} Stands`;
-                if (i === 12) opt.selected = true;
-                select.appendChild(opt);
-            }
-
-            // Auth
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                await signInAnonymously(auth);
-            }
-
-            onAuthStateChanged(auth, async (u) => {
-                user = u;
-                if (user) {
-                    updateSyncStatus('Checking for save...');
-                    const sessionRef = doc(db, 'artifacts', appId, 'users', user.uid, 'persistence', 'current_session');
-                    const snap = await getDoc(sessionRef);
-                    if (snap.exists()) {
-                        state = snap.data().state;
-                    }
-                    render();
-                    updateSyncStatus('Cloud Ready', true);
-                }
-            });
-        }
-
-        startApp();
+        window.onload = init;
     </script>
 </body>
 </html>
