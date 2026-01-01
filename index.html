@@ -118,7 +118,7 @@
             </div>
             <div class="flex items-center gap-2">
                 <button id="share-btn" onclick="window.shareAsImage()" class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-lg">
-                    <i data-lucide="share-2" size="14"></i> Share Image
+                    <i data-lucide="share-2" size="14"></i> Share Score
                 </button>
                 <button onclick="window.exportToPDF()" class="bg-orange-500 hover:bg-orange-600 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-lg">
                     <i data-lucide="printer" size="14"></i> PDF
@@ -141,7 +141,7 @@
                 <label class="text-[10px] font-black text-black uppercase flex items-center gap-1">
                     <i data-lucide="calendar" size="10" class="text-black"></i> Date
                 </label>
-                <input type="date" id="shoot-date" class="w-full bg-slate-50 border-slate-200 rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-bold text-black" onchange="updateField('sessionDate', this.value)">
+                <input type="date" id="shoot-date" class="w-full bg-slate-50 border-none rounded-md p-1.5 text-xs focus:ring-2 focus:ring-orange-500 outline-none font-bold text-black" onchange="updateField('sessionDate', this.value)">
             </div>
             <div class="space-y-1">
                 <label class="text-[10px] font-black text-black uppercase flex items-center gap-1">
@@ -286,7 +286,7 @@
 
     <script>
         // --- State Management ---
-        const SAVE_KEY = 'cpsa_sporting_pro_v8_landscape_no_notes';
+        const SAVE_KEY = 'cpsa_sporting_pro_v9_share_colors';
         let state = {
             groundName: "",
             sessionDate: new Date().toISOString().split('T')[0],
@@ -422,16 +422,17 @@
                     const scores = (state.hits[s.id] && state.hits[s.id][st.id]) ? state.hits[s.id][st.id] : Array(st.targets).fill(null);
                     scores.forEach(h => {
                         let mark = '&nbsp;';
+                        let bg = 'transparent';
                         if (h === true) { 
-                            const color = useColor ? '#16a34a' : 'black';
-                            mark = `<span style="font-family: serif; font-weight: 900; font-size: 14pt; color: ${color};">/</span>`; 
+                            mark = `<span style="font-family: serif; font-weight: 900; font-size: 14pt; color: black;">/</span>`; 
+                            if (useColor) bg = '#4ade80'; // Tailwind Green-400
                             total++; 
                         }
                         if (h === false) {
-                            const color = useColor ? '#ef4444' : 'black';
-                            mark = `<span style="font-weight: 900; font-size: 12pt; color: ${color};">O</span>`;
+                            mark = `<span style="font-weight: 900; font-size: 12pt; color: black;">O</span>`;
+                            if (useColor) bg = '#f87171'; // Tailwind Red-400
                         }
-                        rowHtml += `<td style="border: 1pt solid black; padding:0 !important; width: 18px;"><div style="width:100%; display: flex; align-items: center; justify-content: center;">${mark}</div></td>`;
+                        rowHtml += `<td style="border: 1pt solid black; padding:0 !important; width: 18px; background-color: ${bg};"><div style="width:100%; display: flex; align-items: center; justify-content: center;">${mark}</div></td>`;
                     });
                 });
                 rowHtml += `<td style="border: 1pt solid black; font-weight:bold; font-size:16pt; text-align:center; background: #fafafa;">${total}</td></tr>`;
@@ -458,8 +459,7 @@
             document.getElementById('cap-ground').innerText = state.groundName || "N/A";
             document.getElementById('cap-date').innerText = state.sessionDate || "N/A";
             document.getElementById('cap-event').innerText = state.eventType || "N/A";
-            // No notes setting here for Share Image
-            generateGridHTML('cap-grid', true);
+            generateGridHTML('cap-grid', true); // Enable Green/Red color for Image
 
             try {
                 const canvas = await html2canvas(container, {
@@ -554,9 +554,9 @@
                     pairHtml += `<div class="pair-group"><div class="flex flex-col gap-0.5"><span class="text-[6px] font-black text-black text-center leading-none">${p+1}</span><button onclick="toggleHit(${s.id}, ${activeStand.id}, ${p}, true)" class="w-6 h-6 rounded font-black text-[8px] border ${sScores[p] === true ? 'hit-bg shadow-sm' : 'bg-white border-slate-300 text-slate-300'}">H</button><button onclick="toggleHit(${s.id}, ${activeStand.id}, ${p}, false)" class="w-6 h-6 rounded font-black text-[8px] border ${sScores[p] === false ? 'miss-bg shadow-sm' : 'bg-white border-slate-300 text-slate-300'}">M</button></div><div class="flex flex-col gap-0.5"><span class="text-[6px] font-black text-black text-center leading-none">${p+2}</span><button onclick="toggleHit(${s.id}, ${activeStand.id}, ${p+1}, true)" class="w-6 h-6 rounded font-black text-[8px] border ${sScores[p+1] === true ? 'hit-bg shadow-sm' : 'bg-white border-slate-300 text-slate-300'}">H</button><button onclick="toggleHit(${s.id}, ${activeStand.id}, ${p+1}, false)" class="w-6 h-6 rounded font-black text-[8px] border ${sScores[p+1] === false ? 'miss-bg shadow-sm' : 'bg-white border-slate-300 text-slate-300'}">M</button></div></div>`;
                 }
                 tr.innerHTML = `
-                    <td class="pl-3 pr-2 py-1.5"><div class="font-black text-black text-[10px] truncate w-24">${s.name} <span class="text-[7px] text-orange-600 font-black">${s.class}</span></div><div class="text-[7px] text-black font-bold">Pos: ${displayOrder + 1}</div></td>
+                    <td class="pl-3 pr-2 py-1.5"><div class="font-black text-black text-[10px] truncate w-24">${s.name} <span class="text-[7px] text-orange-600 font-black">${s.class}</span></div><div class="text-[7px] text-black font-bold uppercase">Pos: ${displayOrder + 1}</div></td>
                     <td class="px-2 py-1.5"><div class="target-row gap-1 scrollbar-hide">${pairHtml}</div></td>
-                    <td class="pr-3 pl-2 py-1.5 text-right font-black text-base text-black">${hitsCount}</td>`;
+                    <td class="pr-3 pl-2 py-1.5 text-right font-black text-base text-black leading-none">${hitsCount}</td>`;
                 scoringBody.appendChild(tr);
             });
 
