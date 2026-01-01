@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sporting Pro - Scoring App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        [touch-action="none"] { touch-action: none; }
+        .transition-all { transition: all 0.2s ease-in-out; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans pb-24">
+
+    <!-- Header -->
+    <header class="bg-slate-900 text-white p-4 sticky top-0 z-10 shadow-md">
+        <div class="max-w-4xl mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <i data-lucide="target" class="text-orange-500"></i>
+                <h1 class="text-xl font-bold tracking-tight">Sporting Pro</h1>
+            </div>
+            <div class="text-right">
+                <div class="text-xs uppercase text-slate-400 font-semibold">Live Score</div>
+                <div class="text-2xl font-black text-orange-400" id="header-score">0<span class="text-slate-500 text-sm font-normal">/100</span></div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto p-4 space-y-6">
+        <!-- Shooter Info Card -->
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-1">
+                <label class="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
+                    <i data-lucide="user" size="14"></i> Shooter Name
+                </label>
+                <input 
+                    type="text" 
+                    id="shooter-name"
+                    placeholder="Enter name..."
+                    class="w-full bg-slate-50 border-none rounded-lg p-2 focus:ring-2 focus:ring-orange-500 outline-none font-medium transition-all"
+                >
+            </div>
+            <div class="space-y-1">
+                <label class="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
+                    <i data-lucide="calendar" size="14"></i> Date
+                </label>
+                <input 
+                    type="date" 
+                    id="session-date"
+                    class="w-full bg-slate-50 border-none rounded-lg p-2 focus:ring-2 focus:ring-orange-500 outline-none font-medium transition-all"
+                >
+            </div>
+        </section>
+
+        <!-- Stats Dashboard -->
+        <div class="grid grid-cols-3 gap-3">
+            <div class="bg-white p-3 rounded-xl border border-slate-200 text-center">
+                <div class="text-[10px] font-bold text-slate-400 uppercase">Hits</div>
+                <div id="stat-hits" class="text-xl font-bold text-green-600">0</div>
+            </div>
+            <div class="bg-white p-3 rounded-xl border border-slate-200 text-center">
+                <div class="text-[10px] font-bold text-slate-400 uppercase">Misses</div>
+                <div id="stat-misses" class="text-xl font-bold text-red-500">0</div>
+            </div>
+            <div class="bg-white p-3 rounded-xl border border-slate-200 text-center">
+                <div class="text-[10px] font-bold text-slate-400 uppercase">Avg %</div>
+                <div id="stat-percent" class="text-xl font-bold text-blue-600">0%</div>
+            </div>
+        </div>
+
+        <!-- Navigation - Stand Selector -->
+        <div id="stand-selector" class="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-hide no-scrollbar px-1">
+            <!-- Dynamic Stand Buttons -->
+        </div>
+
+        <!-- Active Stand Scoring -->
+        <section id="active-stand-card" class="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
+            <!-- Dynamic Active Stand Content -->
+        </section>
+
+        <!-- Summary Table -->
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-4 bg-slate-50 border-b border-slate-200 font-bold text-slate-700 flex justify-between items-center">
+                <span>Detailed Scorecard</span>
+                <button id="reset-btn" class="text-xs text-red-500 flex items-center gap-1 hover:underline">
+                   <i data-lucide="rotate-ccw" size="14"></i> Reset Score
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead>
+                        <tr class="bg-slate-50/50 text-slate-400 font-medium">
+                            <th class="px-4 py-2 border-b whitespace-nowrap">Stand</th>
+                            <th class="px-4 py-2 border-b whitespace-nowrap">Targets</th>
+                            <th class="px-4 py-2 border-b whitespace-nowrap">Score</th>
+                            <th class="px-4 py-2 border-b whitespace-nowrap">Progress</th>
+                        </tr>
+                    </thead>
+                    <tbody id="summary-body">
+                        <!-- Dynamic Table Rows -->
+                    </tbody>
+                    <tfoot>
+                        <tr class="bg-slate-900 text-white font-bold">
+                            <td class="px-4 py-3" colSpan="2">TOTAL ROUND</td>
+                            <td class="px-4 py-3" id="footer-score">0/100</td>
+                            <td class="px-4 py-3" id="footer-percent">0%</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- Floating Save Button -->
+    <div class="fixed bottom-6 right-6 flex flex-col gap-3">
+        <button 
+            id="save-btn"
+            class="bg-orange-500 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
+            title="Save results"
+        >
+            <i data-lucide="save" size="24"></i>
+        </button>
+    </div>
+
+    <!-- Footer Branding -->
+    <div class="text-center p-8 text-slate-400 text-xs">
+        <p>© 2025 Clay Counter • English Sporting Pro</p>
+    </div>
+
+    <script>
+        // State Management
+        let state = {
+            shooterName: "",
+            sessionDate: new Date().toISOString().split('T')[0],
+            stands: [
+                { id: 1, targets: 8, hits: Array(8).fill(null) },
+                { id: 2, targets: 8, hits: Array(8).fill(null) },
+                { id: 3, targets: 8, hits: Array(8).fill(null) },
+                { id: 4, targets: 8, hits: Array(8).fill(null) },
+                { id: 5, targets: 8, hits: Array(8).fill(null) },
+                { id: 6, targets: 8, hits: Array(8).fill(null) },
+                { id: 7, targets: 8, hits: Array(8).fill(null) },
+                { id: 8, targets: 8, hits: Array(8).fill(null) },
+                { id: 9, targets: 9, hits: Array(9).fill(null) },
+                { id: 10, targets: 9, hits: Array(9).fill(null) },
+                { id: 11, targets: 9, hits: Array(9).fill(null) },
+                { id: 12, targets: 9, hits: Array(9).fill(null) }
+            ],
+            activeStandIndex: 0
+        };
+
+        // Initialize
+        function init() {
+            document.getElementById('session-date').value = state.sessionDate;
+            render();
+            
+            // Events
+            document.getElementById('shooter-name').addEventListener('input', (e) => state.shooterName = e.target.value);
+            document.getElementById('session-date').addEventListener('change', (e) => state.sessionDate = e.target.value);
+            document.getElementById('reset-btn').addEventListener('click', resetScores);
+            document.getElementById('save-btn').addEventListener('click', saveSession);
+        }
+
+        function calculateStats() {
+            let hits = 0;
+            let total = 0;
+            let attempted = 0;
+
+            state.stands.forEach(stand => {
+                total += stand.targets;
+                stand.hits.forEach(h => {
+                    if (h === true) hits++;
+                    if (h !== null) attempted++;
+                });
+            });
+
+            return {
+                hits,
+                total,
+                misses: attempted - hits,
+                percent: total > 0 ? Math.round((hits / total) * 100) : 0
+            };
+        }
+
+        function render() {
+            const stats = calculateStats();
+            const activeStand = state.stands[state.activeStandIndex];
+
+            // Header & Dashboard
+            document.getElementById('header-score').innerHTML = `${stats.hits}<span class="text-slate-500 text-sm font-normal">/${stats.total}</span>`;
+            document.getElementById('stat-hits').innerText = stats.hits;
+            document.getElementById('stat-misses').innerText = stats.misses;
+            document.getElementById('stat-percent').innerText = `${stats.percent}%`;
+            document.getElementById('footer-score').innerText = `${stats.hits}/${stats.total}`;
+            document.getElementById('footer-percent').innerText = `${stats.percent}%`;
+
+            // Stand Selector
+            const selector = document.getElementById('stand-selector');
+            selector.innerHTML = '';
+            state.stands.forEach((stand, idx) => {
+                const btn = document.createElement('button');
+                const isActive = state.activeStandIndex === idx;
+                btn.className = `flex-shrink-0 w-12 h-12 rounded-xl font-bold flex flex-col items-center justify-center transition-all border-2 ${
+                    isActive ? 'bg-orange-500 border-orange-500 text-white shadow-lg scale-105' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                }`;
+                btn.innerHTML = `<span class="text-[10px] opacity-70 leading-none">S</span><span class="leading-none">${stand.id}</span>`;
+                btn.onclick = () => { state.activeStandIndex = idx; render(); };
+                selector.appendChild(btn);
+            });
+
+            // Add Stand Button
+            const addBtn = document.createElement('button');
+            addBtn.className = 'flex-shrink-0 w-12 h-12 rounded-xl border-2 border-dashed border-slate-300 text-slate-400 flex items-center justify-center hover:border-orange-400 hover:text-orange-400 transition-all';
+            addBtn.innerHTML = '<i data-lucide="plus-circle"></i>';
+            addBtn.onclick = addStand;
+            selector.appendChild(addBtn);
+
+            // Active Stand Card
+            const card = document.getElementById('active-stand-card');
+            if (!activeStand) {
+                card.innerHTML = `
+                    <div class="p-12 text-center border-2 border-dashed border-slate-200 m-4 rounded-2xl">
+                        <p class="text-slate-400 font-medium">No stands created.</p>
+                        <button onclick="addStand()" class="mt-4 text-orange-500 font-bold flex items-center gap-2 mx-auto">
+                            Create first stand
+                        </button>
+                    </div>`;
+            } else {
+                card.innerHTML = `
+                    <div class="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
+                        <div class="flex flex-col">
+                            <h2 class="text-lg font-bold text-slate-800">Stand ${activeStand.id}</h2>
+                            <p class="text-xs text-slate-500 font-medium">${activeStand.targets} Targets</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="flex bg-slate-200 rounded-lg p-1 items-center">
+                                <button onclick="updateTargetCount(-1)" class="p-1 text-slate-600 hover:bg-slate-300 rounded"><i data-lucide="minus" size="16"></i></button>
+                                <span class="px-2 font-bold text-slate-700 min-w-[2ch] text-center">${activeStand.targets}</span>
+                                <button onclick="updateTargetCount(1)" class="p-1 text-slate-600 hover:bg-slate-300 rounded"><i data-lucide="plus" size="16"></i></button>
+                            </div>
+                            <button onclick="removeActiveStand()" class="p-2 text-red-400 hover:text-red-600 transition-colors"><i data-lucide="trash-2" size="20"></i></button>
+                        </div>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        ${activeStand.hits.map((status, tIdx) => `
+                            <div class="flex items-center justify-between gap-4 py-2 border-b border-slate-50 last:border-0">
+                                <span class="font-bold text-slate-400 w-8">#${tIdx + 1}</span>
+                                <div class="flex-1 flex gap-2">
+                                    <button onclick="toggleHit(${tIdx}, true)" class="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all ${status === true ? 'bg-green-600 text-white shadow-md' : 'bg-slate-50 text-slate-400 border border-slate-100'}">
+                                        <i data-lucide="check-circle-2" size="18"></i> Hit
+                                    </button>
+                                    <button onclick="toggleHit(${tIdx}, false)" class="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold transition-all ${status === false ? 'bg-red-500 text-white shadow-md' : 'bg-slate-50 text-slate-400 border border-slate-100'}">
+                                        <i data-lucide="x-circle" size="18"></i> Miss
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="bg-slate-50 p-4 flex gap-3">
+                        <button onclick="navStand(-1)" ${state.activeStandIndex === 0 ? 'disabled' : ''} class="flex-1 flex items-center justify-center gap-2 bg-white border border-slate-200 py-3 rounded-xl font-bold text-slate-600 disabled:opacity-30">
+                            <i data-lucide="chevron-left" size="20"></i> Previous
+                        </button>
+                        <button onclick="navStand(1)" ${state.activeStandIndex === state.stands.length - 1 ? 'disabled' : ''} class="flex-1 flex items-center justify-center gap-2 bg-slate-900 text-white py-3 rounded-xl font-bold disabled:opacity-30">
+                            Next Stand <i data-lucide="chevron-right" size="20"></i>
+                        </button>
+                    </div>`;
+            }
+
+            // Summary Table
+            const tbody = document.getElementById('summary-body');
+            tbody.innerHTML = '';
+            state.stands.forEach((s, idx) => {
+                const sHits = s.hits.filter(h => h === true).length;
+                const sAtt = s.hits.filter(h => h !== null).length;
+                const sPct = Math.round((sAtt / s.targets) * 100);
+                const row = document.createElement('tr');
+                row.className = `border-b border-slate-50 ${state.activeStandIndex === idx ? 'bg-orange-50' : ''}`;
+                row.innerHTML = `
+                    <td class="px-4 py-3 font-bold">Stand ${s.id}</td>
+                    <td class="px-4 py-3 text-slate-500">${s.targets}</td>
+                    <td class="px-4 py-3 font-mono font-bold">${sHits}/${s.targets}</td>
+                    <td class="px-4 py-3 min-w-[100px]">
+                        <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                            <div class="bg-orange-400 h-full transition-all duration-500" style="width: ${sPct}%"></div>
+                        </div>
+                    </td>`;
+                tbody.appendChild(row);
+            });
+
+            // Re-render icons
+            lucide.createIcons();
+        }
+
+        // Logic Functions
+        function toggleHit(targetIdx, value) {
+            const stand = state.stands[state.activeStandIndex];
+            if (stand.hits[targetIdx] === value) {
+                stand.hits[targetIdx] = null;
+            } else {
+                stand.hits[targetIdx] = value;
+            }
+            render();
+        }
+
+        function updateTargetCount(delta) {
+            const stand = state.stands[state.activeStandIndex];
+            const newCount = Math.max(1, stand.targets + delta);
+            const currentCount = stand.targets;
+            
+            if (newCount > currentCount) {
+                stand.hits = [...stand.hits, ...Array(newCount - currentCount).fill(null)];
+            } else {
+                stand.hits = stand.hits.slice(0, newCount);
+            }
+            stand.targets = newCount;
+            render();
+        }
+
+        function addStand() {
+            const newId = state.stands.length > 0 ? Math.max(...state.stands.map(s => s.id)) + 1 : 1;
+            state.stands.push({ id: newId, targets: 8, hits: Array(8).fill(null) });
+            state.activeStandIndex = state.stands.length - 1;
+            render();
+        }
+
+        function removeActiveStand() {
+            if (state.stands.length <= 1) return;
+            if (confirm(`Remove Stand ${state.stands[state.activeStandIndex].id}?`)) {
+                state.stands.splice(state.activeStandIndex, 1);
+                state.activeStandIndex = Math.max(0, state.activeStandIndex - 1);
+                render();
+            }
+        }
+
+        function navStand(dir) {
+            const next = state.activeStandIndex + dir;
+            if (next >= 0 && next < state.stands.length) {
+                state.activeStandIndex = next;
+                render();
+            }
+        }
+
+        function resetScores() {
+            if (confirm("Clear all scores?")) {
+                state.stands.forEach(s => s.hits.fill(null));
+                render();
+            }
+        }
+
+        function saveSession() {
+            const stats = calculateStats();
+            const summary = `Round for ${state.shooterName || 'Unnamed Shooter'}\nScore: ${stats.hits}/${stats.total}\nDate: ${state.sessionDate}`;
+            alert(summary + "\n\nSession saved locally.");
+            console.log("Full session data:", state);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
