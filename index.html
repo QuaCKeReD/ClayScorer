@@ -50,7 +50,18 @@
             100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); } 
         }
 
-        .pair-stack { display: flex; flex-direction: column; gap: 3px; padding: 3px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; min-width: 62px; flex: 1; }
+        /* Vertical Pair Styling - Optimized for Mobile Width */
+        .pair-stack { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 2px; 
+            padding: 2px; 
+            background: #f8fafc; 
+            border: 1px solid #e2e8f0; 
+            border-radius: 6px; 
+            flex: 1;
+            min-width: 0; /* Allows shrinking to fit viewport */
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans pb-24 overflow-x-hidden">
@@ -80,7 +91,7 @@
 
     <main id="app-container" class="max-w-5xl mx-auto p-2 space-y-3 transition-opacity duration-300">
 
-        <!-- Info Card -->
+        <!-- Shoot Info -->
         <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print grid grid-cols-2 gap-2">
             <div class="col-span-2 sm:col-span-1 space-y-1">
                 <label class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Shoot Ground</label>
@@ -100,7 +111,7 @@
             </div>
         </section>
 
-        <!-- Squad List -->
+        <!-- Squad Configuration -->
         <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print">
             <div class="flex justify-between items-center mb-2">
                 <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400">Squad Members</h3>
@@ -109,7 +120,7 @@
             <div id="squad-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
         </section>
 
-        <!-- Stand Nav -->
+        <!-- Stand Navigation -->
         <div id="stand-nav" class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide no-scrollbar px-1 no-print"></div>
 
         <!-- Scoring Interface -->
@@ -124,6 +135,7 @@
                 </button>
             </div>
             
+            <!-- Pair Count Controller -->
             <div class="bg-slate-800 p-1 flex gap-1 no-print">
                 <button onclick="setBirds(4)" class="bird-btn flex-1 bg-slate-700 py-2 rounded-lg text-[9px] font-black text-slate-400" id="bird-4">2 PR</button>
                 <button onclick="setBirds(6)" class="bird-btn flex-1 bg-slate-700 py-2 rounded-lg text-[9px] font-black text-slate-400" id="bird-6">3 PR</button>
@@ -131,18 +143,20 @@
                 <button onclick="setBirds(10)" class="bird-btn flex-1 bg-slate-700 py-2 rounded-lg text-[9px] font-black text-slate-400" id="bird-10">5 PR</button>
             </div>
 
+            <!-- Vertical Scoring Grid -->
             <div id="scoring-area" class="divide-y divide-slate-100"></div>
 
+            <!-- Footer Controls -->
             <div class="bg-slate-50 p-3 flex gap-3 no-print border-t border-slate-200">
                 <button onclick="nav(-1)" id="nav-prev" class="flex-1 bg-white border border-slate-300 py-3 rounded-xl text-xs font-black disabled:opacity-30 tracking-widest">PREV</button>
                 <button onclick="nav(1)" id="nav-next" class="flex-1 bg-slate-900 text-white py-3 rounded-xl text-xs font-black disabled:opacity-30 tracking-widest uppercase">Next Stand</button>
             </div>
         </section>
 
-        <!-- Summary -->
+        <!-- Leaderboard Summary -->
         <section class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden no-print">
             <div class="p-2 bg-slate-100 border-b border-slate-200 flex justify-between items-center text-[9px] font-black uppercase text-slate-500">
-                <span>Leaderboard</span>
+                <span>Leaderboard Summary</span>
                 <div class="flex gap-4">
                     <button onclick="downloadCSV()">CSV</button>
                     <button onclick="resetAll()" class="text-red-600">Reset</button>
@@ -157,13 +171,13 @@
             </div>
         </section>
 
-        <!-- Notes -->
+        <!-- Round Notes -->
         <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print">
             <label class="text-[9px] font-black uppercase text-slate-400 mb-1 flex items-center gap-1"><i data-lucide="sticky-note" size="10"></i> Round Notes</label>
             <textarea id="field-notes" placeholder="Notes..." class="w-full h-20 bg-slate-50 border-none rounded-xl p-3 text-xs font-bold outline-none focus:ring-1 focus:ring-orange-500 resize-none" oninput="updateField('notes', this.value)"></textarea>
         </section>
 
-        <!-- Capture Container -->
+        <!-- Hidden Export Containers -->
         <div id="capture-container">
             <div style="border-bottom: 2pt solid black; padding: 10px 0; margin-bottom: 15px; display: flex; justify-content: space-between; font-size: 14pt;">
                 <div><strong>GROUND:</strong> <span id="cap-ground"></span></div>
@@ -177,7 +191,6 @@
             </div>
         </div>
 
-        <!-- Print View -->
         <div class="hidden print-only" id="print-view">
             <div class="print-header">
                 <div><strong>GROUND:</strong> <span id="p-ground"></span></div>
@@ -192,7 +205,7 @@
     </main>
 
     <script>
-        const KEY = 'sarge_mobile_pro_v1';
+        const KEY = 'sarge_vertical_pro_v1';
         let history = null;
         let state = {
             ground: "", date: new Date().toISOString().split('T')[0], event: "", notes: "",
@@ -279,14 +292,12 @@
             return t;
         }
 
-        function resetAll() { if (confirm("Clear all data?")) { localStorage.removeItem(KEY); location.reload(); } }
-
+        function resetAll() { if (confirm("Clear all shoot data?")) { localStorage.removeItem(KEY); location.reload(); } }
         function downloadCSV() {
             let csv = "Shooter,Class,Total\n";
             state.shooters.forEach(s => { csv += `${s.name},${s.class},${getShooterTotal(s.id)}\n`; });
             const blob = new Blob([csv], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url; a.download = 'scores.csv'; a.click();
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'scores.csv'; a.click();
         }
 
         function generateExportGrid(tid) {
@@ -294,7 +305,6 @@
             grid.innerHTML = '';
             const isShare = tid === 'cap-grid';
             
-            // Layout Tuning for Image Capture centering
             const rowH = isShare ? '45px' : '30px';
             const headH = isShare ? '40px' : '25px';
             const pairH = isShare ? '25px' : '18px';
@@ -336,7 +346,6 @@
         window.exportToPDF = () => {
             document.getElementById('p-ground').innerText = state.ground || "N/A";
             document.getElementById('p-date').innerText = getUKDate(state.date);
-            document.getElementById('p-notes').innerText = state.notes || "None.";
             generateExportGrid('p-grid'); window.print();
         };
 
@@ -354,8 +363,6 @@
                     const file = new File([blob], `scores.png`, { type: 'image/png' });
                     if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
                         await navigator.share({ files: [file], title: 'Squad Leaderboard' });
-                    } else {
-                        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'scores.png'; a.click();
                     }
                 });
             } catch(e) {}
@@ -378,8 +385,6 @@
 
             document.getElementById('field-ground').value = state.ground;
             document.getElementById('field-date').value = state.date;
-            document.getElementById('field-event').value = state.event;
-            document.getElementById('field-notes').value = state.notes;
             document.getElementById('field-stand-count').value = state.stands.length;
 
             const list = document.getElementById('squad-list'); list.innerHTML = '';
@@ -409,18 +414,30 @@
                 const hits = state.hits[s.id]?.[st.id] || Array(st.targets).fill(null);
                 const count = hits.filter(h => h === true).length;
                 const row = document.createElement('div');
-                row.className = `p-2.5 space-y-2 ${i === 0 ? 'bg-orange-50/40 first-up-highlight' : ''} ${state.isLocked ? 'pointer-events-none' : ''}`;
+                row.className = `p-2 space-y-1.5 ${i === 0 ? 'bg-orange-50/40 first-up-highlight' : ''} ${state.isLocked ? 'pointer-events-none' : ''}`;
                 
                 let gridHtml = '';
                 for(let p=0; p < st.targets; p+=2) {
                     const b1 = hits[p], b2 = hits[p+1];
-                    gridHtml += `<div class="pair-stack"><div class="flex gap-1"><button onclick="toggleHit(${s.id},${st.id},${p},true)" class="flex-1 h-8 rounded-md font-black text-[10px] border shadow-sm ${b1===true?'hit-bg':'bg-white border-slate-300 text-slate-400'}">H</button><button onclick="toggleHit(${s.id},${st.id},${p},false)" class="flex-1 h-8 rounded-md font-black text-[10px] border shadow-sm ${b1===false?'miss-bg':'bg-white border-slate-300 text-slate-400'}">M</button></div><div class="flex gap-1"><button onclick="toggleHit(${s.id},${st.id},${p+1},true)" class="flex-1 h-8 rounded-md font-black text-[10px] border shadow-sm ${b2===true?'hit-bg':'bg-white border-slate-300 text-slate-400'}">H</button><button onclick="toggleHit(${s.id},${st.id},${p+1},false)" class="flex-1 h-8 rounded-md font-black text-[10px] border shadow-sm ${b2===false?'miss-bg':'bg-white border-slate-300 text-slate-400'}">M</button></div></div>`;
+                    // ROTATED TO VERTICAL: Hits on top, Misses on bottom
+                    gridHtml += `
+                    <div class="pair-stack">
+                        <div class="flex gap-1">
+                            <button onclick="toggleHit(${s.id},${st.id},${p},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b1===true?'hit-bg':'bg-white border-slate-300 text-slate-400'}">H</button>
+                            <button onclick="toggleHit(${s.id},${st.id},${p+1},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b2===true?'hit-bg':'bg-white border-slate-300 text-slate-400'}">H</button>
+                        </div>
+                        <div class="flex gap-1">
+                            <button onclick="toggleHit(${s.id},${st.id},${p},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b1===false?'miss-bg':'bg-white border-slate-300 text-slate-400'}">M</button>
+                            <button onclick="toggleHit(${s.id},${st.id},${p+1},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b2===false?'miss-bg':'bg-white border-slate-300 text-slate-400'}">M</button>
+                        </div>
+                    </div>`;
                 }
-                row.innerHTML = `<div class="flex justify-between items-center px-0.5"><div class="flex items-center gap-1.5"><span class="text-xs font-black uppercase truncate max-w-[120px] tracking-tight">${s.name}</span>${i===0 ? '<span class="bg-orange-500 text-white text-[6px] px-1 rounded-full font-black">FIRST UP</span>' : ''}</div><div class="text-base font-black italic text-slate-900">${count}<span class="text-slate-300 text-[8px] not-italic ml-0.5">/${st.targets}</span></div></div><div class="flex gap-1 w-full overflow-x-hidden">${gridHtml}</div>`;
+                row.innerHTML = `<div class="flex justify-between items-center px-1"><div class="flex items-center gap-1.5"><span class="text-[11px] font-black uppercase truncate max-w-[140px] tracking-tight">${s.name}</span>${i===0 ? '<span class="bg-orange-500 text-white text-[6px] px-1 rounded-full font-black">FIRST UP</span>' : ''}</div><div class="text-base font-black italic text-slate-900">${count}<span class="text-slate-300 text-[8px] not-italic ml-0.5">/${st.targets}</span></div></div><div class="flex gap-1 w-full overflow-x-hidden">${gridHtml}</div>`;
                 sArea.appendChild(row);
             }
 
-            const lbHeader = document.getElementById('lb-header'); lbHeader.innerHTML = '<th class="p-2 border-b text-left w-12 tracking-tighter">Stand</th>';
+            const lbHeader = document.getElementById('lb-header'); 
+            lbHeader.innerHTML = '<th class="p-2 border-b text-left w-12 tracking-tighter">Stand</th>';
             const perf = state.shooters.map(sh => {
                 let totalH = 0, totalAtt = 0;
                 state.stands.forEach(stnd => {
@@ -432,7 +449,9 @@
                 return { ...sh, t: totalH, att: totalAtt, isStraight: totalH === totalAtt && totalH > 0 };
             }).sort((a,b)=>b.t-a.t);
 
-            perf.forEach(sh => lbHeader.innerHTML += `<th class="p-2 border-b border-l border-slate-200 text-center"><div class="truncate max-w-[50px] mx-auto">${sh.isStraight ? '🔥 ' : ''}${sh.name}</div></th>`);
+            perf.forEach(sh => {
+                lbHeader.innerHTML += `<th class="p-1 border-b border-l border-slate-200 text-center align-bottom"><div class="break-words leading-tight min-w-[50px]">${sh.isStraight ? '🔥<br>' : ''}${sh.name}</div></th>`;
+            });
 
             const lbBody = document.getElementById('lb-body'); lbBody.innerHTML = '';
             const stAvgs = state.stands.map(stand => {
