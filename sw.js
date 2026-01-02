@@ -1,5 +1,5 @@
-const CACHE_NAME = 'sarge-sporting-v2';
-const ICON_URL = 'https://cdn-icons-png.flaticon.com/512/3211/3211313.png';
+const CACHE_NAME = 'sarge-sporting-v3';
+const ICON_URL = 'https://img.icons8.com/ios-filled/512/target.png';
 const ASSETS = [
   './',
   './index.html',
