@@ -1,8 +1,10 @@
 const CACHE_NAME = 'sarge-sporting-v1';
+const ICON_URL = 'https://img.icons8.com/ios-filled/512/target.png';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
+  ICON_URL,
   'https://cdn.tailwindcss.com',
   'https://unpkg.com/lucide@latest',
   'https://html2canvas.hertzen.com/dist/html2canvas.min.js'
