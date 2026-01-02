@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0f172a">
     <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="https://img.icons8.com/ios-filled/512/target.png">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3211/3211313.png">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -18,6 +18,7 @@
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
         
+        /* Stop mobile browser from zooming in on focus */
         input, select, textarea { font-size: 16px !important; }
 
         @media print {
@@ -48,6 +49,7 @@
         .hit-bg { background-color: #16a34a !important; color: white !important; border-color: #15803d !important; }
         .miss-bg { background-color: #ef4444 !important; color: white !important; border-color: #b91c1c !important; }
         
+        /* Rotation Glow */
         .first-up-highlight { animation: lead-pulse 2s infinite; border: 2px solid #f97316 !important; }
         @keyframes lead-pulse { 
             0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4); } 
@@ -61,6 +63,7 @@
             flex: 1; min-width: 0;
         }
 
+        /* Responsive squad grid */
         .squad-grid-item {
             display: grid;
             grid-template-columns: 20px 1fr 75px 45px 25px;
@@ -71,10 +74,17 @@
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans pb-24 overflow-x-hidden">
 
+    <!-- Header Section -->
     <header class="bg-slate-900 text-white sticky top-0 z-50 shadow-md no-print w-full">
         <div class="max-w-5xl mx-auto p-3 flex justify-between items-center">
             <div class="flex items-center gap-2">
-                <i data-lucide="target" class="text-orange-500 w-6 h-6"></i>
+                <div class="w-8 h-8 flex items-center justify-center bg-orange-500 rounded-lg shadow-sm">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <circle cx="12" cy="12" r="6"></circle>
+                        <circle cx="12" cy="12" r="2"></circle>
+                    </svg>
+                </div>
                 <div>
                     <h1 class="text-base font-bold tracking-tight uppercase italic leading-none">Sporting Pro</h1>
                     <span id="offline-status" class="text-[7px] text-green-400 font-bold uppercase flex items-center gap-1 mt-0.5"><i data-lucide="wifi-off" size="7"></i> Offline Ready</span>
@@ -84,7 +94,7 @@
                 <button id="lock-btn" onclick="toggleLock()" class="bg-slate-800 p-2 rounded-lg border border-slate-700">
                     <i data-lucide="unlock" id="lock-icon" class="w-4 h-4 text-slate-400"></i>
                 </button>
-                <button onclick="shareAsImage()" class="bg-slate-700 p-2 rounded-lg border border-slate-600">
+                <button onclick="shareAsImage()" id="share-btn" class="bg-slate-700 p-2 rounded-lg border border-slate-600">
                     <i data-lucide="share-2" class="w-4 h-4 text-white"></i>
                 </button>
                 <button onclick="exportToPDF()" class="bg-orange-500 px-3 py-2 rounded-lg text-[10px] font-black uppercase">PDF</button>
@@ -93,12 +103,13 @@
         <div class="w-full bg-slate-800 h-1"><div id="progress-bar" class="bg-orange-500 h-full transition-all duration-500 w-0"></div></div>
     </header>
 
-    <main id="app-container" class="max-w-5xl mx-auto p-2 space-y-3">
+    <main id="app-container" class="max-w-5xl mx-auto p-2 space-y-3 transition-opacity duration-300">
 
+        <!-- Setup Configuration -->
         <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print grid grid-cols-2 gap-2">
             <div class="col-span-2 sm:col-span-1 space-y-1">
                 <label class="text-[9px] font-black text-slate-400 uppercase">Ground</label>
-                <input type="text" id="field-ground" placeholder="Location..." class="w-full bg-slate-50 border-none rounded-lg p-2 text-xs font-bold" oninput="updateField('ground', this.value)">
+                <input type="text" id="field-ground" placeholder="Ground name..." class="w-full bg-slate-50 border-none rounded-lg p-2 text-xs font-bold" oninput="updateField('ground', this.value)">
             </div>
             <div class="space-y-1">
                 <label class="text-[9px] font-black text-slate-400 uppercase">Date</label>
@@ -110,20 +121,23 @@
             </div>
             <div class="col-span-2 space-y-1">
                 <label class="text-[9px] font-black text-slate-400 uppercase">Event / Squad</label>
-                <input type="text" id="field-event" placeholder="e.g. 100 Selection" class="w-full bg-slate-50 border-none rounded-lg p-2 text-xs font-bold" oninput="updateField('event', this.value)">
+                <input type="text" id="field-event" placeholder="e.g. Selection Shoot" class="w-full bg-slate-50 border-none rounded-lg p-2 text-xs font-bold" oninput="updateField('event', this.value)">
             </div>
         </section>
 
+        <!-- Squad Management -->
         <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print">
             <div class="flex justify-between items-center mb-2">
                 <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400">Squad Members</h3>
-                <button onclick="addShooter()" class="text-[9px] bg-slate-900 text-white px-3 py-1 rounded-lg font-black uppercase tracking-tighter">Add Shooter</button>
+                <button onclick="addShooter()" class="text-[9px] bg-slate-900 text-white px-3 py-1 rounded-lg font-black uppercase">Add Shooter</button>
             </div>
             <div id="squad-list" class="space-y-2"></div>
         </section>
 
+        <!-- Stand Navigation -->
         <div id="stand-nav" class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide no-scrollbar px-1 no-print"></div>
 
+        <!-- Scoring Section -->
         <section class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden no-print">
             <div class="bg-slate-900 px-3 py-2.5 text-white flex justify-between items-center">
                 <div class="flex items-baseline gap-2">
@@ -145,14 +159,15 @@
             <div id="scoring-area" class="divide-y divide-slate-100"></div>
 
             <div class="bg-slate-50 p-3 flex gap-3 no-print border-t border-slate-200">
-                <button onclick="nav(-1)" id="nav-prev" class="flex-1 bg-white border border-slate-300 py-3 rounded-xl text-xs font-black disabled:opacity-30 uppercase tracking-widest">Prev</button>
-                <button onclick="nav(1)" id="nav-next" class="flex-1 bg-slate-900 text-white py-3 rounded-xl text-xs font-black disabled:opacity-30 uppercase tracking-widest">Next</button>
+                <button onclick="nav(-1)" id="nav-prev" class="flex-1 bg-white border border-slate-300 py-3 rounded-xl text-xs font-black disabled:opacity-30 tracking-widest uppercase">Prev</button>
+                <button onclick="nav(1)" id="nav-next" class="flex-1 bg-slate-900 text-white py-3 rounded-xl text-xs font-black disabled:opacity-30 tracking-widest uppercase">Next</button>
             </div>
         </section>
 
+        <!-- Leaderboard Stats -->
         <section class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden no-print">
             <div class="p-2 bg-slate-100 border-b border-slate-200 flex justify-between items-center text-[9px] font-black uppercase text-slate-500">
-                <span>Leaderboard</span>
+                <span>Leaderboard Summary</span>
                 <div class="flex gap-4">
                     <button onclick="downloadCSV()">CSV</button>
                     <button onclick="resetAll()" class="text-red-600">Reset</button>
@@ -167,12 +182,13 @@
             </div>
         </section>
 
+        <!-- Private Notes -->
         <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print">
-            <label class="text-[9px] font-black uppercase text-slate-400 mb-1 flex items-center gap-1"><i data-lucide="sticky-note" size="10"></i> Round Notes</label>
-            <textarea id="field-notes" placeholder="Notes..." class="w-full h-20 bg-slate-50 border-none rounded-xl p-3 text-xs font-bold outline-none focus:ring-1 focus:ring-orange-500 resize-none" oninput="updateField('notes', this.value)"></textarea>
+            <label class="text-[9px] font-black uppercase text-slate-400 mb-1 flex items-center gap-1"><i data-lucide="sticky-note" size="10"></i> Private Notes</label>
+            <textarea id="field-notes" placeholder="Private details..." class="w-full h-20 bg-slate-50 border-none rounded-xl p-3 text-xs font-bold outline-none focus:ring-1 focus:ring-orange-500 resize-none" oninput="updateField('notes', this.value)"></textarea>
         </section>
 
-        <!-- Hidden Exports -->
+        <!-- Hidden Export Containers -->
         <div id="capture-container">
             <div style="border-bottom: 2pt solid black; padding: 10px 0; margin-bottom: 15px; display: flex; justify-content: space-between; font-size: 14pt;">
                 <div><strong>GROUND:</strong> <span id="cap-ground"></span></div>
@@ -200,7 +216,7 @@
     </main>
 
     <script>
-        const KEY = 'sarge_pwa_pro_v1';
+        const KEY = 'sarge_pwa_pro_v2_final';
         let history = null;
         let state = {
             ground: "", date: new Date().toISOString().split('T')[0], event: "", notes: "",
@@ -208,11 +224,10 @@
             stands: [], hits: {}, activeIdx: 0, isLocked: false
         };
 
+        // PWA Registration
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(reg => console.log('SW Registered'))
-                    .catch(err => console.log('SW Failed', err));
+                navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW Registration failed', err));
             });
         }
 
@@ -255,8 +270,10 @@
             history = JSON.parse(JSON.stringify(state.hits));
             if (!state.hits[shId]) state.hits[shId] = {};
             if (!state.hits[shId][stId]) state.hits[shId][stId] = Array(state.stands.find(s=>s.id === stId).targets).fill(null);
+            
             const curr = state.hits[shId][stId][idx];
             state.hits[shId][stId][idx] = (curr === val) ? null : val;
+            
             if (state.hits[shId][stId][idx] !== null) {
                 if (navigator.vibrate) val ? navigator.vibrate(50) : navigator.vibrate([40, 40, 40]);
             }
@@ -293,7 +310,7 @@
             return t;
         }
 
-        function resetAll() { if (confirm("Clear all shoot data?")) { localStorage.removeItem(KEY); location.reload(); } }
+        function resetAll() { if (confirm("Wipe all data?")) { localStorage.removeItem(KEY); location.reload(); } }
 
         function downloadCSV() {
             let csv = "Shooter,CPSA,Class,Total\n";
@@ -362,9 +379,11 @@
                 container.style.position = 'absolute'; container.style.left = '-9999px';
                 canvas.toBlob(async (blob) => {
                     if (!blob) return;
-                    const file = new File([blob], `scores.png`, { type: 'image/png' });
+                    const file = new File([blob], `leaderboard.png`, { type: 'image/png' });
                     if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
                         await navigator.share({ files: [file], title: 'Squad Leaderboard' });
+                    } else {
+                        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'scores.png'; a.click();
                     }
                 });
             } catch(e) {}
@@ -420,7 +439,8 @@
                 let gridHtml = '';
                 for(let p=0; p < st.targets; p+=2) {
                     const b1 = hits[p], b2 = hits[p+1];
-                    gridHtml += `<div class="pair-stack"><div class="flex gap-1"><button onclick="toggleHit(${s.id},${st.id},${p},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b1===true?'hit-bg':'bg-white border-slate-300 text-slate-400'}">H</button><button onclick="toggleHit(${s.id},${st.id},${p+1},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b2===true?'hit-bg':'bg-white border-slate-300 text-slate-400'}">H</button></div><div class="flex gap-1"><button onclick="toggleHit(${s.id},${st.id},${p},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b1===false?'miss-bg':'bg-white border-slate-300 text-slate-400'}">M</button><button onclick="toggleHit(${s.id},${st.id},${p+1},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b2===false?'miss-bg':'bg-white border-slate-300 text-slate-400'}">M</button></div></div>`;
+                    gridHtml += `
+                    <div class="pair-stack"><div class="flex gap-1"><button onclick="toggleHit(${s.id},${st.id},${p},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b1===true?'hit-bg':'bg-white border-slate-300 text-slate-400'}">H</button><button onclick="toggleHit(${s.id},${st.id},${p+1},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b2===true?'hit-bg':'bg-white border-slate-300 text-slate-400'}">H</button></div><div class="flex gap-1"><button onclick="toggleHit(${s.id},${st.id},${p},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b1===false?'miss-bg':'bg-white border-slate-300 text-slate-400'}">M</button><button onclick="toggleHit(${s.id},${st.id},${p+1},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b2===false?'miss-bg':'bg-white border-slate-300 text-slate-400'}">M</button></div></div>`;
                 }
                 row.innerHTML = `<div class="flex justify-between items-center px-1"><div class="flex items-center gap-1.5"><span class="text-[11px] font-black uppercase truncate max-w-[140px] tracking-tight">${s.name}</span>${i===0 ? '<span class="bg-orange-500 text-white text-[6px] px-1 rounded-full font-black uppercase">First Up</span>' : ''}</div><div class="text-base font-black italic text-slate-900">${count}<span class="text-slate-300 text-[8px] not-italic ml-0.5">/${st.targets}</span></div></div><div class="flex gap-1 w-full overflow-x-hidden">${gridHtml}</div>`;
                 sArea.appendChild(row);
