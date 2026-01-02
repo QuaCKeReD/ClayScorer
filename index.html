@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0f172a">
     <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3211/3211313.png">
+    <link rel="apple-touch-icon" href="https://img.icons8.com/ios-filled/512/target.png">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -169,7 +169,7 @@
 
         <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print">
             <label class="text-[9px] font-black uppercase text-slate-400 mb-1 flex items-center gap-1"><i data-lucide="sticky-note" size="10"></i> Round Notes</label>
-            <textarea id="field-notes" placeholder="Weather, setup..." class="w-full h-20 bg-slate-50 border-none rounded-xl p-3 text-xs font-bold outline-none focus:ring-1 focus:ring-orange-500 resize-none" oninput="updateField('notes', this.value)"></textarea>
+            <textarea id="field-notes" placeholder="Notes..." class="w-full h-20 bg-slate-50 border-none rounded-xl p-3 text-xs font-bold outline-none focus:ring-1 focus:ring-orange-500 resize-none" oninput="updateField('notes', this.value)"></textarea>
         </section>
 
         <!-- Hidden Exports -->
@@ -208,7 +208,6 @@
             stands: [], hits: {}, activeIdx: 0, isLocked: false
         };
 
-        // --- PWA Registration ---
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
@@ -294,13 +293,14 @@
             return t;
         }
 
-        function resetAll() { if (confirm("Wipe all shoot data?")) { localStorage.removeItem(KEY); location.reload(); } }
+        function resetAll() { if (confirm("Clear all shoot data?")) { localStorage.removeItem(KEY); location.reload(); } }
 
         function downloadCSV() {
             let csv = "Shooter,CPSA,Class,Total\n";
             state.shooters.forEach(s => { csv += `${s.name},${s.cpsa},${s.class},${getShooterTotal(s.id)}\n`; });
             const blob = new Blob([csv], { type: 'text/csv' });
-            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'scores.csv'; a.click();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'scores.csv'; a.click();
         }
 
         function generateExportGrid(tid) {
@@ -348,14 +348,14 @@
         window.exportToPDF = () => {
             document.getElementById('p-ground').innerText = state.ground || "N/A";
             document.getElementById('p-date').innerText = getUKDate(state.date);
-            generateExportGrid('p-grid'); window.print();
+            generateExportGrid('p-grid', true); window.print();
         };
 
         window.shareAsImage = async () => {
             const container = document.getElementById('capture-container');
             document.getElementById('cap-ground').innerText = state.ground || "N/A";
             document.getElementById('cap-date').innerText = getUKDate(state.date);
-            generateExportGrid('cap-grid');
+            generateExportGrid('cap-grid', true);
             try {
                 container.style.position = 'fixed'; container.style.left = '0'; container.style.top = '0'; container.style.zIndex = '-1';
                 const canvas = await html2canvas(container, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
@@ -393,13 +393,7 @@
             state.shooters.forEach((s, i) => {
                 const div = document.createElement('div');
                 div.className = "bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm squad-grid-item";
-                div.innerHTML = `
-                    <span class="text-[9px] font-black text-slate-300">${i+1}</span>
-                    <input type="text" value="${s.name}" maxlength="20" placeholder="Name" onchange="state.shooters[${i}].name=this.value;save();render();" class="bg-transparent border-none p-0 text-[11px] font-black outline-none w-full">
-                    <input type="text" value="${s.cpsa}" maxlength="8" placeholder="CPSA #" onchange="state.shooters[${i}].cpsa=this.value;save();" class="bg-slate-50 p-1 text-[9px] rounded font-bold w-full border border-slate-100">
-                    <select onchange="state.shooters[${i}].class=this.value;save();" class="text-[9px] font-black bg-slate-50 rounded p-1 border border-slate-100">${['AA','A','B','C','U'].map(c=>`<option ${s.class===c?'selected':''}>${c}</option>`)}</select>
-                    <button onclick="removeShooter(${s.id})" class="text-red-400 flex justify-center"><i data-lucide="x" size="16"></i></button>
-                `;
+                div.innerHTML = `<span class="text-[9px] font-black text-slate-300">${i+1}</span><input type="text" value="${s.name}" maxlength="20" placeholder="Name" onchange="state.shooters[${i}].name=this.value;save();render();" class="bg-transparent border-none p-0 text-[11px] font-black outline-none w-full"><input type="text" value="${s.cpsa}" maxlength="8" placeholder="CPSA #" onchange="state.shooters[${i}].cpsa=this.value;save();" class="bg-slate-50 p-1 text-[9px] rounded font-bold w-full border border-slate-100"><select onchange="state.shooters[${i}].class=this.value;save();" class="text-[9px] font-black bg-slate-50 rounded p-1 border border-slate-100">${['AA','A','B','C','U'].map(c=>`<option ${s.class===c?'selected':''}>${c}</option>`)}</select><button onclick="removeShooter(${s.id})" class="text-red-400 flex justify-center"><i data-lucide="x" size="16"></i></button>`;
                 list.appendChild(div);
             });
 
@@ -423,43 +417,22 @@
                 const count = hits.filter(h => h === true).length;
                 const row = document.createElement('div');
                 row.className = `p-2.5 space-y-1.5 ${i === 0 ? 'bg-orange-50/40 first-up-highlight' : ''} ${state.isLocked ? 'pointer-events-none' : ''}`;
-                
                 let gridHtml = '';
                 for(let p=0; p < st.targets; p+=2) {
                     const b1 = hits[p], b2 = hits[p+1];
-                    // VERTICAL PAIR INPUTS
-                    gridHtml += `
-                    <div class="pair-stack">
-                        <div class="flex gap-1">
-                            <button onclick="toggleHit(${s.id},${st.id},${p},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b1===true?'hit-bg':'bg-white border-slate-300 text-slate-400'}">H</button>
-                            <button onclick="toggleHit(${s.id},${st.id},${p+1},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b2===true?'hit-bg':'bg-white border-slate-300 text-slate-400'}">H</button>
-                        </div>
-                        <div class="flex gap-1">
-                            <button onclick="toggleHit(${s.id},${st.id},${p},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b1===false?'miss-bg':'bg-white border-slate-300 text-slate-400'}">M</button>
-                            <button onclick="toggleHit(${s.id},${st.id},${p+1},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b2===false?'miss-bg':'bg-white border-slate-300 text-slate-400'}">M</button>
-                        </div>
-                    </div>`;
+                    gridHtml += `<div class="pair-stack"><div class="flex gap-1"><button onclick="toggleHit(${s.id},${st.id},${p},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b1===true?'hit-bg':'bg-white border-slate-300 text-slate-400'}">H</button><button onclick="toggleHit(${s.id},${st.id},${p+1},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b2===true?'hit-bg':'bg-white border-slate-300 text-slate-400'}">H</button></div><div class="flex gap-1"><button onclick="toggleHit(${s.id},${st.id},${p},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b1===false?'miss-bg':'bg-white border-slate-300 text-slate-400'}">M</button><button onclick="toggleHit(${s.id},${st.id},${p+1},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b2===false?'miss-bg':'bg-white border-slate-300 text-slate-400'}">M</button></div></div>`;
                 }
                 row.innerHTML = `<div class="flex justify-between items-center px-1"><div class="flex items-center gap-1.5"><span class="text-[11px] font-black uppercase truncate max-w-[140px] tracking-tight">${s.name}</span>${i===0 ? '<span class="bg-orange-500 text-white text-[6px] px-1 rounded-full font-black uppercase">First Up</span>' : ''}</div><div class="text-base font-black italic text-slate-900">${count}<span class="text-slate-300 text-[8px] not-italic ml-0.5">/${st.targets}</span></div></div><div class="flex gap-1 w-full overflow-x-hidden">${gridHtml}</div>`;
                 sArea.appendChild(row);
             }
 
-            const lbHeader = document.getElementById('lb-header'); 
-            lbHeader.innerHTML = '<th class="p-2 border-b text-left w-12 tracking-tighter">Stand</th>';
+            const lbHeader = document.getElementById('lb-header'); lbHeader.innerHTML = '<th class="p-2 border-b text-left w-12 tracking-tighter">Stand</th>';
             const perf = state.shooters.map(sh => {
                 let totalH = 0, totalAtt = 0;
-                state.stands.forEach(stnd => {
-                    if (state.hits[sh.id]?.[stnd.id]) {
-                        totalH += state.hits[sh.id][stnd.id].filter(h => h === true).length;
-                        totalAtt += state.hits[sh.id][stnd.id].filter(h => h !== null).length;
-                    }
-                });
+                state.stands.forEach(stnd => { if (state.hits[sh.id]?.[stnd.id]) { totalH += state.hits[sh.id][stnd.id].filter(h => h === true).length; totalAtt += state.hits[sh.id][stnd.id].filter(h => h !== null).length; }});
                 return { ...sh, t: totalH, att: totalAtt, isStraight: totalH === totalAtt && totalH > 0 };
             }).sort((a,b)=>b.t-a.t);
-
-            perf.forEach(sh => {
-                lbHeader.innerHTML += `<th class="p-1 border-b border-l border-slate-200 text-center align-bottom"><div class="break-words leading-tight min-w-[50px]">${sh.isStraight ? '🔥<br>' : ''}${sh.name}</div></th>`;
-            });
+            perf.forEach(sh => { lbHeader.innerHTML += `<th class="p-1 border-b border-l border-slate-200 text-center align-bottom"><div class="break-words leading-tight min-w-[50px]">${sh.isStraight ? '🔥<br>' : ''}${sh.name}</div></th>`; });
 
             const lbBody = document.getElementById('lb-body'); lbBody.innerHTML = '';
             const stAvgs = state.stands.map(stand => {
@@ -471,10 +444,7 @@
 
             state.stands.forEach((stand, idx) => {
                 let row = `<td class="p-2 font-bold border-b text-slate-400 text-[8px]">ST ${stand.id} ${stand.id===hardId && sTotalShot>0?'❗':''}</td>`;
-                perf.forEach(sh => {
-                    const hits = state.hits[sh.id]?.[stand.id]?.filter(h=>h===true).length || 0;
-                    row += `<td class="p-2 text-center border-b border-l border-slate-100 font-black">${hits}</td>`;
-                });
+                perf.forEach(sh => { row += `<td class="p-2 text-center border-b border-l border-slate-100 font-black">${state.hits[sh.id]?.[stand.id]?.filter(h=>h===true).length || 0}</td>`; });
                 const tr = document.createElement('tr'); tr.className = state.activeIdx === idx ? 'bg-orange-50' : '';
                 tr.innerHTML = row; lbBody.appendChild(tr);
             });
@@ -483,10 +453,8 @@
             let fRow = `<tr class="bg-slate-900 text-white font-black"><td class="p-2 uppercase text-[7px]">Total</td>`;
             perf.forEach(sh => fRow += `<td class="p-2 text-center text-sm border-l border-slate-700">${sh.t}</td>`);
             f.innerHTML = fRow + '</tr>';
-            
             document.querySelectorAll('.bird-btn').forEach(b => b.classList.remove('bg-orange-500', 'text-white'));
             document.getElementById(`bird-${st.targets}`)?.classList.add('bg-orange-500', 'text-white');
-
             document.getElementById('nav-prev').disabled = state.activeIdx === 0;
             document.getElementById('nav-next').disabled = state.activeIdx === state.stands.length - 1;
             lucide.createIcons();
