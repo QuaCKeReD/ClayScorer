@@ -9,7 +9,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0f172a">
     <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3211/3211313.png">
+    <!-- Updated Stable App Icon to match header target -->
+    <link rel="apple-touch-icon" href="https://img.icons8.com/ios-filled/512/target.png">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -36,6 +37,8 @@
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
+            .official-hit { font-family: serif; font-weight: 900; font-size: 11pt; line-height: 1; }
+            .official-miss { font-weight: 900; font-size: 10pt; line-height: 1; }
         }
 
         #capture-container {
@@ -108,20 +111,20 @@
         <!-- Setup Configuration -->
         <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print grid grid-cols-2 gap-2">
             <div class="col-span-2 sm:col-span-1 space-y-1">
-                <label class="text-[9px] font-black text-slate-400 uppercase">Ground</label>
+                <label class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Shoot Ground</label>
                 <input type="text" id="field-ground" placeholder="Ground name..." class="w-full bg-slate-50 border-none rounded-lg p-2 text-xs font-bold" oninput="updateField('ground', this.value)">
             </div>
             <div class="space-y-1">
-                <label class="text-[9px] font-black text-slate-400 uppercase">Date</label>
+                <label class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Shoot Date</label>
                 <input type="date" id="field-date" class="w-full bg-slate-50 border-none rounded-lg p-2 text-xs font-bold" onchange="updateField('date', this.value)">
             </div>
             <div class="space-y-1">
-                <label class="text-[9px] font-black text-slate-400 uppercase">Stands</label>
+                <label class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Stand Count</label>
                 <select id="field-stand-count" onchange="updateStandCount(this.value)" class="w-full bg-slate-50 border-none rounded-lg p-2 text-xs font-black"></select>
             </div>
             <div class="col-span-2 space-y-1">
-                <label class="text-[9px] font-black text-slate-400 uppercase">Event / Squad</label>
-                <input type="text" id="field-event" placeholder="e.g. Selection Shoot" class="w-full bg-slate-50 border-none rounded-lg p-2 text-xs font-bold" oninput="updateField('event', this.value)">
+                <label class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Event Name</label>
+                <input type="text" id="field-event" placeholder="e.g. 100 ESP Selection" class="w-full bg-slate-50 border-none rounded-lg p-2 text-xs font-bold" oninput="updateField('event', this.value)">
             </div>
         </section>
 
@@ -134,17 +137,16 @@
             <div id="squad-list" class="space-y-2"></div>
         </section>
 
-        <!-- Stand Navigation -->
         <div id="stand-nav" class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide no-scrollbar px-1 no-print"></div>
 
-        <!-- Scoring Section -->
+        <!-- Scoring Interface -->
         <section class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden no-print">
             <div class="bg-slate-900 px-3 py-2.5 text-white flex justify-between items-center">
                 <div class="flex items-baseline gap-2">
                     <h2 id="active-stand-title" class="text-lg font-black italic uppercase">Stand 1</h2>
                     <span id="active-stand-targets" class="text-[9px] text-orange-400 font-bold uppercase"></span>
                 </div>
-                <button id="undo-btn" onclick="undo()" class="hidden text-[9px] font-black text-white uppercase flex items-center gap-1 bg-slate-800 px-2 py-1 rounded-lg">
+                <button id="undo-btn" onclick="undo()" class="hidden text-[9px] font-black text-white uppercase flex items-center gap-1 bg-slate-800 px-2 py-1 rounded-lg border border-slate-700">
                     <i data-lucide="rotate-ccw" size="10"></i> Undo
                 </button>
             </div>
@@ -160,11 +162,11 @@
 
             <div class="bg-slate-50 p-3 flex gap-3 no-print border-t border-slate-200">
                 <button onclick="nav(-1)" id="nav-prev" class="flex-1 bg-white border border-slate-300 py-3 rounded-xl text-xs font-black disabled:opacity-30 tracking-widest uppercase">Prev</button>
-                <button onclick="nav(1)" id="nav-next" class="flex-1 bg-slate-900 text-white py-3 rounded-xl text-xs font-black disabled:opacity-30 tracking-widest uppercase">Next</button>
+                <button onclick="nav(1)" id="nav-next" class="flex-1 bg-slate-900 text-white py-3 rounded-xl text-xs font-black disabled:opacity-30 tracking-widest uppercase">Next Stand</button>
             </div>
         </section>
 
-        <!-- Leaderboard Stats -->
+        <!-- Summary -->
         <section class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden no-print">
             <div class="p-2 bg-slate-100 border-b border-slate-200 flex justify-between items-center text-[9px] font-black uppercase text-slate-500">
                 <span>Leaderboard Summary</span>
@@ -182,13 +184,13 @@
             </div>
         </section>
 
-        <!-- Private Notes -->
+        <!-- Notes -->
         <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print">
-            <label class="text-[9px] font-black uppercase text-slate-400 mb-1 flex items-center gap-1"><i data-lucide="sticky-note" size="10"></i> Private Notes</label>
-            <textarea id="field-notes" placeholder="Private details..." class="w-full h-20 bg-slate-50 border-none rounded-xl p-3 text-xs font-bold outline-none focus:ring-1 focus:ring-orange-500 resize-none" oninput="updateField('notes', this.value)"></textarea>
+            <label class="text-[9px] font-black uppercase text-slate-400 mb-1 flex items-center gap-1"><i data-lucide="sticky-note" size="10"></i> Round Notes</label>
+            <textarea id="field-notes" placeholder="Notes..." class="w-full h-20 bg-slate-50 border-none rounded-xl p-3 text-xs font-bold outline-none focus:ring-1 focus:ring-orange-500 resize-none" oninput="updateField('notes', this.value)"></textarea>
         </section>
 
-        <!-- Hidden Export Containers -->
+        <!-- Export -->
         <div id="capture-container">
             <div style="border-bottom: 2pt solid black; padding: 10px 0; margin-bottom: 15px; display: flex; justify-content: space-between; font-size: 14pt;">
                 <div><strong>GROUND:</strong> <span id="cap-ground"></span></div>
@@ -224,7 +226,6 @@
             stands: [], hits: {}, activeIdx: 0, isLocked: false
         };
 
-        // PWA Registration
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW Registration failed', err));
@@ -310,7 +311,7 @@
             return t;
         }
 
-        function resetAll() { if (confirm("Wipe all data?")) { localStorage.removeItem(KEY); location.reload(); } }
+        function resetAll() { if (confirm("Clear all data?")) { localStorage.removeItem(KEY); location.reload(); } }
 
         function downloadCSV() {
             let csv = "Shooter,CPSA,Class,Total\n";
@@ -439,8 +440,7 @@
                 let gridHtml = '';
                 for(let p=0; p < st.targets; p+=2) {
                     const b1 = hits[p], b2 = hits[p+1];
-                    gridHtml += `
-                    <div class="pair-stack"><div class="flex gap-1"><button onclick="toggleHit(${s.id},${st.id},${p},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b1===true?'hit-bg':'bg-white border-slate-300 text-slate-400'}">H</button><button onclick="toggleHit(${s.id},${st.id},${p+1},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b2===true?'hit-bg':'bg-white border-slate-300 text-slate-400'}">H</button></div><div class="flex gap-1"><button onclick="toggleHit(${s.id},${st.id},${p},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b1===false?'miss-bg':'bg-white border-slate-300 text-slate-400'}">M</button><button onclick="toggleHit(${s.id},${st.id},${p+1},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b2===false?'miss-bg':'bg-white border-slate-300 text-slate-400'}">M</button></div></div>`;
+                    gridHtml += `<div class="pair-stack"><div class="flex gap-1"><button onclick="toggleHit(${s.id},${st.id},${p},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b1===true?'hit-bg':'bg-white border-slate-300 text-slate-400'}">H</button><button onclick="toggleHit(${s.id},${st.id},${p+1},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b2===true?'hit-bg':'bg-white border-slate-300 text-slate-400'}">H</button></div><div class="flex gap-1"><button onclick="toggleHit(${s.id},${st.id},${p},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b1===false?'miss-bg':'bg-white border-slate-300 text-slate-400'}">M</button><button onclick="toggleHit(${s.id},${st.id},${p+1},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b2===false?'miss-bg':'bg-white border-slate-300 text-slate-400'}">M</button></div></div>`;
                 }
                 row.innerHTML = `<div class="flex justify-between items-center px-1"><div class="flex items-center gap-1.5"><span class="text-[11px] font-black uppercase truncate max-w-[140px] tracking-tight">${s.name}</span>${i===0 ? '<span class="bg-orange-500 text-white text-[6px] px-1 rounded-full font-black uppercase">First Up</span>' : ''}</div><div class="text-base font-black italic text-slate-900">${count}<span class="text-slate-300 text-[8px] not-italic ml-0.5">/${st.targets}</span></div></div><div class="flex gap-1 w-full overflow-x-hidden">${gridHtml}</div>`;
                 sArea.appendChild(row);
