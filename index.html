@@ -163,11 +163,11 @@
             <textarea id="field-notes" placeholder="Notes..." class="w-full h-20 bg-slate-50 border-none rounded-xl p-3 text-xs font-bold outline-none focus:ring-1 focus:ring-orange-500 resize-none" oninput="updateField('notes', this.value)"></textarea>
         </section>
 
-        <!-- Capture Containers -->
+        <!-- Capture Container -->
         <div id="capture-container">
             <div style="border-bottom: 2pt solid black; padding: 10px 0; margin-bottom: 15px; display: flex; justify-content: space-between; font-size: 14pt;">
                 <div><strong>GROUND:</strong> <span id="cap-ground"></span></div>
-                <div style="text-align:center"><strong>LEADERBOARD</strong></div>
+                <div style="text-align:center; text-transform: uppercase;"><strong>Sporting Score Leaderboard</strong></div>
                 <div><strong>DATE:</strong> <span id="cap-date"></span></div>
             </div>
             <table id="cap-grid"></table>
@@ -177,10 +177,11 @@
             </div>
         </div>
 
+        <!-- Print View -->
         <div class="hidden print-only" id="print-view">
             <div class="print-header">
                 <div><strong>GROUND:</strong> <span id="p-ground"></span></div>
-                <div style="text-align:center"><strong>OFFICIAL CPSA SCORECARD</strong></div>
+                <div style="text-align:center; text-transform: uppercase;"><strong>Official Scorecard</strong></div>
                 <div style="text-align:right"><strong>DATE:</strong> <span id="p-date"></span></div>
             </div>
             <table id="p-grid"></table>
@@ -278,7 +279,7 @@
             return t;
         }
 
-        function resetAll() { if (confirm("Clear all?")) { localStorage.removeItem(KEY); location.reload(); } }
+        function resetAll() { if (confirm("Clear all data?")) { localStorage.removeItem(KEY); location.reload(); } }
 
         function downloadCSV() {
             let csv = "Shooter,Class,Total\n";
@@ -292,14 +293,23 @@
             const grid = document.getElementById(tid);
             grid.innerHTML = '';
             const isShare = tid === 'cap-grid';
+            
+            // Layout Tuning for Image Capture centering
             const rowH = isShare ? '45px' : '30px';
-            let h = `<tr style="background:#f0f0f0"><th style="width:200px; vertical-align:middle;" rowspan="2">NAME</th>`;
-            state.stands.forEach(st => { h += `<th colspan="${Math.ceil(st.targets/2)}" style="vertical-align:middle;">ST ${st.id}</th>`; });
-            h += `<th style="width:60px; vertical-align:middle;" rowspan="2">TOTAL</th></tr><tr>`;
+            const headH = isShare ? '40px' : '25px';
+            const pairH = isShare ? '25px' : '18px';
+
+            let h = `<tr style="background:#f0f0f0"><th style="width:200px; vertical-align:middle;" rowspan="2"><div class="cell-center">NAME</div></th>`;
+            state.stands.forEach(st => { 
+                h += `<th colspan="${Math.ceil(st.targets/2)}" style="vertical-align:middle; height:${headH};"><div class="cell-center">ST ${st.id}</div></th>`; 
+            });
+            h += `<th style="width:60px; vertical-align:middle;" rowspan="2"><div class="cell-center">TOTAL</div></th></tr><tr>`;
             state.stands.forEach(st => {
-                for(let p=1; p<=Math.ceil(st.targets/2); p++) h += `<th style="font-size:6pt; height:18px; background:#fafafa; vertical-align:middle;">P${p}</th>`;
+                for(let p=1; p<=Math.ceil(st.targets/2); p++) 
+                    h += `<th style="font-size:6pt; height:${pairH}; background:#fafafa; vertical-align:middle;"><div class="cell-center">P${p}</div></th>`;
             });
             grid.innerHTML = h + '</tr>';
+
             const sorted = state.shooters.map(s => ({ ...s, t: getShooterTotal(s.id) })).sort((a,b) => b.t - a.t);
             sorted.forEach(s => {
                 let r1 = `<tr><td style="text-align:left; padding-left:10px; vertical-align:middle; white-space:normal;" rowspan="2"><strong>${s.name}</strong></td>`;
@@ -326,7 +336,6 @@
         window.exportToPDF = () => {
             document.getElementById('p-ground').innerText = state.ground || "N/A";
             document.getElementById('p-date').innerText = getUKDate(state.date);
-            document.getElementById('p-event').innerText = state.event || "N/A";
             document.getElementById('p-notes').innerText = state.notes || "None.";
             generateExportGrid('p-grid'); window.print();
         };
@@ -345,6 +354,8 @@
                     const file = new File([blob], `scores.png`, { type: 'image/png' });
                     if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
                         await navigator.share({ files: [file], title: 'Squad Leaderboard' });
+                    } else {
+                        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'scores.png'; a.click();
                     }
                 });
             } catch(e) {}
@@ -358,7 +369,6 @@
             document.getElementById('app-container').style.opacity = state.isLocked ? "0.6" : "1";
             document.getElementById('undo-btn').style.display = history ? 'flex' : 'none';
 
-            // Progress bar calc
             let sTotalShot = 0, sTotalPossible = 0;
             state.stands.forEach(s => { 
                 sTotalPossible += s.targets * state.shooters.length;
@@ -366,14 +376,12 @@
             });
             document.getElementById('progress-bar').style.width = sTotalPossible > 0 ? `${(sTotalShot/sTotalPossible)*100}%` : '0%';
 
-            // Inputs
             document.getElementById('field-ground').value = state.ground;
             document.getElementById('field-date').value = state.date;
             document.getElementById('field-event').value = state.event;
             document.getElementById('field-notes').value = state.notes;
             document.getElementById('field-stand-count').value = state.stands.length;
 
-            // Squad setup rows
             const list = document.getElementById('squad-list'); list.innerHTML = '';
             state.shooters.forEach((s, i) => {
                 const div = document.createElement('div');
@@ -382,7 +390,6 @@
                 list.appendChild(div);
             });
 
-            // Stand nav buttons
             const navDiv = document.getElementById('stand-nav'); navDiv.innerHTML = '';
             state.stands.forEach((s, i) => {
                 const btn = document.createElement('button');
@@ -391,7 +398,6 @@
                 navDiv.appendChild(btn);
             });
 
-            // SCORING AREA
             const n = state.shooters.length;
             const leadIdx = state.activeIdx % n;
             const sArea = document.getElementById('scoring-area'); sArea.innerHTML = '';
@@ -414,7 +420,6 @@
                 sArea.appendChild(row);
             }
 
-            // LEADERBOARD LOGIC
             const lbHeader = document.getElementById('lb-header'); lbHeader.innerHTML = '<th class="p-2 border-b text-left w-12 tracking-tighter">Stand</th>';
             const perf = state.shooters.map(sh => {
                 let totalH = 0, totalAtt = 0;
