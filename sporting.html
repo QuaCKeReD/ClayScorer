@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ClayScorer – English Sporting (ESP)</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="https://img.icons8.com/ios-filled/512/target.png">
+    <link rel="stylesheet" href="assets/scorer.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans pb-24 overflow-x-hidden">
+    <div id="app-root"></div>
+    <script>
+        window.DISCIPLINE = {
+            id: 'sporting',
+            name: 'English Sporting',
+            code: 'ESP',
+            storageKey: 'clayscorer_esp_v2',
+            standLabel: 'Stand',
+            maxShooters: 10,
+            showFirstUpRotation: true,
+            editable: { standCount: true, targetsPerStand: true, extraClay: true },
+            defaults: { standCount: 10, targetsPerStand: 8 },
+            targetOptions: [4, 6, 8, 10, 12],
+            fixedStands: null
+        };
+    </script>
+    <script src="assets/scorer.js"></script>
+</body>
+</html>

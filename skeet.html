@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ClayScorer – English Skeet (ESK)</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="https://img.icons8.com/ios-filled/512/target.png">
+    <link rel="stylesheet" href="assets/scorer.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans pb-24 overflow-x-hidden">
+    <div id="app-root"></div>
+    <script>
+        // English Skeet standard round: 25 targets across 7 stations.
+        // Labels: H = high house single, L = low house single, H+L / L+H = simultaneous pair (bird thrown first named first).
+        window.DISCIPLINE = {
+            id: 'skeet',
+            name: 'English Skeet',
+            code: 'ESK',
+            storageKey: 'clayscorer_esk_v2',
+            standLabel: 'Station',
+            maxShooters: 10,
+            showFirstUpRotation: false,
+            editable: { standCount: false, targetsPerStand: false, extraClay: false },
+            fixedStands: [
+                { id: 1, targets: 4, labels: ['H', 'L', 'H+L', 'H+L'] },
+                { id: 2, targets: 4, labels: ['H', 'L', 'H+L', 'H+L'] },
+                { id: 3, targets: 2, labels: ['H', 'L'] },
+                { id: 4, targets: 4, labels: ['H', 'L', 'H/L', 'H/L'] },
+                { id: 5, targets: 2, labels: ['H', 'L'] },
+                { id: 6, targets: 4, labels: ['H', 'L', 'L+H', 'L+H'] },
+                { id: 7, targets: 4, labels: ['L', 'H', 'L+H', 'L+H'] }
+            ]
+        };
+    </script>
+    <script src="assets/scorer.js"></script>
+</body>
+</html>

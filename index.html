@@ -2,489 +2,73 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sarge Sporting Pro</title>
-    <!-- PWA Meta Tags -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClayScorer Pro – CPSA Discipline Scorer</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0f172a">
     <link rel="manifest" href="manifest.json">
-    <!-- Updated Stable App Icon to match header target -->
     <link rel="apple-touch-icon" href="https://img.icons8.com/ios-filled/512/target.png">
-
+    <link rel="stylesheet" href="assets/scorer.css">
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
-    <style>
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-        
-        /* Stop mobile browser from zooming in on focus */
-        input, select, textarea { font-size: 16px !important; }
-
-        @media print {
-            .no-print { display: none !important; }
-            body { 
-                background-color: white !important; padding: 0 !important; margin: 5mm !important; 
-                font-family: "Courier New", Courier, monospace; color: black !important;
-            }
-            .print-only { display: block !important; }
-            table { width: 100% !important; border-collapse: collapse !important; border: 1.5pt solid black !important; table-layout: fixed; }
-            th, td { 
-                border: 0.5pt solid black !important; padding: 0 !important; color: black !important; 
-                text-align: center !important; vertical-align: middle !important; overflow: hidden;
-                height: 30px;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-            }
-            .official-hit { font-family: serif; font-weight: 900; font-size: 11pt; line-height: 1; }
-            .official-miss { font-weight: 900; font-size: 10pt; line-height: 1; }
-        }
-
-        #capture-container {
-            position: absolute; left: -9999px; top: 0; width: 1200px; background: white; padding: 40px; color: black; font-family: "Courier New", Courier, monospace;
-        }
-        #capture-container table { width: 100%; border-collapse: collapse; border: 2pt solid black; table-layout: fixed; }
-        #capture-container th, #capture-container td { border: 1pt solid black; padding: 0; text-align: center !important; vertical-align: middle !important; }
-        
-        .cell-center { display: flex; align-items: center; justify-content: center; height: 100%; width: 100%; text-align: center; }
-        
-        .hit-bg { background-color: #16a34a !important; color: white !important; border-color: #15803d !important; }
-        .miss-bg { background-color: #ef4444 !important; color: white !important; border-color: #b91c1c !important; }
-        
-        /* Rotation Glow */
-        .first-up-highlight { animation: lead-pulse 2s infinite; border: 2px solid #f97316 !important; }
-        @keyframes lead-pulse { 
-            0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4); } 
-            70% { box-shadow: 0 0 0 10px rgba(249, 115, 22, 0); } 
-            100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); } 
-        }
-
-        .pair-stack { 
-            display: flex; flex-direction: column; gap: 2px; padding: 2px; 
-            background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; 
-            flex: 1; min-width: 0;
-        }
-
-        /* Responsive squad grid */
-        .squad-grid-item {
-            display: grid;
-            grid-template-columns: 20px 1fr 75px 45px 25px;
-            align-items: center;
-            gap: 6px;
-        }
-    </style>
 </head>
-<body class="bg-slate-50 text-slate-900 font-sans pb-24 overflow-x-hidden">
-
-    <!-- Header Section -->
-    <header class="bg-slate-900 text-white sticky top-0 z-50 shadow-md no-print w-full">
-        <div class="max-w-5xl mx-auto p-3 flex justify-between items-center">
-            <div class="flex items-center gap-2">
-                <div class="w-8 h-8 flex items-center justify-center bg-orange-500 rounded-lg shadow-sm">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <circle cx="12" cy="12" r="6"></circle>
-                        <circle cx="12" cy="12" r="2"></circle>
-                    </svg>
-                </div>
-                <div>
-                    <h1 class="text-base font-bold tracking-tight uppercase italic leading-none">Sporting Pro</h1>
-                    <span id="offline-status" class="text-[7px] text-green-400 font-bold uppercase flex items-center gap-1 mt-0.5"><i data-lucide="wifi-off" size="7"></i> Offline Ready</span>
-                </div>
+<body class="bg-slate-50 text-slate-900 font-sans min-h-screen">
+    <header class="bg-slate-900 text-white shadow-md">
+        <div class="max-w-3xl mx-auto p-4 flex items-center gap-3">
+            <div class="w-10 h-10 flex items-center justify-center bg-orange-500 rounded-lg shadow-sm">
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-7 h-7">
+                    <circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle>
+                </svg>
             </div>
-            <div class="flex items-center gap-1.5">
-                <button id="lock-btn" onclick="toggleLock()" class="bg-slate-800 p-2 rounded-lg border border-slate-700">
-                    <i data-lucide="unlock" id="lock-icon" class="w-4 h-4 text-slate-400"></i>
-                </button>
-                <button onclick="shareAsImage()" id="share-btn" class="bg-slate-700 p-2 rounded-lg border border-slate-600">
-                    <i data-lucide="share-2" class="w-4 h-4 text-white"></i>
-                </button>
-                <button onclick="exportToPDF()" class="bg-orange-500 px-3 py-2 rounded-lg text-[10px] font-black uppercase">PDF</button>
+            <div>
+                <h1 class="text-xl font-black tracking-tight uppercase italic leading-none">ClayScorer Pro</h1>
+                <p class="text-[10px] text-orange-400 font-bold uppercase tracking-widest mt-1">Multi-Discipline Scorer</p>
             </div>
         </div>
-        <div class="w-full bg-slate-800 h-1"><div id="progress-bar" class="bg-orange-500 h-full transition-all duration-500 w-0"></div></div>
     </header>
 
-    <main id="app-container" class="max-w-5xl mx-auto p-2 space-y-3 transition-opacity duration-300">
-
-        <!-- Setup Configuration -->
-        <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print grid grid-cols-2 gap-2">
-            <div class="col-span-2 sm:col-span-1 space-y-1">
-                <label class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Shoot Ground</label>
-                <input type="text" id="field-ground" placeholder="Ground name..." class="w-full bg-slate-50 border-none rounded-lg p-2 text-xs font-bold" oninput="updateField('ground', this.value)">
-            </div>
-            <div class="space-y-1">
-                <label class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Shoot Date</label>
-                <input type="date" id="field-date" class="w-full bg-slate-50 border-none rounded-lg p-2 text-xs font-bold" onchange="updateField('date', this.value)">
-            </div>
-            <div class="space-y-1">
-                <label class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Stand Count</label>
-                <select id="field-stand-count" onchange="updateStandCount(this.value)" class="w-full bg-slate-50 border-none rounded-lg p-2 text-xs font-black"></select>
-            </div>
-            <div class="col-span-2 space-y-1">
-                <label class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Event Name</label>
-                <input type="text" id="field-event" placeholder="e.g. 100 ESP Selection" class="w-full bg-slate-50 border-none rounded-lg p-2 text-xs font-bold" oninput="updateField('event', this.value)">
-            </div>
-        </section>
-
-        <!-- Squad Management -->
-        <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print">
-            <div class="flex justify-between items-center mb-2">
-                <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400">Squad Members</h3>
-                <button onclick="addShooter()" class="text-[9px] bg-slate-900 text-white px-3 py-1 rounded-lg font-black uppercase">Add Shooter</button>
-            </div>
-            <div id="squad-list" class="space-y-2"></div>
-        </section>
-
-        <div id="stand-nav" class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide no-scrollbar px-1 no-print"></div>
-
-        <!-- Scoring Interface -->
-        <section class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden no-print">
-            <div class="bg-slate-900 px-3 py-2.5 text-white flex justify-between items-center">
-                <div class="flex items-baseline gap-2">
-                    <h2 id="active-stand-title" class="text-lg font-black italic uppercase">Stand 1</h2>
-                    <span id="active-stand-targets" class="text-[9px] text-orange-400 font-bold uppercase"></span>
-                </div>
-                <button id="undo-btn" onclick="undo()" class="hidden text-[9px] font-black text-white uppercase flex items-center gap-1 bg-slate-800 px-2 py-1 rounded-lg border border-slate-700">
-                    <i data-lucide="rotate-ccw" size="10"></i> Undo
-                </button>
-            </div>
-            
-            <div class="bg-slate-800 p-1 flex gap-1 no-print">
-                <button onclick="setBirds(4)" class="bird-btn flex-1 bg-slate-700 py-2 rounded-lg text-[9px] font-black text-slate-400" id="bird-4">2 PR</button>
-                <button onclick="setBirds(6)" class="bird-btn flex-1 bg-slate-700 py-2 rounded-lg text-[9px] font-black text-slate-400" id="bird-6">3 PR</button>
-                <button onclick="setBirds(8)" class="bird-btn flex-1 bg-slate-700 py-2 rounded-lg text-[9px] font-black text-slate-400" id="bird-8">4 PR</button>
-                <button onclick="setBirds(10)" class="bird-btn flex-1 bg-slate-700 py-2 rounded-lg text-[9px] font-black text-slate-400" id="bird-10">5 PR</button>
-            </div>
-
-            <div id="scoring-area" class="divide-y divide-slate-100"></div>
-
-            <div class="bg-slate-50 p-3 flex gap-3 no-print border-t border-slate-200">
-                <button onclick="nav(-1)" id="nav-prev" class="flex-1 bg-white border border-slate-300 py-3 rounded-xl text-xs font-black disabled:opacity-30 tracking-widest uppercase">Prev</button>
-                <button onclick="nav(1)" id="nav-next" class="flex-1 bg-slate-900 text-white py-3 rounded-xl text-xs font-black disabled:opacity-30 tracking-widest uppercase">Next Stand</button>
+    <main class="max-w-3xl mx-auto p-4 space-y-4">
+        <section>
+            <h2 class="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Choose a discipline</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <a href="sporting.html" class="discipline-tile">
+                    <div class="text-[10px] font-black text-orange-500 uppercase tracking-widest">ESP</div>
+                    <div class="text-lg font-black uppercase italic mt-1">English Sporting</div>
+                    <p class="text-[11px] text-slate-500 mt-2 font-medium">Variable stands, variable pairs per stand, optional +1 extra clay per stand.</p>
+                </a>
+                <a href="sportrap.html" class="discipline-tile">
+                    <div class="text-[10px] font-black text-orange-500 uppercase tracking-widest">STR</div>
+                    <div class="text-lg font-black uppercase italic mt-1">Sportrap</div>
+                    <p class="text-[11px] text-slate-500 mt-2 font-medium">5 stands · 5 targets per stand · 25 total.</p>
+                </a>
+                <a href="compak.html" class="discipline-tile">
+                    <div class="text-[10px] font-black text-orange-500 uppercase tracking-widest">CSP</div>
+                    <div class="text-lg font-black uppercase italic mt-1">Compak Sporting</div>
+                    <p class="text-[11px] text-slate-500 mt-2 font-medium">5 stands · 5 targets per stand · 25 total.</p>
+                </a>
+                <a href="skeet.html" class="discipline-tile">
+                    <div class="text-[10px] font-black text-orange-500 uppercase tracking-widest">ESK</div>
+                    <div class="text-lg font-black uppercase italic mt-1">English Skeet</div>
+                    <p class="text-[11px] text-slate-500 mt-2 font-medium">7 stations · standard 25-target CPSA sequence (H / L / H+L / L+H).</p>
+                </a>
             </div>
         </section>
 
-        <!-- Summary -->
-        <section class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden no-print">
-            <div class="p-2 bg-slate-100 border-b border-slate-200 flex justify-between items-center text-[9px] font-black uppercase text-slate-500">
-                <span>Leaderboard Summary</span>
-                <div class="flex gap-4">
-                    <button onclick="downloadCSV()">CSV</button>
-                    <button onclick="resetAll()" class="text-red-600">Reset</button>
-                </div>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-[10px]" id="leaderboard">
-                    <thead><tr id="lb-header" class="bg-slate-50 font-black uppercase border-b border-slate-200"></tr></thead>
-                    <tbody id="lb-body"></tbody>
-                    <tfoot id="lb-footer"></tfoot>
-                </table>
-            </div>
+        <section class="bg-white rounded-2xl border border-slate-200 p-4 text-[11px] font-medium text-slate-600 leading-relaxed">
+            Each discipline stores its round separately on this device. Works offline once loaded &mdash; on iOS/Android use "Add to Home Screen" to install.
         </section>
-
-        <!-- Notes -->
-        <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print">
-            <label class="text-[9px] font-black uppercase text-slate-400 mb-1 flex items-center gap-1"><i data-lucide="sticky-note" size="10"></i> Round Notes</label>
-            <textarea id="field-notes" placeholder="Notes..." class="w-full h-20 bg-slate-50 border-none rounded-xl p-3 text-xs font-bold outline-none focus:ring-1 focus:ring-orange-500 resize-none" oninput="updateField('notes', this.value)"></textarea>
-        </section>
-
-        <!-- Export -->
-        <div id="capture-container">
-            <div style="border-bottom: 2pt solid black; padding: 10px 0; margin-bottom: 15px; display: flex; justify-content: space-between; font-size: 14pt;">
-                <div><strong>GROUND:</strong> <span id="cap-ground"></span></div>
-                <div style="text-align:center; text-transform: uppercase;"><strong>Sporting Score Leaderboard</strong></div>
-                <div><strong>DATE:</strong> <span id="cap-date"></span></div>
-            </div>
-            <table id="cap-grid"></table>
-            <div style="margin-top: 30px; display: flex; justify-content: space-between; align-items: center; font-size: 11pt; font-weight: bold;">
-                <span>Generated by Sarge</span>
-                <div style="border-top: 1.5pt solid black; width: 300px; text-align: center; padding-top: 8px;">SCORER / SHOOTER SIGNATURE</div>
-            </div>
-        </div>
-
-        <div class="hidden print-only" id="print-view">
-            <div class="print-header">
-                <div><strong>GROUND:</strong> <span id="p-ground"></span></div>
-                <div style="text-align:center; text-transform: uppercase;"><strong>Official Scorecard</strong></div>
-                <div style="text-align:right"><strong>DATE:</strong> <span id="p-date"></span></div>
-            </div>
-            <table id="p-grid"></table>
-            <div class="print-notes"><strong>NOTES:</strong> <span id="p-notes"></span></div>
-            <div class="signature-section"><div class="sig-line">SIGNATURE</div></div>
-            <div style="text-align: center; margin-top: 20px; font-size: 8pt; font-weight: bold; color: #666;">Generated by Sarge</div>
-        </div>
     </main>
 
-    <script>
-        const KEY = 'sarge_pwa_pro_v2_final';
-        let history = null;
-        let state = {
-            ground: "", date: new Date().toISOString().split('T')[0], event: "", notes: "",
-            shooters: [{ id: Date.now(), name: "Shooter 1", cpsa: "", class: "U" }],
-            stands: [], hits: {}, activeIdx: 0, isLocked: false
-        };
+    <footer class="text-center text-[9px] text-slate-400 font-black uppercase tracking-widest py-6">
+        QuaCKeReD &middot; original idea by Sarge
+    </footer>
 
+    <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW Registration failed', err));
+                navigator.serviceWorker.register('./sw.js').catch(() => {});
             });
         }
-
-        function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e) {} }
-        function load() {
-            const s = localStorage.getItem(KEY);
-            if (s) { try { state = Object.assign({}, state, JSON.parse(s)); return true; } catch(e) {} }
-            return false;
-        }
-
-        function toggleLock() { state.isLocked = !state.isLocked; render(); save(); }
-        function updateField(k, v) { state[k] = v; save(); }
-        
-        function updateStandCount(c) {
-            const count = parseInt(c);
-            const current = state.stands.length;
-            if (count > current) {
-                for (let i = current + 1; i <= count; i++) state.stands.push({ id: i, targets: 8 });
-            } else if (count < current) {
-                state.stands = state.stands.slice(0, count);
-                if (state.activeIdx >= count) state.activeIdx = count - 1;
-            }
-            render(); save();
-        }
-
-        function addShooter() {
-            if (state.shooters.length >= 6) return;
-            state.shooters.push({ id: Date.now(), name: `Shooter ${state.shooters.length + 1}`, cpsa: "", class: "U" });
-            render(); save();
-        }
-
-        function removeShooter(id) {
-            if (state.shooters.length <= 1) return;
-            state.shooters = state.shooters.filter(s => s.id !== id);
-            render(); save();
-        }
-
-        function toggleHit(shId, stId, idx, val) {
-            if (state.isLocked) return;
-            history = JSON.parse(JSON.stringify(state.hits));
-            if (!state.hits[shId]) state.hits[shId] = {};
-            if (!state.hits[shId][stId]) state.hits[shId][stId] = Array(state.stands.find(s=>s.id === stId).targets).fill(null);
-            
-            const curr = state.hits[shId][stId][idx];
-            state.hits[shId][stId][idx] = (curr === val) ? null : val;
-            
-            if (state.hits[shId][stId][idx] !== null) {
-                if (navigator.vibrate) val ? navigator.vibrate(50) : navigator.vibrate([40, 40, 40]);
-            }
-            render(); save();
-        }
-
-        function undo() { if (history) { state.hits = history; history = null; render(); save(); } }
-
-        function setBirds(c) {
-            if (state.isLocked) return;
-            const st = state.stands[state.activeIdx];
-            st.targets = c;
-            state.shooters.forEach(s => {
-                if (state.hits[s.id] && state.hits[s.id][st.id]) {
-                    const h = state.hits[s.id][st.id];
-                    state.hits[s.id][st.id] = h.length > c ? h.slice(0, c) : [...h, ...Array(c - h.length).fill(null)];
-                }
-            });
-            render(); save();
-        }
-
-        function nav(d) { 
-            if (state.isLocked) return;
-            state.activeIdx = Math.max(0, Math.min(state.stands.length - 1, state.activeIdx + d)); render(); save(); 
-        }
-
-        function getUKDate(d) { return d ? new Date(d).toLocaleDateString('en-GB') : "N/A"; }
-
-        function getShooterTotal(shId) {
-            let t = 0;
-            state.stands.forEach(st => {
-                if (state.hits[shId]?.[st.id]) t += state.hits[shId][st.id].filter(h => h === true).length;
-            });
-            return t;
-        }
-
-        function resetAll() { if (confirm("Clear all data?")) { localStorage.removeItem(KEY); location.reload(); } }
-
-        function downloadCSV() {
-            let csv = "Shooter,CPSA,Class,Total\n";
-            state.shooters.forEach(s => { csv += `${s.name},${s.cpsa},${s.class},${getShooterTotal(s.id)}\n`; });
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url; a.download = 'scores.csv'; a.click();
-        }
-
-        function generateExportGrid(tid) {
-            const grid = document.getElementById(tid);
-            grid.innerHTML = '';
-            const isShare = tid === 'cap-grid';
-            const rowH = isShare ? '45px' : '30px';
-            const headH = isShare ? '40px' : '25px';
-            const pairH = isShare ? '25px' : '18px';
-
-            let h = `<tr style="background:#f0f0f0"><th style="width:200px; vertical-align:middle;" rowspan="2"><div class="cell-center">NAME</div></th>`;
-            state.stands.forEach(st => { 
-                h += `<th colspan="${Math.ceil(st.targets/2)}" style="vertical-align:middle; height:${headH};"><div class="cell-center">ST ${st.id}</div></th>`; 
-            });
-            h += `<th style="width:60px; vertical-align:middle;" rowspan="2"><div class="cell-center">TOTAL</div></th></tr><tr>`;
-            state.stands.forEach(st => {
-                for(let p=1; p<=Math.ceil(st.targets/2); p++) 
-                    h += `<th style="font-size:6pt; height:${pairH}; background:#fafafa; vertical-align:middle;"><div class="cell-center">P${p}</div></th>`;
-            });
-            grid.innerHTML = h + '</tr>';
-
-            const sorted = state.shooters.map(s => ({ ...s, t: getShooterTotal(s.id) })).sort((a,b) => b.t - a.t);
-            sorted.forEach(s => {
-                let r1 = `<tr><td style="text-align:left; padding-left:10px; vertical-align:middle; white-space:normal;" rowspan="2"><strong>${s.name}</strong></td>`;
-                let r2 = `<tr>`;
-                state.stands.forEach(st => {
-                    const hits = state.hits[s.id]?.[st.id] || Array(st.targets).fill(null);
-                    for(let i=0; i < Math.ceil(st.targets/2)*2; i+=2) {
-                        const d = (idx) => {
-                            if (idx >= st.targets) return { m: '', bg: 'transparent' };
-                            if (hits[idx] === true) return { m: '/', bg: '#4ade80' };
-                            if (hits[idx] === false) return { m: 'O', bg: '#f87171' };
-                            return { m: '', bg: 'transparent' };
-                        };
-                        const b1 = d(i), b2 = d(i+1);
-                        r1 += `<td style="background:${b1.bg}; height:${rowH}; vertical-align:middle;"><div class="cell-center" style="font-weight:900;">${b1.m}</div></td>`;
-                        r2 += `<td style="background:${b2.bg}; height:${rowH}; vertical-align:middle;"><div class="cell-center" style="font-weight:900;">${b2.m}</div></td>`;
-                    }
-                });
-                r1 += `<td style="font-weight:bold; font-size:16pt; vertical-align:middle; background:#fafafa;" rowspan="2"><div class="cell-center">${s.t}</div></td></tr>`;
-                grid.innerHTML += r1 + r2 + '</tr>';
-            });
-        }
-
-        window.exportToPDF = () => {
-            document.getElementById('p-ground').innerText = state.ground || "N/A";
-            document.getElementById('p-date').innerText = getUKDate(state.date);
-            generateExportGrid('p-grid', true); window.print();
-        };
-
-        window.shareAsImage = async () => {
-            const container = document.getElementById('capture-container');
-            document.getElementById('cap-ground').innerText = state.ground || "N/A";
-            document.getElementById('cap-date').innerText = getUKDate(state.date);
-            generateExportGrid('cap-grid', true);
-            try {
-                container.style.position = 'fixed'; container.style.left = '0'; container.style.top = '0'; container.style.zIndex = '-1';
-                const canvas = await html2canvas(container, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
-                container.style.position = 'absolute'; container.style.left = '-9999px';
-                canvas.toBlob(async (blob) => {
-                    if (!blob) return;
-                    const file = new File([blob], `leaderboard.png`, { type: 'image/png' });
-                    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                        await navigator.share({ files: [file], title: 'Squad Leaderboard' });
-                    } else {
-                        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'scores.png'; a.click();
-                    }
-                });
-            } catch(e) {}
-        };
-
-        function render() {
-            const st = state.stands[state.activeIdx];
-            if (!st) return;
-
-            document.getElementById('lock-icon').setAttribute('data-lucide', state.isLocked ? 'lock' : 'unlock');
-            document.getElementById('app-container').style.opacity = state.isLocked ? "0.6" : "1";
-            document.getElementById('undo-btn').style.display = history ? 'flex' : 'none';
-
-            let sTotalShot = 0, sTotalPossible = 0;
-            state.stands.forEach(s => { 
-                sTotalPossible += s.targets * state.shooters.length;
-                state.shooters.forEach(sh => { if(state.hits[sh.id]?.[s.id]) sTotalShot += state.hits[sh.id][s.id].filter(h=>h!==null).length; });
-            });
-            document.getElementById('progress-bar').style.width = sTotalPossible > 0 ? `${(sTotalShot/sTotalPossible)*100}%` : '0%';
-
-            document.getElementById('field-ground').value = state.ground;
-            document.getElementById('field-date').value = state.date;
-            document.getElementById('field-stand-count').value = state.stands.length;
-
-            const list = document.getElementById('squad-list'); list.innerHTML = '';
-            state.shooters.forEach((s, i) => {
-                const div = document.createElement('div');
-                div.className = "bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm squad-grid-item";
-                div.innerHTML = `<span class="text-[9px] font-black text-slate-300">${i+1}</span><input type="text" value="${s.name}" maxlength="20" placeholder="Name" onchange="state.shooters[${i}].name=this.value;save();render();" class="bg-transparent border-none p-0 text-[11px] font-black outline-none w-full"><input type="text" value="${s.cpsa}" maxlength="8" placeholder="CPSA #" onchange="state.shooters[${i}].cpsa=this.value;save();" class="bg-slate-50 p-1 text-[9px] rounded font-bold w-full border border-slate-100"><select onchange="state.shooters[${i}].class=this.value;save();" class="text-[9px] font-black bg-slate-50 rounded p-1 border border-slate-100">${['AA','A','B','C','U'].map(c=>`<option ${s.class===c?'selected':''}>${c}</option>`)}</select><button onclick="removeShooter(${s.id})" class="text-red-400 flex justify-center"><i data-lucide="x" size="16"></i></button>`;
-                list.appendChild(div);
-            });
-
-            const navDiv = document.getElementById('stand-nav'); navDiv.innerHTML = '';
-            state.stands.forEach((s, i) => {
-                const btn = document.createElement('button');
-                btn.className = `flex-shrink-0 w-11 h-11 rounded-xl font-black text-xs border-2 transition-all ${state.activeIdx === i ? 'bg-orange-500 border-orange-500 text-white shadow-lg' : 'bg-white border-slate-200 text-slate-500'}`;
-                btn.innerText = s.id; btn.onclick = () => { if(!state.isLocked) { state.activeIdx = i; render(); save(); } };
-                navDiv.appendChild(btn);
-            });
-
-            const n = state.shooters.length;
-            const leadIdx = state.activeIdx % n;
-            const sArea = document.getElementById('scoring-area'); sArea.innerHTML = '';
-            document.getElementById('active-stand-title').innerText = `Stand ${st.id}`;
-            document.getElementById('active-stand-targets').innerText = `${st.targets} Targets`;
-
-            for(let i=0; i<n; i++) {
-                const s = state.shooters[(i + leadIdx) % n];
-                const hits = state.hits[s.id]?.[st.id] || Array(st.targets).fill(null);
-                const count = hits.filter(h => h === true).length;
-                const row = document.createElement('div');
-                row.className = `p-2.5 space-y-1.5 ${i === 0 ? 'bg-orange-50/40 first-up-highlight' : ''} ${state.isLocked ? 'pointer-events-none' : ''}`;
-                let gridHtml = '';
-                for(let p=0; p < st.targets; p+=2) {
-                    const b1 = hits[p], b2 = hits[p+1];
-                    gridHtml += `<div class="pair-stack"><div class="flex gap-1"><button onclick="toggleHit(${s.id},${st.id},${p},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b1===true?'hit-bg':'bg-white border-slate-300 text-slate-400'}">H</button><button onclick="toggleHit(${s.id},${st.id},${p+1},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b2===true?'hit-bg':'bg-white border-slate-300 text-slate-400'}">H</button></div><div class="flex gap-1"><button onclick="toggleHit(${s.id},${st.id},${p},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b1===false?'miss-bg':'bg-white border-slate-300 text-slate-400'}">M</button><button onclick="toggleHit(${s.id},${st.id},${p+1},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b2===false?'miss-bg':'bg-white border-slate-300 text-slate-400'}">M</button></div></div>`;
-                }
-                row.innerHTML = `<div class="flex justify-between items-center px-1"><div class="flex items-center gap-1.5"><span class="text-[11px] font-black uppercase truncate max-w-[140px] tracking-tight">${s.name}</span>${i===0 ? '<span class="bg-orange-500 text-white text-[6px] px-1 rounded-full font-black uppercase">First Up</span>' : ''}</div><div class="text-base font-black italic text-slate-900">${count}<span class="text-slate-300 text-[8px] not-italic ml-0.5">/${st.targets}</span></div></div><div class="flex gap-1 w-full overflow-x-hidden">${gridHtml}</div>`;
-                sArea.appendChild(row);
-            }
-
-            const lbHeader = document.getElementById('lb-header'); lbHeader.innerHTML = '<th class="p-2 border-b text-left w-12 tracking-tighter">Stand</th>';
-            const perf = state.shooters.map(sh => {
-                let totalH = 0, totalAtt = 0;
-                state.stands.forEach(stnd => { if (state.hits[sh.id]?.[stnd.id]) { totalH += state.hits[sh.id][stnd.id].filter(h => h === true).length; totalAtt += state.hits[sh.id][stnd.id].filter(h => h !== null).length; }});
-                return { ...sh, t: totalH, att: totalAtt, isStraight: totalH === totalAtt && totalH > 0 };
-            }).sort((a,b)=>b.t-a.t);
-            perf.forEach(sh => { lbHeader.innerHTML += `<th class="p-1 border-b border-l border-slate-200 text-center align-bottom"><div class="break-words leading-tight min-w-[50px]">${sh.isStraight ? '🔥<br>' : ''}${sh.name}</div></th>`; });
-
-            const lbBody = document.getElementById('lb-body'); lbBody.innerHTML = '';
-            const stAvgs = state.stands.map(stand => {
-                let hitC = 0, attC = 0;
-                state.shooters.forEach(sh => { if(state.hits[sh.id]?.[stand.id]) { hitC += state.hits[sh.id][stand.id].filter(h=>h===true).length; attC += stand.targets; }});
-                return { id: stand.id, avg: attC > 0 ? hitC/attC : 1 };
-            });
-            const hardId = stAvgs.sort((a,b)=>a.avg-b.avg)[0]?.id;
-
-            state.stands.forEach((stand, idx) => {
-                let row = `<td class="p-2 font-bold border-b text-slate-400 text-[8px]">ST ${stand.id} ${stand.id===hardId && sTotalShot>0?'❗':''}</td>`;
-                perf.forEach(sh => { row += `<td class="p-2 text-center border-b border-l border-slate-100 font-black">${state.hits[sh.id]?.[stand.id]?.filter(h=>h===true).length || 0}</td>`; });
-                const tr = document.createElement('tr'); tr.className = state.activeIdx === idx ? 'bg-orange-50' : '';
-                tr.innerHTML = row; lbBody.appendChild(tr);
-            });
-
-            const f = document.getElementById('lb-footer');
-            let fRow = `<tr class="bg-slate-900 text-white font-black"><td class="p-2 uppercase text-[7px]">Total</td>`;
-            perf.forEach(sh => fRow += `<td class="p-2 text-center text-sm border-l border-slate-700">${sh.t}</td>`);
-            f.innerHTML = fRow + '</tr>';
-            document.querySelectorAll('.bird-btn').forEach(b => b.classList.remove('bg-orange-500', 'text-white'));
-            document.getElementById(`bird-${st.targets}`)?.classList.add('bg-orange-500', 'text-white');
-            document.getElementById('nav-prev').disabled = state.activeIdx === 0;
-            document.getElementById('nav-next').disabled = state.activeIdx === state.stands.length - 1;
-            lucide.createIcons();
-        }
-
-        window.onload = () => {
-            const sel = document.getElementById('field-stand-count');
-            for(let i=1; i<=20; i++) { const o = document.createElement('option'); o.value=i; o.innerText=`${i} Stands`; if(i===12) o.selected=true; sel.appendChild(o); }
-            if(!load()) updateStandCount(12); render();
-        };
     </script>
 </body>
 </html>

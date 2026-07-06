@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ClayScorer – Sportrap (STR)</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="https://img.icons8.com/ios-filled/512/target.png">
+    <link rel="stylesheet" href="assets/scorer.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans pb-24 overflow-x-hidden">
+    <div id="app-root"></div>
+    <script>
+        window.DISCIPLINE = {
+            id: 'sportrap',
+            name: 'Sportrap',
+            code: 'STR',
+            storageKey: 'clayscorer_str_v2',
+            standLabel: 'Stand',
+            maxShooters: 10,
+            showFirstUpRotation: true,
+            editable: { standCount: false, targetsPerStand: false, extraClay: false },
+            fixedStands: [
+                { id: 1, targets: 5 },
+                { id: 2, targets: 5 },
+                { id: 3, targets: 5 },
+                { id: 4, targets: 5 },
+                { id: 5, targets: 5 }
+            ]
+        };
+    </script>
+    <script src="assets/scorer.js"></script>
+</body>
+</html>
