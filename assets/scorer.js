@@ -15,6 +15,11 @@
 (function () {
     'use strict';
 
+    // Bump this string when you ship a change so it's easy to confirm from DevTools
+    // that a page has picked up the new build (rather than serving from SW cache).
+    const SCORER_BUILD = 'scorer 2026-07-06-b (details-order-preserving)';
+    console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
+
     const D = window.DISCIPLINE;
     if (!D) { console.error('DISCIPLINE config missing'); return; }
 
@@ -40,6 +45,44 @@
     const slug = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     // Stem shared by every export: `YYYYMMDD-${discipline}[-ground][-event]`. Empty parts are skipped.
     const filenameStem = () => [yyyymmdd(state.date), D.id, slug(state.ground), slug(state.event)].filter(Boolean).join('_');
+
+    // Minimal RFC-4180ish CSV helpers. Quote values that contain comma/quote/newline;
+    // parser respects quoted fields and "" escaping so round-tripping user-typed ground
+    // or shooter names (e.g. "Smith, John") is safe.
+    const csvEscape = (v) => {
+        const s = String(v ?? '');
+        return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    function csvParseLine(line) {
+        const out = [];
+        let cur = '', inQ = false, i = 0;
+        while (i < line.length) {
+            const c = line[i];
+            if (inQ) {
+                if (c === '"') {
+                    if (line[i + 1] === '"') { cur += '"'; i += 2; continue; }
+                    inQ = false; i++;
+                } else { cur += c; i++; }
+            } else {
+                if (c === ',') { out.push(cur); cur = ''; i++; }
+                else if (c === '"' && cur === '') { inQ = true; i++; }
+                else { cur += c; i++; }
+            }
+        }
+        out.push(cur);
+        return out;
+    }
+
+    // Accepts YYYYMMDD, YYMMDD, or already-ISO YYYY-MM-DD and returns YYYY-MM-DD (or null).
+    function parseDateField(str) {
+        if (!str) return null;
+        const s = String(str).trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+        const digits = s.replace(/[^0-9]/g, '');
+        if (digits.length === 8) return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+        if (digits.length === 6) return `20${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4, 6)}`;
+        return null;
+    }
 
     // Note: the outer `history` variable is the undo snapshot — the persisted round history
     // dict is read/written via readHistory()/writeHistory() to avoid the name collision.
@@ -266,17 +309,211 @@
     };
 
     window.downloadCSV = () => {
-        let csv = `Discipline,${D.name}\nDate,${yyyymmdd(state.date)}\nGround,${state.ground}\nEvent,${state.event}\n\nShooter,CPSA,Class,`;
-        csv += state.stands.map(s => `${D.standLabel.slice(0, 2).toUpperCase()}${s.id}${s.extraClay ? '+1' : ''}`).join(',') + ',Total\n';
+        const q = csvEscape;
+        const abbr = D.standLabel.slice(0, 2).toUpperCase();
+        // Header block: Discipline / Date / Ground / Event / Stands (base + optional +1 per stand)
+        let csv = `Discipline,${q(D.name)}\n`;
+        csv += `Date,${yyyymmdd(state.date)}\n`;
+        csv += `Ground,${q(state.ground)}\n`;
+        csv += `Event,${q(state.event)}\n`;
+        csv += `Stands,${state.stands.map(s => `${s.targets}${s.extraClay ? '+1' : ''}`).join(',')}\n\n`;
+        // Totals block: per-shooter, per-stand hits + grand total
+        csv += `Shooter,CPSA,Class,`;
+        csv += state.stands.map(s => `${abbr}${s.id}${s.extraClay ? '+1' : ''}`).join(',') + ',Total\n';
         state.shooters.forEach(s => {
             const perStand = state.stands.map(st => state.hits[s.id]?.[st.id]?.filter(h => h === true).length || 0);
-            csv += `${s.name},${s.cpsa},${s.class},${perStand.join(',')},${getShooterTotal(s.id)}\n`;
+            csv += `${q(s.name)},${q(s.cpsa)},${q(s.class)},${perStand.join(',')},${getShooterTotal(s.id)}\n`;
+        });
+        // Details block: per-target H (hit) / M (miss) / . (not shot). Lets importCSV
+        // reconstruct the exact hit arrays instead of falling back to "N hits at front".
+        csv += `\nDetails\nShooter,Stand,Shots\n`;
+        state.shooters.forEach(s => {
+            state.stands.forEach(st => {
+                const arr = state.hits[s.id]?.[st.id];
+                if (!arr || !arr.length) return;
+                const shots = arr.map(h => h === true ? 'H' : h === false ? 'M' : '.').join('');
+                csv += `${q(s.name)},${st.id},${shots}\n`;
+            });
         });
         const blob = new Blob([csv], { type: 'text/csv' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = `${filenameStem()}.csv`;
         a.click();
+    };
+
+    // Parse an exported CSV back into { meta, stands, shooters, totals, details }.
+    // Both the new format (with Stands line + Details block) and legacy exports work.
+    function parseCSV(text) {
+        const lines = text.replace(/\r\n?/g, '\n').split('\n');
+        const meta = {};
+        let stands = null;              // [{ targets, extraClay }]
+        const shooters = [];            // [{ name, cpsa, class }]
+        const totals = {};              // shooterName -> [perStandHits]
+        const details = {};             // shooterName -> { standId -> shotString }
+
+        let i = 0;
+        // Header block: Key,Value lines until blank line
+        while (i < lines.length && lines[i].trim()) {
+            const parts = csvParseLine(lines[i]);
+            const [key, ...rest] = parts;
+            if (key === 'Discipline') meta.discipline = rest[0];
+            else if (key === 'Date') meta.date = rest[0];
+            else if (key === 'Ground') meta.ground = rest[0];
+            else if (key === 'Event') meta.event = rest[0];
+            else if (key === 'Stands') {
+                stands = rest.filter(Boolean).map(spec => {
+                    const m = String(spec).match(/^(\d+)(\+1)?$/);
+                    return m ? { targets: parseInt(m[1], 10), extraClay: !!m[2] } : null;
+                }).filter(Boolean);
+            }
+            i++;
+        }
+        while (i < lines.length && !lines[i].trim()) i++;
+
+        // Totals block header
+        if (i >= lines.length) throw new Error('missing totals block');
+        const totalsHeader = csvParseLine(lines[i++]);
+        if (totalsHeader[0] !== 'Shooter') throw new Error('malformed totals header');
+        const standCols = [];
+        for (let c = 3; c < totalsHeader.length - 1; c++) {
+            const m = String(totalsHeader[c]).match(/^[A-Z]{1,3}(\d+)(\+1)?$/);
+            standCols.push(m ? { id: parseInt(m[1], 10), extraClay: !!m[2] } : { id: c - 2, extraClay: false });
+        }
+        // Fall back to inferring stands from header columns if the Stands line was absent
+        if (!stands) {
+            const defaultTargets = D.fixedStands ? null : (D.defaults?.targetsPerStand || 8);
+            stands = standCols.map((sc, idx) => ({
+                targets: D.fixedStands ? (D.fixedStands[idx]?.targets ?? defaultTargets ?? 8) : defaultTargets,
+                extraClay: sc.extraClay,
+            }));
+        }
+        // Attach the id from the totals header (in case ids aren't 1..N contiguous)
+        stands = stands.map((s, idx) => ({ ...s, id: standCols[idx]?.id ?? idx + 1 }));
+
+        // Totals rows: until blank line, next section header, or EOF
+        while (i < lines.length && lines[i].trim() && lines[i].trim() !== 'Details') {
+            const parts = csvParseLine(lines[i++]);
+            const [name, cpsa, cls] = parts;
+            if (!name) continue;
+            shooters.push({ name, cpsa: cpsa || '', class: cls || 'U' });
+            totals[name] = stands.map((_, sIdx) => parseInt(parts[3 + sIdx], 10) || 0);
+        }
+        while (i < lines.length && !lines[i].trim()) i++;
+
+        // Optional Details block
+        if (i < lines.length && lines[i].trim() === 'Details') {
+            i++;
+            if (i < lines.length && csvParseLine(lines[i])[0] === 'Shooter') i++;
+            while (i < lines.length && lines[i].trim()) {
+                const [name, standStr, shots] = csvParseLine(lines[i++]);
+                if (!name || !standStr || !shots) continue;
+                const standId = parseInt(standStr, 10);
+                if (!details[name]) details[name] = {};
+                details[name][standId] = shots;
+            }
+        }
+
+        return { meta, stands, shooters, totals, details };
+    }
+
+    // File-picker onchange handler — hidden input lives inside the history section.
+    window.handleImportChange = (input) => {
+        const file = input.files?.[0];
+        input.value = '';  // reset so the same file can be re-picked
+        if (file) window.importCSV(file);
+    };
+
+    window.importCSV = async (file) => {
+        let text;
+        try { text = await file.text(); } catch (err) { alert('Could not read file: ' + err.message); return; }
+        let parsed;
+        try { parsed = parseCSV(text); } catch (err) { alert('Could not parse CSV: ' + err.message); return; }
+
+        // Discipline guard — the shared engine can only score what the current page is set up for.
+        if (parsed.meta.discipline && parsed.meta.discipline !== D.name && parsed.meta.discipline !== D.code) {
+            alert(`This CSV is from "${parsed.meta.discipline}". Open that discipline's page and import there.`);
+            return;
+        }
+
+        // Fixed disciplines: the CSV's stand structure must line up with the discipline's fixed layout.
+        if (D.fixedStands) {
+            const ok = parsed.stands.length === D.fixedStands.length
+                && parsed.stands.every((s, idx) => s.targets === D.fixedStands[idx].targets);
+            if (!ok) { alert(`Stand structure doesn't match ${D.name}'s fixed layout — import cancelled.`); return; }
+        }
+
+        const importedState = makeDefaultState();
+        importedState.date = parseDateField(parsed.meta.date) || importedState.date;
+        importedState.ground = parsed.meta.ground || '';
+        importedState.event = parsed.meta.event || '';
+        // Rebuild stands using imported target/extraClay + labels from D.fixedStands if it exists
+        importedState.stands = parsed.stands.map((s, idx) => {
+            const fixed = D.fixedStands?.[idx];
+            return {
+                id: s.id,
+                targets: s.targets,
+                extraClay: !!s.extraClay,
+                ...(fixed?.labels ? { labels: fixed.labels } : {}),
+            };
+        });
+        // Fresh shooter ids so they don't collide with any existing round's ids
+        importedState.shooters = parsed.shooters.map((sh, idx) => ({
+            id: Date.now() + idx,
+            name: sh.name,
+            cpsa: sh.cpsa,
+            class: sh.class || 'U',
+        }));
+        // Reconstruct hits: prefer the Details block when present, otherwise pack N hits
+        // then (total - N) misses so per-stand totals and the leaderboard match.
+        importedState.hits = {};
+        importedState.shooters.forEach((sh, shIdx) => {
+            importedState.hits[sh.id] = {};
+            const srcName = parsed.shooters[shIdx].name;
+            importedState.stands.forEach((st, stIdx) => {
+                const total = standTargets(st);
+                const detail = parsed.details[srcName]?.[st.id];
+                let arr;
+                if (detail) {
+                    arr = detail.split('').slice(0, total).map(c => c === 'H' ? true : c === 'M' ? false : null);
+                    while (arr.length < total) arr.push(null);
+                } else {
+                    const hitCount = Math.min(parsed.totals[srcName]?.[stIdx] || 0, total);
+                    arr = Array.from({ length: total }, (_, k) => k < hitCount ? true : false);
+                }
+                importedState.hits[sh.id][st.id] = arr;
+            });
+        });
+
+        // Legacy CSVs (no `Details` block) can't tell us the real per-shot order —
+        // we can only pack `hitCount` H's at the front and the remaining misses after.
+        // Warn before proceeding so the user knows a subsequent re-export will show
+        // that same "all hits then all misses" pattern rather than the true sequence.
+        const hasDetails = Object.keys(parsed.details).length > 0;
+        if (!hasDetails) {
+            if (!confirm(
+                'This CSV has no per-target Details block, so the exact hit/miss order can\'t be recovered.\n\n' +
+                'Per-stand totals will be preserved, but hits will be packed at the start of each stand and misses at the end. ' +
+                'A subsequent CSV export will show that same order.\n\n' +
+                'Import anyway?'
+            )) return;
+        }
+
+        const importKey = roundKey(importedState);
+        const store = readHistory();
+        if (!isNamedRound(importedState)) {
+            alert('Import needs at least a Ground or Event so the round has an identity — aborting.');
+            return;
+        }
+        if (store[importKey] && !confirm('A round already exists in history for this date/ground/event. Overwrite it?')) return;
+
+        store[importKey] = { ...importedState, _roundKey: importKey, _updatedAt: Date.now() };
+        writeHistory(store);
+        renderHistory();
+
+        if (confirm(`Imported "${importedState.ground || importedState.event}". Load it as the current round now?`)) {
+            window.loadRound(importKey);
+        }
     };
 
     function generateExportGrid(tid) {
@@ -566,7 +803,13 @@
                     <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400">Round History${countLabel}</h3>
                     ${emptyHint}
                 </div>
-                <button onclick="newRound()" class="flex-shrink-0 text-[9px] bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-black uppercase border border-slate-200">+ New Round</button>
+                <div class="flex-shrink-0 flex gap-1.5">
+                    <label class="text-[9px] bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-black uppercase border border-slate-200 cursor-pointer inline-flex items-center">
+                        Import CSV
+                        <input type="file" accept=".csv,text/csv" onchange="handleImportChange(this)" style="display:none">
+                    </label>
+                    <button onclick="newRound()" class="text-[9px] bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-black uppercase border border-slate-200">+ New Round</button>
+                </div>
             </div>
             ${entries.length ? `<div class="max-h-64 overflow-y-auto">${rows}</div>` : ''}`;
         if (window.lucide) lucide.createIcons();

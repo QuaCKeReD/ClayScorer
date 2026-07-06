@@ -14,7 +14,7 @@ ClayScorer Pro — a static, offline-capable Progressive Web App for scoring CPS
   - Tailwind (`cdn.tailwindcss.com`) — utility CSS
   - Lucide (`unpkg.com/lucide@latest`) — icons, initialised via `lucide.createIcons()` after every `render()`
   - html2canvas (`html2canvas.hertzen.com`) — used only by `shareAsImage()`
-- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v1`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names.
+- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v3`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names. `scorer.js` also logs a `SCORER_BUILD` banner on load — bumping that string when you ship changes gives you a quick DevTools signal that the page is running the new code (not a stale SW-cached copy).
 - The SW pre-caches local files with `cache.addAll` (fail-hard) and cross-origin CDN URLs (Tailwind / Lucide / html2canvas / icon) with `mode: 'no-cors'` inside `Promise.allSettled` so one bad CDN response — Tailwind's CDN in particular sometimes redirects or returns non-cacheable payloads — doesn't abort the whole install. Missed URLs still get cached at runtime by the fetch handler on the first successful network hit. If you add new same-origin assets, put them in `LOCAL_ASSETS`; new third-party URLs go in `CROSS_ORIGIN_ASSETS`.
 
 ## Architecture
@@ -107,9 +107,15 @@ On DOMContentLoaded, after `load()`, we call `save()` if the restored state is n
 Three export flows share `generateExportGrid(tid)`, which uses `standTargets()` for column counts (so extra clays get their own pair column, headed e.g. `STA 3+1`):
 - `exportToPDF()` — fills `#p-grid` inside `#print-view`, then `window.print()`. Print styles in `assets/scorer.css` (`@media print`) do the visual work. `document.title` is temporarily set to `filenameStem()` so the print dialog's default filename matches the CSV/PNG stem; an `afterprint` listener restores the original title.
 - `shareAsImage()` — off-screen `#capture-container` (via `position: absolute; left: -9999px`), briefly moved to `position: fixed; left:0; z-index:-1` for html2canvas measurement, then `navigator.share({ files })` on mobile or falls back to download. Preserve the position dance if you touch it.
-- `downloadCSV()` — header block `Discipline / Date / Ground / Event` (Date as `YYYYMMDD`), then a per-stand columns + totals block.
+- `downloadCSV()` — header block `Discipline / Date / Ground / Event / Stands` (Date as `YYYYMMDD`, `Stands` is a comma-separated list of `targets[+1]` specs), then a per-stand columns + totals block, then a `Details` block (`Shooter,Stand,Shots`) whose shot strings use `H` = hit, `M` = miss, `.` = not shot. The `Stands` line + `Details` block make CSVs fully round-trippable through `importCSV`.
 
 Every export shares the same filename stem — `${D.id}-YYYYMMDD[-ground-slug][-event-slug]` — built by `filenameStem()`. Empty parts are skipped, so an unnamed round yields `${D.id}-YYYYMMDD`. Ground and event are lowercased and non-alphanumerics collapse to single dashes. The PDF/PNG header blocks show ground + date (yyyymmdd) + discipline unconditionally and an italic EVENT row directly below (`#p-event-row` / `#cap-event-row`) that stays hidden unless `state.event` is set.
+
+### CSV import
+
+`parseCSV(text)` returns `{ meta, stands, shooters, totals, details }` and accepts both the current export and legacy exports (no `Stands` line, no `Details` block). Missing `Stands` falls back to `D.defaults.targetsPerStand` for ESP or `D.fixedStands[i].targets` for the fixed disciplines. Missing `Details` reconstructs hits as `hitCount` `true`s followed by the remaining `false`s so per-stand totals still line up in the leaderboard. `csvEscape` / `csvParseLine` handle RFC-4180 quoting, so commas in ground/event/shooter names round-trip. `parseDateField` accepts YYYYMMDD, YYMMDD, or ISO.
+
+`window.importCSV(file)` reads the file, refuses cross-discipline imports (aborts if the CSV's `Discipline` doesn't match `D.name` / `D.code`) and refuses stand-structure mismatches on fixed disciplines (STR/CSP/ESK), then writes the reconstructed state into `history[roundKey]` and offers to load it as the current round. Round must be named (ground or event) to have an identity — unnamed imports are refused. UI: a hidden `<input type="file">` sits inside an "Import CSV" `<label>` in the history section header; `handleImportChange(input)` resets the input value (so re-importing the same file works) and routes to `importCSV`.
 
 ## Files
 
