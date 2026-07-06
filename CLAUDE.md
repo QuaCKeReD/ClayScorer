@@ -14,7 +14,7 @@ ClayScorer Pro — a static, offline-capable Progressive Web App for scoring CPS
   - Tailwind (`cdn.tailwindcss.com`) — utility CSS
   - Lucide (`unpkg.com/lucide@latest`) — icons, initialised via `lucide.createIcons()` after every `render()`
   - html2canvas (`html2canvas.hertzen.com`) — used only by `shareAsImage()`
-- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v6`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names.
+- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v1`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names.
 - The SW pre-caches local files with `cache.addAll` (fail-hard) and cross-origin CDN URLs (Tailwind / Lucide / html2canvas / icon) with `mode: 'no-cors'` inside `Promise.allSettled` so one bad CDN response — Tailwind's CDN in particular sometimes redirects or returns non-cacheable payloads — doesn't abort the whole install. Missed URLs still get cached at runtime by the fetch handler on the first successful network hit. If you add new same-origin assets, put them in `LOCAL_ASSETS`; new third-party URLs go in `CROSS_ORIGIN_ASSETS`.
 
 ## Architecture

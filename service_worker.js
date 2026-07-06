@@ -1,4 +1,4 @@
-const CACHE_NAME = 'clayscorer-v6';
+const CACHE_NAME = 'clayscorer-v1';
 const ICON_URL = 'https://img.icons8.com/ios-filled/512/target.png';
 
 // Same-origin assets: `cache.addAll` is all-or-nothing, but these are local files
@@ -15,7 +15,7 @@ const LOCAL_ASSETS = [
   './assets/scorer.js',
   './assets/target.png',
   './assets/target.ico',
-  './assets/favicon.ico',
+  './favicon.ico',
 ];
 
 // Cross-origin assets: fetched with `mode: 'no-cors'` so redirects and CORS-less
