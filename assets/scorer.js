@@ -34,6 +34,13 @@
     const readHistory = () => { try { return JSON.parse(localStorage.getItem(KEY_HISTORY) || '{}'); } catch (e) { return {}; } };
     const writeHistory = (h) => { try { localStorage.setItem(KEY_HISTORY, JSON.stringify(h)); } catch (e) {} };
 
+    // yyyymmdd from an ISO date string like "2026-07-06" -> "260706".
+    const yyyymmdd = (iso) => (!iso || iso.length < 10) ? '' : iso.slice(0, 4) + iso.slice(5, 7) + iso.slice(8, 10);
+    // Filename-safe slug: lowercase alphanumerics with dashes.
+    const slug = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    // Stem shared by every export: `YYYYMMDD-${discipline}[-ground][-event]`. Empty parts are skipped.
+    const filenameStem = () => [yyyymmdd(state.date), D.id, slug(state.ground), slug(state.event)].filter(Boolean).join('-');
+
     // Note: the outer `history` variable is the undo snapshot — the persisted round history
     // dict is read/written via readHistory()/writeHistory() to avoid the name collision.
     let history = null;
@@ -259,7 +266,7 @@
     };
 
     window.downloadCSV = () => {
-        let csv = `Discipline,${D.name}\nGround,${state.ground}\nDate,${state.date}\nEvent,${state.event}\n\nShooter,CPSA,Class,`;
+        let csv = `Discipline,${D.name}\nDate,${yyyymmdd(state.date)}\nGround,${state.ground}\nEvent,${state.event}\n\nShooter,CPSA,Class,`;
         csv += state.stands.map(s => `${D.standLabel.slice(0, 2).toUpperCase()}${s.id}${s.extraClay ? '+1' : ''}`).join(',') + ',Total\n';
         state.shooters.forEach(s => {
             const perStand = state.stands.map(st => state.hits[s.id]?.[st.id]?.filter(h => h === true).length || 0);
@@ -268,7 +275,7 @@
         const blob = new Blob([csv], { type: 'text/csv' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `${D.id}-scores.csv`;
+        a.download = `${filenameStem()}.csv`;
         a.click();
     };
 
@@ -321,32 +328,46 @@
 
     window.exportToPDF = () => {
         document.getElementById('p-ground').innerText = state.ground || 'N/A';
-        document.getElementById('p-date').innerText = getUKDate(state.date);
+        document.getElementById('p-date').innerText = yyyymmdd(state.date) || 'N/A';
+        document.getElementById('p-event').innerText = state.event || '';
+        const evRow = document.getElementById('p-event-row');
+        if (evRow) evRow.style.display = (state.event || '').trim() ? '' : 'none';
         document.getElementById('p-notes').innerText = state.notes || '';
         document.getElementById('p-discipline').innerText = D.name;
         generateExportGrid('p-grid');
+
+        // The browser derives the print dialog's suggested filename from document.title.
+        // Swap it, print, then restore on the afterprint event so the tab title stays clean.
+        const prevTitle = document.title;
+        document.title = filenameStem();
+        const restore = () => { document.title = prevTitle; window.removeEventListener('afterprint', restore); };
+        window.addEventListener('afterprint', restore);
         window.print();
     };
 
     window.shareAsImage = async () => {
         const container = document.getElementById('capture-container');
         document.getElementById('cap-ground').innerText = state.ground || 'N/A';
-        document.getElementById('cap-date').innerText = getUKDate(state.date);
+        document.getElementById('cap-date').innerText = yyyymmdd(state.date) || 'N/A';
+        document.getElementById('cap-event').innerText = state.event || '';
+        const capEv = document.getElementById('cap-event-row');
+        if (capEv) capEv.style.display = (state.event || '').trim() ? '' : 'none';
         document.getElementById('cap-discipline').innerText = D.name;
         generateExportGrid('cap-grid');
+        const filename = `${filenameStem()}.png`;
         try {
             container.style.position = 'fixed'; container.style.left = '0'; container.style.top = '0'; container.style.zIndex = '-1';
             const canvas = await html2canvas(container, { scale: 3, backgroundColor: '#ffffff', useCORS: true });
             container.style.position = 'absolute'; container.style.left = '-9999px';
             canvas.toBlob(async (blob) => {
                 if (!blob) return;
-                const file = new File([blob], `${D.id}-leaderboard.png`, { type: 'image/png' });
+                const file = new File([blob], filename, { type: 'image/png' });
                 if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
                     await navigator.share({ files: [file], title: `${D.name} Squad Leaderboard` });
                 } else {
                     const a = document.createElement('a');
                     a.href = URL.createObjectURL(blob);
-                    a.download = `${D.id}-scores.png`;
+                    a.download = filename;
                     a.click();
                 }
             });
@@ -467,11 +488,13 @@
             </section>
 
             <div id="capture-container">
-                <div style="border-bottom: 2pt solid black; padding: 10px 0; margin-bottom: 15px; display: flex; justify-content: space-between; font-size: 14pt;">
+                <div style="border-bottom: 2pt solid black; padding: 10px 0; display: flex; justify-content: space-between; font-size: 14pt;">
                     <div><strong>GROUND:</strong> <span id="cap-ground"></span></div>
                     <div style="text-align:center; text-transform: uppercase;"><strong><span id="cap-discipline"></span> Leaderboard</strong></div>
                     <div><strong>DATE:</strong> <span id="cap-date"></span></div>
                 </div>
+                <div id="cap-event-row" style="display:none; text-align:center; font-size: 12pt; font-weight: bold; font-style: italic; padding: 6px 0 10px; margin-bottom: 10px; border-bottom: 1pt solid #ccc;"><strong>EVENT:</strong> <span id="cap-event"></span></div>
+                <div style="height: 10px;"></div>
                 <table id="cap-grid"></table>
                 <div style="margin-top: 30px; display: flex; justify-content: space-between; align-items: center; font-size: 11pt; font-weight: bold;">
                     <span>Generated by QuaCKeReD - original idea by Sarge</span>
@@ -485,6 +508,7 @@
                     <div style="text-align:center; text-transform: uppercase;"><strong><span id="p-discipline"></span> Scorecard</strong></div>
                     <div style="text-align:right"><strong>DATE:</strong> <span id="p-date"></span></div>
                 </div>
+                <div id="p-event-row" class="print-event" style="display:none;"><strong>EVENT:</strong> <span id="p-event"></span></div>
                 <table id="p-grid"></table>
                 <div class="print-notes"><strong>NOTES:</strong> <span id="p-notes"></span></div>
                 <div class="signature-section"><div class="sig-line">SIGNATURE</div></div>
@@ -729,9 +753,12 @@
         if (window.lucide) lucide.createIcons();
     }
 
-    if ('serviceWorker' in navigator) {
+    // Service workers are only allowed on http(s) origins. Under `file://` the origin is
+    // "null" and the browser rejects registration outright — skip it entirely so we don't
+    // spam the console when the file is opened directly (double-click / preview).
+    if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:')) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW registration failed', err));
+            navigator.serviceWorker.register('./service_worker.js').catch(err => console.warn('SW registration failed', err));
         });
     }
 

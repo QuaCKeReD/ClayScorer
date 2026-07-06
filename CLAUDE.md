@@ -14,7 +14,8 @@ ClayScorer Pro — a static, offline-capable Progressive Web App for scoring CPS
   - Tailwind (`cdn.tailwindcss.com`) — utility CSS
   - Lucide (`unpkg.com/lucide@latest`) — icons, initialised via `lucide.createIcons()` after every `render()`
   - html2canvas (`html2canvas.hertzen.com`) — used only by `shareAsImage()`
-- **When you change what's cached, bump `CACHE_NAME` in `sw.js`** (currently `clayscorer-v4`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names.
+- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v6`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names.
+- The SW pre-caches local files with `cache.addAll` (fail-hard) and cross-origin CDN URLs (Tailwind / Lucide / html2canvas / icon) with `mode: 'no-cors'` inside `Promise.allSettled` so one bad CDN response — Tailwind's CDN in particular sometimes redirects or returns non-cacheable payloads — doesn't abort the whole install. Missed URLs still get cached at runtime by the fetch handler on the first successful network hit. If you add new same-origin assets, put them in `LOCAL_ASSETS`; new third-party URLs go in `CROSS_ORIGIN_ASSETS`.
 
 ## Architecture
 
@@ -104,9 +105,11 @@ On DOMContentLoaded, after `load()`, we call `save()` if the restored state is n
 ### Export paths
 
 Three export flows share `generateExportGrid(tid)`, which uses `standTargets()` for column counts (so extra clays get their own pair column, headed e.g. `STA 3+1`):
-- `exportToPDF()` — fills `#p-grid` inside `#print-view`, then `window.print()`. Print styles in `assets/scorer.css` (`@media print`) do the visual work.
+- `exportToPDF()` — fills `#p-grid` inside `#print-view`, then `window.print()`. Print styles in `assets/scorer.css` (`@media print`) do the visual work. `document.title` is temporarily set to `filenameStem()` so the print dialog's default filename matches the CSV/PNG stem; an `afterprint` listener restores the original title.
 - `shareAsImage()` — off-screen `#capture-container` (via `position: absolute; left: -9999px`), briefly moved to `position: fixed; left:0; z-index:-1` for html2canvas measurement, then `navigator.share({ files })` on mobile or falls back to download. Preserve the position dance if you touch it.
-- `downloadCSV()` — includes discipline/ground/date/event header plus per-stand columns and totals.
+- `downloadCSV()` — header block `Discipline / Date / Ground / Event` (Date as `YYYYMMDD`), then a per-stand columns + totals block.
+
+Every export shares the same filename stem — `${D.id}-YYYYMMDD[-ground-slug][-event-slug]` — built by `filenameStem()`. Empty parts are skipped, so an unnamed round yields `${D.id}-YYYYMMDD`. Ground and event are lowercased and non-alphanumerics collapse to single dashes. The PDF/PNG header blocks show ground + date (yyyymmdd) + discipline unconditionally and an italic EVENT row directly below (`#p-event-row` / `#cap-event-row`) that stays hidden unless `state.event` is set.
 
 ## Files
 
@@ -114,7 +117,7 @@ Three export flows share `generateExportGrid(tid)`, which uses `standTargets()` 
 - `sporting.html`, `sportrap.html`, `compak.html`, `skeet.html` — thin per-discipline shells that set `window.DISCIPLINE` and load the shared engine.
 - `assets/scorer.js` — shared scoring engine (state, mount, render, exports). All global `window.*` handlers used by inline `onclick`s are defined here.
 - `assets/scorer.css` — shared styles including print media, capture container, pair-stack, first-up glow, and discipline tiles.
-- `sw.js` — service worker: cache-first for the listed assets, network fallback for everything else. On activate, deletes any cache whose name isn't the current `CACHE_NAME`.
+- `service_worker.js` — service worker: cache-first for the listed assets, network fallback for everything else. On activate, deletes any cache whose name isn't the current `CACHE_NAME`.
 - `manifest.json` — PWA install metadata. `start_url` is the landing page.
 - `_archive/indexv1.html`, `_archive/indexv2.html`, `_archive/indexv3.html` — historical snapshots of the original sporting-only single-file app. Not linked from anywhere; ignore unless the user explicitly refers to them.
 
@@ -123,6 +126,6 @@ Three export flows share `generateExportGrid(tid)`, which uses `standTargets()` 
 1. Create `<id>.html` mirroring an existing discipline shell.
 2. Set `window.DISCIPLINE` with a unique `id`, `code`, and `storageKey` (mirroring an existing one will overwrite its data).
 3. Add a tile to `index.html`.
-4. Add the page path to the `ASSETS` list in `sw.js` and bump `CACHE_NAME`.
+4. Add the page path to the `ASSETS` list in `service_worker.js` and bump `CACHE_NAME`.
 
 If the new discipline needs behaviour the shared engine doesn't yet support (e.g. a new scoring shape), extend `assets/scorer.js` gated by a new config flag rather than forking the engine.

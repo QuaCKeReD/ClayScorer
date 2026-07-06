@@ -64,9 +64,10 @@
     </footer>
 
     <script>
-        if ('serviceWorker' in navigator) {
+        // Service workers require an http(s) origin — skip under file:// so we don't spam the console.
+        if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:')) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').catch(() => {});
+                navigator.serviceWorker.register('./service_worker.js').catch(() => {});
             });
         }
     </script>
