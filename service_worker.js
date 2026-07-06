@@ -13,6 +13,9 @@ const LOCAL_ASSETS = [
   './manifest.json',
   './assets/scorer.css',
   './assets/scorer.js',
+  './assets/target.png',
+  './assets/target.ico',
+  './assets/favicon.ico',
 ];
 
 // Cross-origin assets: fetched with `mode: 'no-cors'` so redirects and CORS-less
