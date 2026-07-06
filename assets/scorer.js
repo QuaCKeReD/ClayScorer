@@ -39,7 +39,7 @@
     // Filename-safe slug: lowercase alphanumerics with dashes.
     const slug = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     // Stem shared by every export: `YYYYMMDD-${discipline}[-ground][-event]`. Empty parts are skipped.
-    const filenameStem = () => [yyyymmdd(state.date), D.id, slug(state.ground), slug(state.event)].filter(Boolean).join('-');
+    const filenameStem = () => [yyyymmdd(state.date), D.id, slug(state.ground), slug(state.event)].filter(Boolean).join('_');
 
     // Note: the outer `history` variable is the undo snapshot — the persisted round history
     // dict is read/written via readHistory()/writeHistory() to avoid the name collision.
