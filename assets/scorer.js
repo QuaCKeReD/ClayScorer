@@ -17,7 +17,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-07-06-b (details-order-preserving)';
+    const SCORER_BUILD = 'scorer 2026-07-07 (stand descriptions)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -91,9 +91,9 @@
 
     function makeDefaultState() {
         const stands = D.fixedStands
-            ? D.fixedStands.map(s => ({ ...s, extraClay: !!s.extraClay }))
+            ? D.fixedStands.map(s => ({ ...s, extraClay: !!s.extraClay, description: s.description || '' }))
             : Array.from({ length: D.defaults.standCount }, (_, i) => ({
-                id: i + 1, targets: D.defaults.targetsPerStand, extraClay: false
+                id: i + 1, targets: D.defaults.targetsPerStand, extraClay: false, description: ''
             }));
         return {
             ground: '', date: new Date().toISOString().split('T')[0], event: '', notes: '',
@@ -140,7 +140,7 @@
         try {
             const parsed = JSON.parse(s);
             state = Object.assign({}, state, parsed);
-            state.stands = state.stands.map(st => ({ ...st, extraClay: !!st.extraClay }));
+            state.stands = state.stands.map(st => ({ ...st, extraClay: !!st.extraClay, description: st.description || '' }));
             return true;
         } catch (e) { return false; }
     }
@@ -244,6 +244,18 @@
         render(); save();
     };
 
+    // Free-text description for the presentation of clays at the active stand
+    // (e.g. "left-to-right crosser + rabbit"). Persists per-round so it survives
+    // history load/save, and appears in every export (CSV Descriptions line,
+    // PDF + PNG grid header subtitle).
+    window.updateStandDescription = (v) => {
+        if (state.isLocked) return;
+        const st = state.stands[state.activeIdx];
+        if (!st) return;
+        st.description = v;
+        save();
+    };
+
     window.nav = (d) => {
         if (state.isLocked) return;
         state.activeIdx = Math.max(0, Math.min(state.stands.length - 1, state.activeIdx + d));
@@ -285,7 +297,7 @@
         if (!round) return;
         save();
         state = Object.assign({}, makeDefaultState(), round);
-        state.stands = (state.stands || []).map(st => ({ ...st, extraClay: !!st.extraClay }));
+        state.stands = (state.stands || []).map(st => ({ ...st, extraClay: !!st.extraClay, description: st.description || '' }));
         if (!state.stands.length) state.stands = makeDefaultState().stands;
         state.activeIdx = Math.min(state.activeIdx || 0, state.stands.length - 1);
         history = null;
@@ -316,7 +328,13 @@
         csv += `Date,${yyyymmdd(state.date)}\n`;
         csv += `Ground,${q(state.ground)}\n`;
         csv += `Event,${q(state.event)}\n`;
-        csv += `Stands,${state.stands.map(s => `${s.targets}${s.extraClay ? '+1' : ''}`).join(',')}\n\n`;
+        csv += `Stands,${state.stands.map(s => `${s.targets}${s.extraClay ? '+1' : ''}`).join(',')}\n`;
+        // Only emit the Descriptions line if any stand actually has one — keeps the CSV
+        // tidy for rounds that never used the field.
+        if (state.stands.some(s => (s.description || '').trim())) {
+            csv += `Descriptions,${state.stands.map(s => q(s.description || '')).join(',')}\n`;
+        }
+        csv += `\n`;
         // Totals block: per-shooter, per-stand hits + grand total
         csv += `Shooter,CPSA,Class,`;
         csv += state.stands.map(s => `${abbr}${s.id}${s.extraClay ? '+1' : ''}`).join(',') + ',Total\n';
@@ -347,7 +365,8 @@
     function parseCSV(text) {
         const lines = text.replace(/\r\n?/g, '\n').split('\n');
         const meta = {};
-        let stands = null;              // [{ targets, extraClay }]
+        let stands = null;              // [{ targets, extraClay, description? }]
+        let descriptions = null;        // parallel array of strings, applied to stands below
         const shooters = [];            // [{ name, cpsa, class }]
         const totals = {};              // shooterName -> [perStandHits]
         const details = {};             // shooterName -> { standId -> shotString }
@@ -362,12 +381,20 @@
             else if (key === 'Ground') meta.ground = rest[0];
             else if (key === 'Event') meta.event = rest[0];
             else if (key === 'Stands') {
-                stands = rest.filter(Boolean).map(spec => {
+                stands = rest.filter(spec => spec !== '' || rest.length === 1).map(spec => {
                     const m = String(spec).match(/^(\d+)(\+1)?$/);
                     return m ? { targets: parseInt(m[1], 10), extraClay: !!m[2] } : null;
                 }).filter(Boolean);
             }
+            else if (key === 'Descriptions') {
+                // rest is a parallel array to Stands — one entry per stand, possibly empty.
+                descriptions = rest;
+            }
             i++;
+        }
+        // Merge descriptions into stands (positional match)
+        if (stands && descriptions) {
+            stands = stands.map((s, idx) => ({ ...s, description: descriptions[idx] || '' }));
         }
         while (i < lines.length && !lines[i].trim()) i++;
 
@@ -447,13 +474,14 @@
         importedState.date = parseDateField(parsed.meta.date) || importedState.date;
         importedState.ground = parsed.meta.ground || '';
         importedState.event = parsed.meta.event || '';
-        // Rebuild stands using imported target/extraClay + labels from D.fixedStands if it exists
+        // Rebuild stands using imported target/extraClay/description + labels from D.fixedStands if it exists
         importedState.stands = parsed.stands.map((s, idx) => {
             const fixed = D.fixedStands?.[idx];
             return {
                 id: s.id,
                 targets: s.targets,
                 extraClay: !!s.extraClay,
+                description: s.description || '',
                 ...(fixed?.labels ? { labels: fixed.labels } : {}),
             };
         });
@@ -528,7 +556,12 @@
         let h = `<tr style="background:#f0f0f0"><th style="width:200px; vertical-align:middle;" rowspan="2"><div class="cell-center">NAME</div></th>`;
         state.stands.forEach(st => {
             const total = standTargets(st);
-            h += `<th colspan="${Math.ceil(total / 2)}" style="vertical-align:middle; height:${headH};"><div class="cell-center">${abbr} ${st.id}${st.extraClay ? '+1' : ''}</div></th>`;
+            const descTxt = (st.description || '').trim();
+            const descHtml = descTxt
+                ? `<div style="font-size:${isShare ? '9pt' : '7pt'}; font-style:italic; font-weight:normal; line-height:1.1; padding:2px 4px 0; white-space:normal; word-break:break-word;">${escapeHtml(descTxt)}</div>`
+                : '';
+            const heightStyle = descTxt ? '' : `height:${headH};`;
+            h += `<th colspan="${Math.ceil(total / 2)}" style="vertical-align:middle; ${heightStyle}"><div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:2px 0;"><div style="font-weight:900;">${abbr} ${st.id}${st.extraClay ? '+1' : ''}</div>${descHtml}</div></th>`;
         });
         h += `<th style="width:60px; vertical-align:middle;" rowspan="2"><div class="cell-center">TOTAL</div></th></tr><tr>`;
         state.stands.forEach(st => {
@@ -691,6 +724,14 @@
                     <button id="undo-btn" onclick="undo()" class="hidden text-[9px] font-black text-white uppercase flex items-center gap-1 bg-slate-800 px-2 py-1 rounded-lg border border-slate-700">
                         <i data-lucide="rotate-ccw" size="10"></i> Undo
                     </button>
+                </div>
+
+                <div class="bg-slate-800 px-3 py-2 border-t border-slate-700 no-print">
+                    <label class="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Presentation</label>
+                    <input id="field-stand-description" type="text" maxlength="120"
+                        placeholder="e.g. left-to-right crosser + going-away rabbit"
+                        class="w-full bg-slate-900 text-white text-xs font-medium rounded-md px-2 py-1.5 border border-slate-700 outline-none focus:border-orange-500 placeholder-slate-500"
+                        oninput="updateStandDescription(this.value)">
                 </div>
 
                 <div id="scoring-controls"></div>
@@ -896,6 +937,8 @@
         document.getElementById('active-stand-title').innerText = `${D.standLabel} ${st.id}`;
         const total = standTargets(st);
         document.getElementById('active-stand-targets').innerText = `${total} Target${total !== 1 ? 's' : ''}${st.extraClay ? ' (+1)' : ''}`;
+        const descEl = document.getElementById('field-stand-description');
+        if (descEl) descEl.value = st.description || '';
         renderScoringControls();
 
         // Scoring rows (rotated first-up if enabled)

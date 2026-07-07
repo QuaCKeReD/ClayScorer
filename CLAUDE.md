@@ -14,7 +14,7 @@ ClayScorer Pro — a static, offline-capable Progressive Web App for scoring CPS
   - Tailwind (`cdn.tailwindcss.com`) — utility CSS
   - Lucide (`unpkg.com/lucide@latest`) — icons, initialised via `lucide.createIcons()` after every `render()`
   - html2canvas (`html2canvas.hertzen.com`) — used only by `shareAsImage()`
-- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v3`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names. `scorer.js` also logs a `SCORER_BUILD` banner on load — bumping that string when you ship changes gives you a quick DevTools signal that the page is running the new code (not a stale SW-cached copy).
+- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v4`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names. `scorer.js` also logs a `SCORER_BUILD` banner on load — bumping that string when you ship changes gives you a quick DevTools signal that the page is running the new code (not a stale SW-cached copy).
 - The SW pre-caches local files with `cache.addAll` (fail-hard) and cross-origin CDN URLs (Tailwind / Lucide / html2canvas / icon) with `mode: 'no-cors'` inside `Promise.allSettled` so one bad CDN response — Tailwind's CDN in particular sometimes redirects or returns non-cacheable payloads — doesn't abort the whole install. Missed URLs still get cached at runtime by the fetch handler on the first successful network hit. If you add new same-origin assets, put them in `LOCAL_ASSETS`; new third-party URLs go in `CROSS_ORIGIN_ASSETS`.
 
 ## Architecture
@@ -51,7 +51,7 @@ One `state` object per page — populated from `localStorage[D.storageKey]` on l
 state = {
   ground, date, event, notes,
   shooters: [{ id, name, cpsa, class }],
-  stands:   [{ id, targets, extraClay, labels? }],
+  stands:   [{ id, targets, extraClay, description, labels? }],
   hits:     { [shooterId]: { [standId]: [true|false|null, ...] } },
   activeIdx,
   isLocked,
@@ -60,6 +60,7 @@ state = {
 ```
 
 - Total targets on a stand = `standTargets(stand) = stand.targets + (stand.extraClay ? 1 : 0)`. Use this helper everywhere; a raw `stand.targets` will miss the ESP extra clay.
+- `stand.description` is a free-text presentation note (e.g. "left-to-right crosser + rabbit") — edited via the "Presentation" input under the active stand's title, persisted per-round through history, echoed into CSV exports as a `Descriptions` line (only emitted when at least one stand has one) and rendered as italic subtext under each stand-column header in the PDF/PNG grid. `parseCSV` reads the `Descriptions` line positionally against `Stands` and attaches it to the imported stands.
 - `hits[shId][stId]` is an array sized to `standTargets`. When targets change (setBirds, setExtraClay), `ensureHitsArray()` resizes preserving existing values.
 - The outer `history` variable (in `scorer.js`) is a one-level **undo snapshot** of `state.hits`, cleared on each hit toggle — one-step by design. Not to be confused with the persisted round-history dict below (which is only ever read/written via `readHistory()` / `writeHistory()`).
 
