@@ -12,7 +12,7 @@ input, select, textarea { font-size: 16px !important; }
     .print-only { display: block !important; }
     table { width: 100% !important; border-collapse: collapse !important; border: 1.5pt solid black !important; table-layout: fixed; }
     th, td {
-        border: 0.5pt solid black !important; padding: 0 !important; color: black !important;
+        border: 0.35pt solid #9ca3af !important; padding: 0 !important; color: black !important;
         text-align: center !important; vertical-align: middle !important; overflow: hidden;
         height: 30px;
         -webkit-print-color-adjust: exact !important;
@@ -31,7 +31,7 @@ input, select, textarea { font-size: 16px !important; }
     position: absolute; left: -9999px; top: 0; width: 1200px; background: white; padding: 40px; color: black; font-family: "Courier New", Courier, monospace;
 }
 #capture-container table { width: 100%; border-collapse: collapse; border: 2pt solid black; table-layout: fixed; }
-#capture-container th, #capture-container td { border: 1pt solid black; padding: 0; text-align: center !important; vertical-align: middle !important; }
+#capture-container th, #capture-container td { border: 0.6pt solid #9ca3af; padding: 0; text-align: center !important; vertical-align: middle !important; }
 
 .cell-center { display: flex; align-items: center; justify-content: center; height: 100%; width: 100%; text-align: center; }
 

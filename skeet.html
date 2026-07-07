@@ -17,8 +17,9 @@
 <body class="bg-slate-50 text-slate-900 font-sans pb-24 overflow-x-hidden">
     <div id="app-root"></div>
     <script>
-        // English Skeet standard round: 25 targets across 7 stations.
+        // English Skeet standard round: 24 scheduled targets plus the 25th option target.
         // Labels: H = high house single, L = low house single, H+L / L+H = simultaneous pair (bird thrown first named first).
+        // OPT = first target missed is immediately reshot; if the first 24 are hit, shooter chooses H or L on Station 7.
         window.DISCIPLINE = {
             id: 'skeet',
             name: 'English Skeet',
@@ -27,7 +28,14 @@
             standLabel: 'Station',
             maxShooters: 10,
             showFirstUpRotation: false,
+            enableStandDescriptions: false,
             editable: { standCount: false, targetsPerStand: false, extraClay: false },
+            optionTarget: {
+                label: 'OPT',
+                fallbackStandId: 7,
+                migrateFromStandId: 7,
+                migrateFromIndex: 4
+            },
             fixedStands: [
                 { id: 1, targets: 4, labels: ['H', 'L', 'H+L', 'H+L'] },
                 { id: 2, targets: 4, labels: ['H', 'L', 'H+L', 'H+L'] },

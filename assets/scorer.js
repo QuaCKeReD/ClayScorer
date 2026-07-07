@@ -7,7 +7,9 @@
  *     editable: { standCount, targetsPerStand, extraClay },
  *     defaults: { standCount, targetsPerStand },  // only when standCount editable
  *     targetOptions: [4, 6, 8, 10],               // only when targetsPerStand editable
- *     fixedStands: [{ id, targets, labels? }]     // null for variable ESP
+ *     enableStandDescriptions: false,             // optional, defaults to true
+ *     fixedStands: [{ id, targets, labels? }],    // null for variable ESP
+ *     optionTarget: { label, fallbackStandId }     // optional floating target
  *   }
  *
  * Storage keys are per-discipline so each round is independent.
@@ -17,7 +19,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-07-07 (stand descriptions)';
+    const SCORER_BUILD = 'scorer 2026-07-07 (image mark optical centering)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -27,8 +29,11 @@
     const MAX_SHOOTERS = D.maxShooters || 6;
     const CLASSES = ['AAA', 'AA', 'A', 'B', 'C', 'U'];
     const ROTATE = D.showFirstUpRotation !== false;
+    const HAS_STAND_DESCRIPTIONS = D.enableStandDescriptions !== false;
 
     const standTargets = (s) => s.targets + (s.extraClay ? 1 : 0);
+    const OPTION = D.optionTarget || null;
+    const scheduledRoundTargets = () => state.stands.reduce((sum, s) => sum + standTargets(s), 0);
 
     const KEY_CURRENT = KEY;
     const KEY_HISTORY = KEY + ':history';
@@ -91,15 +96,131 @@
 
     function makeDefaultState() {
         const stands = D.fixedStands
-            ? D.fixedStands.map(s => ({ ...s, extraClay: !!s.extraClay, description: s.description || '' }))
+            ? D.fixedStands.map(s => ({ ...s, extraClay: !!s.extraClay, description: HAS_STAND_DESCRIPTIONS ? (s.description || '') : '' }))
             : Array.from({ length: D.defaults.standCount }, (_, i) => ({
                 id: i + 1, targets: D.defaults.targetsPerStand, extraClay: false, description: ''
             }));
         return {
             ground: '', date: new Date().toISOString().split('T')[0], event: '', notes: '',
             shooters: [{ id: Date.now(), name: 'Shooter 1', cpsa: '', class: 'U' }],
-            stands, hits: {}, activeIdx: 0, isLocked: false
+            stands, hits: {}, optionHits: {}, activeIdx: 0, isLocked: false
         };
+    }
+
+    function normalizeStands(stands) {
+        const current = Array.isArray(stands) ? stands : [];
+        if (!D.fixedStands) {
+            return current.map(st => ({ ...st, extraClay: !!st.extraClay, description: HAS_STAND_DESCRIPTIONS ? (st.description || '') : '' }));
+        }
+        return D.fixedStands.map((fixed, idx) => {
+            const existing = current.find(st => st.id === fixed.id) || current[idx] || {};
+            return {
+                ...fixed,
+                extraClay: !!fixed.extraClay,
+                description: HAS_STAND_DESCRIPTIONS ? (existing.description || fixed.description || '') : ''
+            };
+        });
+    }
+
+    function normalizeState() {
+        state.stands = normalizeStands(state.stands);
+        state.optionHits = state.optionHits || {};
+
+        // Previous Skeet build stored the option as a fifth Station 7 target.
+        // Move that saved value into the per-shooter floating option slot.
+        if (OPTION && OPTION.migrateFromStandId) {
+            state.shooters.forEach(sh => {
+                const arr = state.hits?.[sh.id]?.[OPTION.migrateFromStandId];
+                if (arr && arr.length > OPTION.migrateFromIndex && !state.optionHits[sh.id]) {
+                    const hit = arr[OPTION.migrateFromIndex];
+                    if (hit !== null && hit !== undefined) {
+                        state.optionHits[sh.id] = { standId: OPTION.fallbackStandId, hit };
+                    }
+                }
+            });
+        }
+        if (OPTION) state.shooters.forEach(sh => reconcileOptionHit(sh.id));
+    }
+
+    function shooterScheduledStats(shId) {
+        let hit = 0, shot = 0, firstMissStandId = null;
+        state.stands.forEach(st => {
+            const total = standTargets(st);
+            const arr = state.hits[shId]?.[st.id] || [];
+            for (let i = 0; i < total; i++) {
+                if (arr[i] === true) hit++;
+                if (arr[i] !== null && arr[i] !== undefined) shot++;
+                if (arr[i] === false && firstMissStandId === null) firstMissStandId = st.id;
+            }
+        });
+        return { hit, shot, firstMissStandId };
+    }
+
+    function getOptionStandId(shId) {
+        if (!OPTION) return null;
+        const existing = state.optionHits?.[shId];
+        if (existing?.standId) return existing.standId;
+        const stats = shooterScheduledStats(shId);
+        if (stats.firstMissStandId !== null) return stats.firstMissStandId;
+        if (stats.shot >= scheduledRoundTargets() && stats.hit === scheduledRoundTargets()) {
+            return OPTION.fallbackStandId || state.stands[state.stands.length - 1]?.id || null;
+        }
+        return null;
+    }
+
+    function getOptionHit(shId) {
+        const opt = state.optionHits?.[shId];
+        return opt ? opt.hit : null;
+    }
+
+    function getOptionHitForStand(shId, stId) {
+        const opt = state.optionHits?.[shId];
+        return opt && opt.standId === stId ? opt.hit : null;
+    }
+
+    function shooterStandStats(shId, stand) {
+        const total = standTargets(stand);
+        const arr = state.hits[shId]?.[stand.id] || [];
+        let hits = 0, shot = 0;
+        for (let i = 0; i < total; i++) {
+            if (arr[i] === true) hits++;
+            if (arr[i] !== null && arr[i] !== undefined) shot++;
+        }
+        const opt = getOptionHitForStand(shId, stand.id);
+        const hasOption = OPTION && getOptionStandId(shId) === stand.id;
+        if (hasOption && opt !== null && opt !== undefined) {
+            shot++;
+            if (opt === true) hits++;
+        }
+        const possible = total + (hasOption ? 1 : 0);
+        return { hits, shot, possible, completed: shot >= possible };
+    }
+
+    function completedStandDifficulty(stand) {
+        if (!state.shooters.length) return null;
+        let hits = 0, possible = 0;
+        for (const sh of state.shooters) {
+            const stats = shooterStandStats(sh.id, stand);
+            if (!stats.completed) return null;
+            hits += stats.hits;
+            possible += stats.possible;
+        }
+        return possible > 0 ? { id: stand.id, avg: hits / possible } : null;
+    }
+
+    function reconcileOptionHit(shId) {
+        if (!OPTION || !state.optionHits?.[shId]) return;
+        const stats = shooterScheduledStats(shId);
+        const straightComplete = stats.shot >= scheduledRoundTargets() && stats.hit === scheduledRoundTargets();
+        const validStandId = stats.firstMissStandId !== null
+            ? stats.firstMissStandId
+            : (straightComplete ? (OPTION.fallbackStandId || state.stands[state.stands.length - 1]?.id) : null);
+
+        if (validStandId === null) {
+            delete state.optionHits[shId];
+        } else if (state.optionHits[shId].standId !== validStandId) {
+            state.optionHits[shId].standId = validStandId;
+        }
     }
 
     function saveStateOnly() {
@@ -140,7 +261,7 @@
         try {
             const parsed = JSON.parse(s);
             state = Object.assign({}, state, parsed);
-            state.stands = state.stands.map(st => ({ ...st, extraClay: !!st.extraClay, description: st.description || '' }));
+            normalizeState();
             return true;
         } catch (e) { return false; }
     }
@@ -213,11 +334,30 @@
         if (state.isLocked) return;
         const stand = state.stands.find(s => s.id === stId);
         if (!stand) return;
-        history = JSON.parse(JSON.stringify(state.hits));
+        history = { hits: JSON.parse(JSON.stringify(state.hits)), optionHits: JSON.parse(JSON.stringify(state.optionHits || {})) };
         const arr = ensureHitsArray(shId, stand);
         const curr = arr[idx];
         arr[idx] = (curr === val) ? null : val;
+        reconcileOptionHit(shId);
         if (arr[idx] !== null && navigator.vibrate) {
+            val ? navigator.vibrate(50) : navigator.vibrate([40, 40, 40]);
+        }
+        render(); save();
+    };
+
+    window.toggleOptionHit = (shId, stId, val) => {
+        if (state.isLocked || !OPTION) return;
+        const optionStandId = getOptionStandId(shId);
+        if (optionStandId !== stId) return;
+        history = { hits: JSON.parse(JSON.stringify(state.hits)), optionHits: JSON.parse(JSON.stringify(state.optionHits || {})) };
+        if (!state.optionHits) state.optionHits = {};
+        const curr = state.optionHits[shId]?.hit ?? null;
+        if (curr === val) {
+            delete state.optionHits[shId];
+        } else {
+            state.optionHits[shId] = { standId: stId, hit: val };
+        }
+        if (val !== null && navigator.vibrate) {
             val ? navigator.vibrate(50) : navigator.vibrate([40, 40, 40]);
         }
         render(); save();
@@ -225,7 +365,13 @@
 
     window.undo = () => {
         if (!history) return;
-        state.hits = history; history = null; render(); save();
+        if (history.hits) {
+            state.hits = history.hits;
+            state.optionHits = history.optionHits || {};
+        } else {
+            state.hits = history;
+        }
+        history = null; render(); save();
     };
 
     window.setBirds = (c) => {
@@ -249,7 +395,7 @@
     // history load/save, and appears in every export (CSV Descriptions line,
     // PDF + PNG grid header subtitle).
     window.updateStandDescription = (v) => {
-        if (state.isLocked) return;
+        if (state.isLocked || !HAS_STAND_DESCRIPTIONS) return;
         const st = state.stands[state.activeIdx];
         if (!st) return;
         st.description = v;
@@ -269,6 +415,7 @@
         state.stands.forEach(st => {
             if (state.hits[shId]?.[st.id]) t += state.hits[shId][st.id].filter(h => h === true).length;
         });
+        if (getOptionHit(shId) === true) t++;
         return t;
     }
 
@@ -297,7 +444,7 @@
         if (!round) return;
         save();
         state = Object.assign({}, makeDefaultState(), round);
-        state.stands = (state.stands || []).map(st => ({ ...st, extraClay: !!st.extraClay, description: st.description || '' }));
+        normalizeState();
         if (!state.stands.length) state.stands = makeDefaultState().stands;
         state.activeIdx = Math.min(state.activeIdx || 0, state.stands.length - 1);
         history = null;
@@ -329,9 +476,10 @@
         csv += `Ground,${q(state.ground)}\n`;
         csv += `Event,${q(state.event)}\n`;
         csv += `Stands,${state.stands.map(s => `${s.targets}${s.extraClay ? '+1' : ''}`).join(',')}\n`;
+        if (OPTION) csv += `Option Target,${q(OPTION.label || 'OPT')}\n`;
         // Only emit the Descriptions line if any stand actually has one — keeps the CSV
         // tidy for rounds that never used the field.
-        if (state.stands.some(s => (s.description || '').trim())) {
+        if (HAS_STAND_DESCRIPTIONS && state.stands.some(s => (s.description || '').trim())) {
             csv += `Descriptions,${state.stands.map(s => q(s.description || '')).join(',')}\n`;
         }
         csv += `\n`;
@@ -339,7 +487,10 @@
         csv += `Shooter,CPSA,Class,`;
         csv += state.stands.map(s => `${abbr}${s.id}${s.extraClay ? '+1' : ''}`).join(',') + ',Total\n';
         state.shooters.forEach(s => {
-            const perStand = state.stands.map(st => state.hits[s.id]?.[st.id]?.filter(h => h === true).length || 0);
+            const perStand = state.stands.map(st => {
+                const base = state.hits[s.id]?.[st.id]?.filter(h => h === true).length || 0;
+                return base + (getOptionHitForStand(s.id, st.id) === true ? 1 : 0);
+            });
             csv += `${q(s.name)},${q(s.cpsa)},${q(s.class)},${perStand.join(',')},${getShooterTotal(s.id)}\n`;
         });
         // Details block: per-target H (hit) / M (miss) / . (not shot). Lets importCSV
@@ -353,6 +504,14 @@
                 csv += `${q(s.name)},${st.id},${shots}\n`;
             });
         });
+        if (OPTION) {
+            csv += `\nOption\nShooter,Stand,Shot\n`;
+            state.shooters.forEach(s => {
+                const opt = state.optionHits?.[s.id];
+                if (!opt || opt.hit === null || opt.hit === undefined) return;
+                csv += `${q(s.name)},${opt.standId},${opt.hit === true ? 'H' : 'M'}\n`;
+            });
+        }
         const blob = new Blob([csv], { type: 'text/csv' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
@@ -370,6 +529,7 @@
         const shooters = [];            // [{ name, cpsa, class }]
         const totals = {};              // shooterName -> [perStandHits]
         const details = {};             // shooterName -> { standId -> shotString }
+        const optionDetails = {};       // shooterName -> { standId, hit }
 
         let i = 0;
         // Header block: Key,Value lines until blank line
@@ -380,6 +540,7 @@
             else if (key === 'Date') meta.date = rest[0];
             else if (key === 'Ground') meta.ground = rest[0];
             else if (key === 'Event') meta.event = rest[0];
+            else if (key === 'Option Target') meta.optionTarget = rest[0];
             else if (key === 'Stands') {
                 stands = rest.filter(spec => spec !== '' || rest.length === 1).map(spec => {
                     const m = String(spec).match(/^(\d+)(\+1)?$/);
@@ -440,8 +601,20 @@
                 details[name][standId] = shots;
             }
         }
+        while (i < lines.length && !lines[i].trim()) i++;
 
-        return { meta, stands, shooters, totals, details };
+        // Optional Skeet option-target block.
+        if (i < lines.length && lines[i].trim() === 'Option') {
+            i++;
+            if (i < lines.length && csvParseLine(lines[i])[0] === 'Shooter') i++;
+            while (i < lines.length && lines[i].trim()) {
+                const [name, standStr, shot] = csvParseLine(lines[i++]);
+                if (!name || !standStr || !shot) continue;
+                optionDetails[name] = { standId: parseInt(standStr, 10), hit: shot === 'H' ? true : shot === 'M' ? false : null };
+            }
+        }
+
+        return { meta, stands, shooters, totals, details, optionDetails };
     }
 
     // File-picker onchange handler — hidden input lives inside the history section.
@@ -466,7 +639,13 @@
         // Fixed disciplines: the CSV's stand structure must line up with the discipline's fixed layout.
         if (D.fixedStands) {
             const ok = parsed.stands.length === D.fixedStands.length
-                && parsed.stands.every((s, idx) => s.targets === D.fixedStands[idx].targets);
+                && parsed.stands.every((s, idx) => {
+                    const fixed = D.fixedStands[idx];
+                    const isMigratedOptionStand = OPTION
+                        && OPTION.migrateFromStandId === fixed.id
+                        && s.targets === fixed.targets + 1;
+                    return s.targets === fixed.targets || isMigratedOptionStand;
+                });
             if (!ok) { alert(`Stand structure doesn't match ${D.name}'s fixed layout — import cancelled.`); return; }
         }
 
@@ -479,9 +658,9 @@
             const fixed = D.fixedStands?.[idx];
             return {
                 id: s.id,
-                targets: s.targets,
-                extraClay: !!s.extraClay,
-                description: s.description || '',
+                targets: fixed?.targets ?? s.targets,
+                extraClay: fixed ? !!fixed.extraClay : !!s.extraClay,
+                description: HAS_STAND_DESCRIPTIONS ? (s.description || '') : '',
                 ...(fixed?.labels ? { labels: fixed.labels } : {}),
             };
         });
@@ -495,6 +674,7 @@
         // Reconstruct hits: prefer the Details block when present, otherwise pack N hits
         // then (total - N) misses so per-stand totals and the leaderboard match.
         importedState.hits = {};
+        importedState.optionHits = {};
         importedState.shooters.forEach((sh, shIdx) => {
             importedState.hits[sh.id] = {};
             const srcName = parsed.shooters[shIdx].name;
@@ -511,7 +691,36 @@
                 }
                 importedState.hits[sh.id][st.id] = arr;
             });
+            if (OPTION) {
+                const opt = parsed.optionDetails?.[srcName];
+                if (opt && opt.hit !== null && opt.hit !== undefined) {
+                    importedState.optionHits[sh.id] = opt;
+                } else if (OPTION.migrateFromStandId) {
+                    const detail = parsed.details[srcName]?.[OPTION.migrateFromStandId];
+                    const migratedShot = detail?.[OPTION.migrateFromIndex];
+                    if (migratedShot === 'H' || migratedShot === 'M') {
+                        importedState.optionHits[sh.id] = {
+                            standId: OPTION.fallbackStandId,
+                            hit: migratedShot === 'H'
+                        };
+                    } else {
+                        const standIdx = parsed.stands.findIndex(st => st.id === OPTION.migrateFromStandId);
+                        const legacyHits = parsed.totals[srcName]?.[standIdx];
+                        const fixedTotal = D.fixedStands?.[standIdx]?.targets;
+                        if (Number.isFinite(legacyHits) && Number.isFinite(fixedTotal) && legacyHits > fixedTotal) {
+                            importedState.optionHits[sh.id] = {
+                                standId: OPTION.fallbackStandId,
+                                hit: true
+                            };
+                        }
+                    }
+                }
+            }
         });
+        const currentState = state;
+        state = importedState;
+        normalizeState();
+        state = currentState;
 
         // Legacy CSVs (no `Details` block) can't tell us the real per-shot order —
         // we can only pack `hitCount` H's at the front and the remaining misses after.
@@ -552,46 +761,80 @@
         const headH = isShare ? '40px' : '25px';
         const pairH = isShare ? '25px' : '18px';
         const abbr = D.standLabel.slice(0, 3).toUpperCase();
+        const hitBg = '#4ade80';
+        const missBg = '#f87171';
+        const markStyle = isShare ? 'font-weight:900;' : 'font-weight:400; color:#334155;';
+        const blockBorder = '1pt solid black';
+        const standHeaderBorder = `border-left:${blockBorder} !important; border-right:${blockBorder} !important;`;
+        const standEdgeBorder = (idx, count) => [
+            idx === 0 ? `border-left:${blockBorder} !important;` : '',
+            idx === count - 1 ? `border-right:${blockBorder} !important;` : ''
+        ].filter(Boolean).join(' ');
+        const shooterBorder = `border-top:${blockBorder} !important;`;
+        const shooterBottomBorder = `border-bottom:${blockBorder} !important;`;
+        const headerBottomBorder = `border-bottom:${blockBorder} !important;`;
+        const markCellStyle = `${markStyle} line-height:1;${isShare ? ` height:${rowH}; min-height:${rowH};` : ''}`;
+        const optionMarkStyle = `${markStyle} line-height:1;${isShare ? ' min-height:90px;' : ''}`;
+        const markCell = (mark) => isShare
+            ? `<div style="position:relative; width:100%; height:${rowH};"><div style="position:absolute; left:0; right:0; top:50%; transform:translateY(-58%); text-align:center; ${markStyle} line-height:1;">${mark}</div></div>`
+            : `<div class="cell-center" style="${markCellStyle}">${mark}</div>`;
+        const optionCell = (mark, stand) => isShare
+            ? `<div style="position:relative; width:100%; height:90px;"><div style="position:absolute; left:0; right:0; top:50%; transform:translateY(-58%); text-align:center; ${markStyle} line-height:1;"><div>${mark}</div><div style="font-size:7pt; font-weight:normal; margin-top:2px;">${stand}</div></div></div>`
+            : `<div class="cell-center" style="flex-direction:column; ${optionMarkStyle}"><span>${mark}</span><span style="font-size:7pt; font-weight:normal;">${stand}</span></div>`;
 
-        let h = `<tr style="background:#f0f0f0"><th style="width:200px; vertical-align:middle;" rowspan="2"><div class="cell-center">NAME</div></th>`;
+        let h = `<tr style="background:#f0f0f0"><th style="width:200px; vertical-align:middle; border-right:${blockBorder} !important; ${headerBottomBorder}" rowspan="2"><div class="cell-center">NAME</div></th>`;
         state.stands.forEach(st => {
             const total = standTargets(st);
-            const descTxt = (st.description || '').trim();
+            const pairCount = Math.ceil(total / 2);
+            const descTxt = HAS_STAND_DESCRIPTIONS ? (st.description || '').trim() : '';
             const descHtml = descTxt
                 ? `<div style="font-size:${isShare ? '9pt' : '7pt'}; font-style:italic; font-weight:normal; line-height:1.1; padding:2px 4px 0; white-space:normal; word-break:break-word;">${escapeHtml(descTxt)}</div>`
                 : '';
             const heightStyle = descTxt ? '' : `height:${headH};`;
-            h += `<th colspan="${Math.ceil(total / 2)}" style="vertical-align:middle; ${heightStyle}"><div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:2px 0;"><div style="font-weight:900;">${abbr} ${st.id}${st.extraClay ? '+1' : ''}</div>${descHtml}</div></th>`;
+            h += `<th colspan="${pairCount}" style="vertical-align:middle; ${heightStyle} ${standHeaderBorder}"><div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:2px 0;"><div style="font-weight:900;">${abbr} ${st.id}${st.extraClay ? '+1' : ''}</div>${descHtml}</div></th>`;
         });
-        h += `<th style="width:60px; vertical-align:middle;" rowspan="2"><div class="cell-center">TOTAL</div></th></tr><tr>`;
+        if (OPTION) {
+            h += `<th style="width:70px; vertical-align:middle; border-left:${blockBorder} !important; border-right:${blockBorder} !important; ${headerBottomBorder}" rowspan="2"><div class="cell-center">${escapeHtml(OPTION.label || 'OPT')}</div></th>`;
+        }
+        h += `<th style="width:60px; vertical-align:middle; border-left:${blockBorder} !important; ${headerBottomBorder}" rowspan="2"><div class="cell-center">TOTAL</div></th></tr><tr>`;
         state.stands.forEach(st => {
             const total = standTargets(st);
-            for (let p = 1; p <= Math.ceil(total / 2); p++) {
-                h += `<th style="font-size:6pt; height:${pairH}; background:#fafafa; vertical-align:middle;"><div class="cell-center">P${p}</div></th>`;
+            const pairCount = Math.ceil(total / 2);
+            for (let p = 1; p <= pairCount; p++) {
+                h += `<th style="font-size:6pt; height:${pairH}; background:#fafafa; vertical-align:middle; ${standEdgeBorder(p - 1, pairCount)} ${headerBottomBorder}"><div class="cell-center">P${p}</div></th>`;
             }
         });
         grid.innerHTML = h + '</tr>';
 
         const sorted = state.shooters.map(s => ({ ...s, t: getShooterTotal(s.id) })).sort((a, b) => b.t - a.t);
         sorted.forEach(s => {
-            let r1 = `<tr><td style="text-align:left; padding-left:10px; vertical-align:middle; white-space:normal;" rowspan="2"><strong>${s.name}</strong></td>`;
+            let r1 = `<tr><td style="text-align:left; padding-left:10px; vertical-align:middle; white-space:normal; border-right:${blockBorder} !important; ${shooterBorder} ${shooterBottomBorder}" rowspan="2"><strong>${s.name}</strong></td>`;
             let r2 = `<tr>`;
             state.stands.forEach(st => {
                 const total = standTargets(st);
+                const pairCount = Math.ceil(total / 2);
                 const hits = state.hits[s.id]?.[st.id] || Array(total).fill(null);
-                for (let i = 0; i < Math.ceil(total / 2) * 2; i += 2) {
+                for (let i = 0; i < pairCount * 2; i += 2) {
+                    const edgeStyle = standEdgeBorder(i / 2, pairCount);
                     const d = (idx) => {
                         if (idx >= total) return { m: '', bg: 'transparent' };
-                        if (hits[idx] === true) return { m: '/', bg: '#4ade80' };
-                        if (hits[idx] === false) return { m: 'O', bg: '#f87171' };
+                        if (hits[idx] === true) return { m: '/', bg: hitBg };
+                        if (hits[idx] === false) return { m: 'O', bg: missBg };
                         return { m: '', bg: 'transparent' };
                     };
                     const b1 = d(i), b2 = d(i + 1);
-                    r1 += `<td style="background:${b1.bg}; height:${rowH}; vertical-align:middle;"><div class="cell-center" style="font-weight:900;">${b1.m}</div></td>`;
-                    r2 += `<td style="background:${b2.bg}; height:${rowH}; vertical-align:middle;"><div class="cell-center" style="font-weight:900;">${b2.m}</div></td>`;
+                    r1 += `<td style="background:${b1.bg}; height:${rowH}; vertical-align:middle; ${edgeStyle} ${shooterBorder}">${markCell(b1.m)}</td>`;
+                    r2 += `<td style="background:${b2.bg}; height:${rowH}; vertical-align:middle; ${edgeStyle} ${shooterBottomBorder}">${markCell(b2.m)}</td>`;
                 }
             });
-            r1 += `<td style="font-weight:bold; font-size:16pt; vertical-align:middle; background:#fafafa;" rowspan="2"><div class="cell-center">${s.t}</div></td></tr>`;
+            if (OPTION) {
+                const opt = state.optionHits?.[s.id];
+                const optMark = opt?.hit === true ? '/' : opt?.hit === false ? 'O' : '';
+                const optBg = opt?.hit === true ? hitBg : opt?.hit === false ? missBg : 'transparent';
+                const optStand = opt?.standId ? `${abbr} ${opt.standId}` : '';
+                r1 += `<td style="background:${optBg}; vertical-align:middle; border-left:${blockBorder} !important; border-right:${blockBorder} !important; ${shooterBorder} ${shooterBottomBorder}" rowspan="2">${optionCell(optMark, optStand)}</td>`;
+            }
+            r1 += `<td style="font-weight:bold; font-size:16pt; vertical-align:middle; background:#fafafa; border-left:${blockBorder} !important; ${shooterBorder} ${shooterBottomBorder}" rowspan="2"><div class="cell-center">${s.t}</div></td></tr>`;
             grid.innerHTML += r1 + r2 + '</tr>';
         });
     }
@@ -656,6 +899,15 @@
                  <label class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Format</label>
                  <div id="field-format" class="bg-slate-50 rounded-lg p-2 text-xs font-black text-slate-700"></div>
                </div>`;
+        const standDescriptionControl = HAS_STAND_DESCRIPTIONS
+            ? `<div class="bg-slate-800 px-3 py-2 border-t border-slate-700 no-print">
+                    <label class="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Presentation</label>
+                    <input id="field-stand-description" type="text" maxlength="120"
+                        placeholder="e.g. left-to-right crosser + going-away rabbit"
+                        class="w-full bg-slate-900 text-white text-xs font-medium rounded-md px-2 py-1.5 border border-slate-700 outline-none focus:border-orange-500 placeholder-slate-500"
+                        oninput="updateStandDescription(this.value)">
+                </div>`
+            : '';
 
         document.getElementById('app-root').innerHTML = `
         <header class="bg-slate-900 text-white sticky top-0 z-50 shadow-md no-print w-full">
@@ -726,13 +978,7 @@
                     </button>
                 </div>
 
-                <div class="bg-slate-800 px-3 py-2 border-t border-slate-700 no-print">
-                    <label class="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Presentation</label>
-                    <input id="field-stand-description" type="text" maxlength="120"
-                        placeholder="e.g. left-to-right crosser + going-away rabbit"
-                        class="w-full bg-slate-900 text-white text-xs font-medium rounded-md px-2 py-1.5 border border-slate-700 outline-none focus:border-orange-500 placeholder-slate-500"
-                        oninput="updateStandDescription(this.value)">
-                </div>
+                ${standDescriptionControl}
 
                 <div id="scoring-controls"></div>
                 <div id="scoring-area" class="divide-y divide-slate-100"></div>
@@ -775,7 +1021,7 @@
                 <div style="height: 10px;"></div>
                 <table id="cap-grid"></table>
                 <div style="margin-top: 30px; display: flex; justify-content: space-between; align-items: center; font-size: 11pt; font-weight: bold;">
-                    <span>Generated by QuaCKeReD - original idea by Sarge</span>
+                    <span>Generated by QuaCKeReD</span>
                     <div style="border-top: 1.5pt solid black; width: 300px; text-align: center; padding-top: 8px;">SCORER / SHOOTER SIGNATURE</div>
                 </div>
             </div>
@@ -817,6 +1063,11 @@
                     if (h !== null && h !== undefined) totalShot++;
                     if (h === true) totalHits++;
                 }));
+                const opt = (r.optionHits || {})[sh.id];
+                if (opt && opt.hit !== null && opt.hit !== undefined) {
+                    totalShot++;
+                    if (opt.hit === true) totalHits++;
+                }
             });
             const g = (r.ground || '').trim();
             const ev = (r.event || '').trim();
@@ -894,6 +1145,13 @@
                 if (state.hits[sh.id]?.[s.id]) sTotalShot += state.hits[sh.id][s.id].filter(h => h !== null).length;
             });
         });
+        if (OPTION) {
+            sTotalPossible += state.shooters.length;
+            state.shooters.forEach(sh => {
+                const opt = state.optionHits?.[sh.id];
+                if (opt && opt.hit !== null && opt.hit !== undefined) sTotalShot++;
+            });
+        }
         document.getElementById('progress-bar').style.width = sTotalPossible > 0 ? `${(sTotalShot / sTotalPossible) * 100}%` : '0%';
 
         renderHistory();
@@ -907,7 +1165,7 @@
             document.getElementById('field-stand-count').value = state.stands.length;
         } else {
             const totalTargets = state.stands.reduce((sum, s) => sum + standTargets(s), 0);
-            document.getElementById('field-format').innerText = `${state.stands.length} ${D.standLabel}s / ${totalTargets} Targets`;
+            document.getElementById('field-format').innerText = `${state.stands.length} ${D.standLabel}s / ${totalTargets + (OPTION ? 1 : 0)} Targets`;
         }
 
         // Squad
@@ -936,7 +1194,8 @@
         // Active header
         document.getElementById('active-stand-title').innerText = `${D.standLabel} ${st.id}`;
         const total = standTargets(st);
-        document.getElementById('active-stand-targets').innerText = `${total} Target${total !== 1 ? 's' : ''}${st.extraClay ? ' (+1)' : ''}`;
+        const optionAvailableHere = OPTION && state.shooters.some(sh => getOptionStandId(sh.id) === st.id);
+        document.getElementById('active-stand-targets').innerText = `${total} Target${total !== 1 ? 's' : ''}${st.extraClay ? ' (+1)' : ''}${optionAvailableHere ? ` + ${OPTION.label || 'OPT'}` : ''}`;
         const descEl = document.getElementById('field-stand-description');
         if (descEl) descEl.value = st.description || '';
         renderScoringControls();
@@ -949,7 +1208,11 @@
         for (let i = 0; i < n; i++) {
             const s = state.shooters[(i + leadIdx) % n];
             const hits = state.hits[s.id]?.[st.id] || Array(total).fill(null);
-            const count = hits.filter(h => h === true).length;
+            const optionStandId = getOptionStandId(s.id);
+            const optionOnThisStand = OPTION && optionStandId === st.id;
+            const optionHit = optionOnThisStand ? getOptionHit(s.id) : null;
+            const count = hits.filter(h => h === true).length + (optionHit === true ? 1 : 0);
+            const possible = total + (optionOnThisStand ? 1 : 0);
             const row = document.createElement('div');
             row.className = `p-2.5 space-y-1.5 ${i === 0 && ROTATE ? 'bg-orange-50/40 first-up-highlight' : ''} ${state.isLocked ? 'pointer-events-none' : ''}`;
 
@@ -977,13 +1240,27 @@
                     </div>` : ''}
                 </div>`;
             }
+            if (optionOnThisStand) {
+                const optLabel = OPTION.label || 'OPT';
+                gridHtml += `<div class="pair-stack pair-extra">
+                    <div class="flex gap-1">
+                        <button onclick="toggleOptionHit(${s.id},${st.id},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${optionHit === true ? 'hit-bg' : 'bg-white border-slate-300 text-slate-400'}">H</button>
+                    </div>
+                    <div class="flex gap-1">
+                        <button onclick="toggleOptionHit(${s.id},${st.id},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${optionHit === false ? 'miss-bg' : 'bg-white border-slate-300 text-slate-400'}">M</button>
+                    </div>
+                    <div class="flex gap-1 text-[7px] font-black text-slate-500 text-center uppercase pt-0.5">
+                        <div class="flex-1">${escapeHtml(optLabel)}</div>
+                    </div>
+                </div>`;
+            }
 
             row.innerHTML = `<div class="flex justify-between items-center px-1">
                 <div class="flex items-center gap-1.5">
                     <span class="text-[11px] font-black uppercase truncate max-w-[140px] tracking-tight">${s.name}</span>
                     ${i === 0 && ROTATE ? '<span class="bg-orange-500 text-white text-[6px] px-1 rounded-full font-black uppercase">First Up</span>' : ''}
                 </div>
-                <div class="text-base font-black italic text-slate-900">${count}<span class="text-slate-300 text-[8px] not-italic ml-0.5">/${total}</span></div>
+                <div class="text-base font-black italic text-slate-900">${count}<span class="text-slate-300 text-[8px] not-italic ml-0.5">/${possible}</span></div>
             </div>
             <div class="flex gap-1 w-full overflow-x-hidden">${gridHtml}</div>`;
             sArea.appendChild(row);
@@ -1000,6 +1277,11 @@
                     totalAtt += state.hits[sh.id][stnd.id].filter(h => h !== null).length;
                 }
             });
+            const opt = state.optionHits?.[sh.id];
+            if (opt && opt.hit !== null && opt.hit !== undefined) {
+                if (opt.hit === true) totalH++;
+                totalAtt++;
+            }
             return { ...sh, t: totalH, att: totalAtt, isStraight: totalH === totalAtt && totalH > 0 };
         }).sort((a, b) => b.t - a.t);
         perf.forEach(sh => {
@@ -1007,21 +1289,16 @@
         });
 
         const lbBody = document.getElementById('lb-body'); lbBody.innerHTML = '';
-        const stAvgs = state.stands.map(stand => {
-            let hitC = 0, attC = 0;
-            state.shooters.forEach(sh => {
-                if (state.hits[sh.id]?.[stand.id]) {
-                    hitC += state.hits[sh.id][stand.id].filter(h => h === true).length;
-                    attC += standTargets(stand);
-                }
-            });
-            return { id: stand.id, avg: attC > 0 ? hitC / attC : 1 };
-        });
-        const hardId = stAvgs.slice().sort((a, b) => a.avg - b.avg)[0]?.id;
+        const completedDifficulties = state.stands.map(completedStandDifficulty).filter(Boolean);
+        const hardId = completedDifficulties.slice().sort((a, b) => a.avg - b.avg)[0]?.id;
 
         state.stands.forEach((stand, idx) => {
-            let row = `<td class="p-2 font-bold border-b text-slate-400 text-[8px]">${D.standLabel.slice(0, 2).toUpperCase()} ${stand.id}${stand.extraClay ? '+1' : ''} ${stand.id === hardId && sTotalShot > 0 ? '&#10071;' : ''}</td>`;
-            perf.forEach(sh => { row += `<td class="p-2 text-center border-b border-l border-slate-100 font-black">${state.hits[sh.id]?.[stand.id]?.filter(h => h === true).length || 0}</td>`; });
+            let row = `<td class="p-2 font-bold border-b text-slate-400 text-[8px]">${D.standLabel.slice(0, 2).toUpperCase()} ${stand.id}${stand.extraClay ? '+1' : ''} ${stand.id === hardId ? '&#10071;' : ''}</td>`;
+            perf.forEach(sh => {
+                const base = state.hits[sh.id]?.[stand.id]?.filter(h => h === true).length || 0;
+                const opt = getOptionHitForStand(sh.id, stand.id) === true ? 1 : 0;
+                row += `<td class="p-2 text-center border-b border-l border-slate-100 font-black">${base + opt}</td>`;
+            });
             const tr = document.createElement('tr');
             tr.className = state.activeIdx === idx ? 'bg-orange-50' : '';
             tr.innerHTML = row;
