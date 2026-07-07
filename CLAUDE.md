@@ -10,12 +10,12 @@ ClayScorer Pro — a static, offline-capable Progressive Web App for scoring CPS
 
 - Open `index.html` directly in a browser, or serve the directory (`python3 -m http.server`) for service-worker + PWA install testing (SW requires http://localhost, not `file://`).
 - No install / build / lint / test commands exist. There is no CI.
-- All third-party libs are loaded from CDNs at runtime — there are no local dependencies to install:
-  - Tailwind (`cdn.tailwindcss.com`) — utility CSS
-  - Lucide (`unpkg.com/lucide@latest`) — icons, initialised via `lucide.createIcons()` after every `render()`
-  - html2canvas (`html2canvas.hertzen.com`) — used only by `shareAsImage()`
-- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v4`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names. `scorer.js` also logs a `SCORER_BUILD` banner on load — bumping that string when you ship changes gives you a quick DevTools signal that the page is running the new code (not a stale SW-cached copy).
-- The SW pre-caches local files with `cache.addAll` (fail-hard) and cross-origin CDN URLs (Tailwind / Lucide / html2canvas / icon) with `mode: 'no-cors'` inside `Promise.allSettled` so one bad CDN response — Tailwind's CDN in particular sometimes redirects or returns non-cacheable payloads — doesn't abort the whole install. Missed URLs still get cached at runtime by the fetch handler on the first successful network hit. If you add new same-origin assets, put them in `LOCAL_ASSETS`; new third-party URLs go in `CROSS_ORIGIN_ASSETS`.
+- Third-party browser libs are vendored under `assets/vendor/` so the app shell is deterministic and installable offline after first load:
+  - Tailwind (`assets/vendor/tailwindcss-3.4.17.js`) — utility CSS
+  - Lucide (`assets/vendor/lucide-0.468.0.min.js`) — icons, initialised via `lucide.createIcons()` after every `render()`
+  - html2canvas (`assets/vendor/html2canvas-1.4.1.min.js`) — used only by `shareAsImage()`
+- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v5`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names. `scorer.js` also logs a `SCORER_BUILD` banner on load — bumping that string when you ship changes gives you a quick DevTools signal that the page is running the new code (not a stale SW-cached copy).
+- The SW pre-caches same-origin files with `cache.addAll`. If you add new app shell assets, put them in `LOCAL_ASSETS`.
 
 ## Architecture
 
@@ -133,6 +133,6 @@ Every export shares the same filename stem — `${D.id}-YYYYMMDD[-ground-slug][-
 1. Create `<id>.html` mirroring an existing discipline shell.
 2. Set `window.DISCIPLINE` with a unique `id`, `code`, and `storageKey` (mirroring an existing one will overwrite its data).
 3. Add a tile to `index.html`.
-4. Add the page path to the `ASSETS` list in `service_worker.js` and bump `CACHE_NAME`.
+4. Add the page path to the `LOCAL_ASSETS` list in `service_worker.js` and bump `CACHE_NAME`.
 
 If the new discipline needs behaviour the shared engine doesn't yet support (e.g. a new scoring shape), extend `assets/scorer.js` gated by a new config flag rather than forking the engine.

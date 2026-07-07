@@ -8,7 +8,7 @@
   "theme_color": "#0f172a",
   "icons": [
     {
-      "src": "https://img.icons8.com/ios-filled/512/target.png",
+      "src": "assets/target.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

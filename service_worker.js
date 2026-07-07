@@ -1,5 +1,4 @@
-const CACHE_NAME = 'clayscorer-v4';
-const ICON_URL = 'https://img.icons8.com/ios-filled/512/target.png';
+const CACHE_NAME = 'clayscorer-v5';
 
 // Same-origin assets: `cache.addAll` is all-or-nothing, but these are local files
 // we control, so a hard-fail here is the right behaviour.
@@ -13,23 +12,12 @@ const LOCAL_ASSETS = [
   './manifest.json',
   './assets/scorer.css',
   './assets/scorer.js',
+  './assets/vendor/tailwindcss-3.4.17.js',
+  './assets/vendor/lucide-0.468.0.min.js',
+  './assets/vendor/html2canvas-1.4.1.min.js',
   './assets/target.png',
   './assets/target.ico',
   './favicon.ico',
-];
-
-// Cross-origin assets: fetched with `mode: 'no-cors'` so redirects and CORS-less
-// responses (e.g. cdn.tailwindcss.com) still produce cacheable opaque responses.
-// Wrapped in Promise.allSettled so any single failure just gets logged — install
-// still completes and the fetch handler below will pick the asset up next time
-// the page is online. This is what fixes the "SW addAll failed on tailwindcss"
-// error: previously one bad CDN URL aborted the whole install and NO assets
-// ended up cached.
-const CROSS_ORIGIN_ASSETS = [
-  ICON_URL,
-  'https://cdn.tailwindcss.com',
-  'https://unpkg.com/lucide@latest',
-  'https://html2canvas.hertzen.com/dist/html2canvas.min.js',
 ];
 
 self.addEventListener('install', (event) => {
@@ -41,14 +29,6 @@ self.addEventListener('install', (event) => {
     } catch (err) {
       console.warn('SW local addAll failed', err);
     }
-    await Promise.allSettled(CROSS_ORIGIN_ASSETS.map(async (url) => {
-      try {
-        const res = await fetch(url, { mode: 'no-cors', cache: 'reload' });
-        await cache.put(url, res);
-      } catch (err) {
-        console.warn('SW pre-cache skipped', url, err);
-      }
-    }));
   })());
 });
 
@@ -61,7 +41,7 @@ self.addEventListener('activate', (event) => {
 });
 
 // Cache-first with runtime caching: on a miss, fetch from the network and stash a
-// clone (including opaque cross-origin responses) for next time.
+// clone for next time.
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
