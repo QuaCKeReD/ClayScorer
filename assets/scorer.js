@@ -19,7 +19,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-07-07 (image mark optical centering)';
+    const SCORER_BUILD = 'scorer 2026-07-08 (skeet option status)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -966,6 +966,9 @@
             </section>
 
             <div id="stand-nav" class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide no-scrollbar px-1 no-print"></div>
+            ${OPTION ? `
+            <section id="option-status" class="bg-white rounded-xl shadow-sm border border-slate-200 p-2 no-print"></section>
+            ` : ''}
 
             <section class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden no-print">
                 <div class="bg-slate-900 px-3 py-2.5 text-white flex justify-between items-center">
@@ -1190,6 +1193,32 @@
             btn.onclick = () => { if (!state.isLocked) { state.activeIdx = i; render(); save(); } };
             navDiv.appendChild(btn);
         });
+        const optionStatus = document.getElementById('option-status');
+        if (optionStatus) {
+            const optLabel = OPTION.label || 'OPT';
+            const chips = state.shooters.map(sh => {
+                const opt = state.optionHits?.[sh.id];
+                const optStandId = getOptionStandId(sh.id);
+                const used = opt && opt.hit !== null && opt.hit !== undefined;
+                const available = !used && optStandId !== null;
+                const text = used
+                    ? `Used ${D.standLabel.slice(0, 2).toUpperCase()} ${opt.standId}`
+                    : (available ? `Available ${D.standLabel.slice(0, 2).toUpperCase()} ${optStandId}` : 'Not used');
+                const cls = used
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                    : (available ? 'bg-orange-50 border-orange-300 text-orange-800' : 'bg-slate-50 border-slate-200 text-slate-500');
+                const dot = used ? 'bg-emerald-500' : (available ? 'bg-orange-500' : 'bg-slate-300');
+                return `<div class="min-w-0 flex items-center gap-1.5 rounded-lg border px-2 py-1 ${cls}">
+                    <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}"></span>
+                    <span class="truncate font-black">${escapeHtml(sh.name)}</span>
+                    <span class="flex-shrink-0 font-bold opacity-80">${text}</span>
+                </div>`;
+            }).join('');
+            optionStatus.innerHTML = `<div class="flex items-center gap-2">
+                <div class="flex-shrink-0 text-[9px] font-black uppercase tracking-widest text-slate-400">${escapeHtml(optLabel)}</div>
+                <div class="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1 text-[9px] uppercase">${chips}</div>
+            </div>`;
+        }
 
         // Active header
         document.getElementById('active-stand-title').innerText = `${D.standLabel} ${st.id}`;
