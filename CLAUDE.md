@@ -14,7 +14,8 @@ ClayScorer Pro — a static, offline-capable Progressive Web App for scoring CPS
   - Tailwind (`assets/vendor/tailwindcss-3.4.17.js`) — utility CSS
   - Lucide (`assets/vendor/lucide-0.468.0.min.js`) — icons, initialised via `lucide.createIcons()` after every `render()`
   - html2canvas (`assets/vendor/html2canvas-1.4.1.min.js`) — used only by `shareAsImage()`
-- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v2`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names. `scorer.js` also logs a `SCORER_BUILD` banner on load — bumping that string when you ship changes gives you a quick DevTools signal that the page is running the new code (not a stale SW-cached copy).
+- Firebase cloud sync is optional and disabled by default. `assets/firebase-sync-loader.js` only loads `assets/firebase-sync.js` on `http(s)` origins, and `assets/firebase-config.js` must be filled in with a Firebase Web config plus `FIREBASE_ENABLED = true`. Setup notes and Firestore rules live in `FIREBASE_SETUP.md`.
+- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v5`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names. `scorer.js` also logs a `SCORER_BUILD` banner on load — bumping that string when you ship changes gives you a quick DevTools signal that the page is running the new code (not a stale SW-cached copy).
 - The SW pre-caches same-origin files with `cache.addAll`. If you add new app shell assets, put them in `LOCAL_ASSETS`.
 
 ## Architecture
@@ -124,6 +125,7 @@ Every export shares the same filename stem — `${D.id}-YYYYMMDD[-ground-slug][-
 - `sporting.html`, `sportrap.html`, `compak.html`, `skeet.html` — thin per-discipline shells that set `window.DISCIPLINE` and load the shared engine.
 - `assets/scorer.js` — shared scoring engine (state, mount, render, exports). All global `window.*` handlers used by inline `onclick`s are defined here.
 - `assets/scorer.css` — shared styles including print media, capture container, pair-stack, first-up glow, and discipline tiles.
+- `assets/firebase-sync-loader.js` / `assets/firebase-sync.js` / `assets/firebase-config.js` — optional Firebase Auth + Firestore sync layer. The scorer exposes a narrow `window.ClayScorerCloud` bridge for reading/writing round history; keep Firebase-specific code out of the core scorer where possible.
 - `service_worker.js` — service worker: cache-first for the listed assets, network fallback for everything else. On activate, deletes any cache whose name isn't the current `CACHE_NAME`.
 - `manifest.json` — PWA install metadata. `start_url` is the landing page.
 - `_archive/indexv1.html`, `_archive/indexv2.html`, `_archive/indexv3.html` — historical snapshots of the original sporting-only single-file app. Not linked from anywhere; ignore unless the user explicitly refers to them.

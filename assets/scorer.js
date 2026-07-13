@@ -19,7 +19,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-07-08 (skeet option status)';
+    const SCORER_BUILD = 'scorer 2026-07-13 (header dropdown sync)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -254,6 +254,48 @@
         if (dirty) writeHistory(store);
         state._roundKey = named ? newKey : null;
     }
+
+    function cloneData(value) {
+        return JSON.parse(JSON.stringify(value || {}));
+    }
+
+    function replaceHistory(store) {
+        writeHistory(store || {});
+        renderHistory();
+    }
+
+    function refreshCurrentRoundFromHistory() {
+        if (!state._roundKey) return false;
+        const store = readHistory();
+        const round = store[state._roundKey];
+        if (!round) return false;
+        state = Object.assign({}, makeDefaultState(), round);
+        normalizeState();
+        render();
+        saveStateOnly();
+        return true;
+    }
+
+    function setMenuExpanded(name, expanded) {
+        const button = document.getElementById(`${name}-menu-btn`);
+        const menu = document.getElementById(`${name}-dropdown`);
+        if (!button || !menu) return;
+        button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        menu.classList.toggle('hidden', !expanded);
+    }
+
+    window.closeHeaderMenus = () => {
+        setMenuExpanded('history', false);
+        setMenuExpanded('cloud', false);
+    };
+
+    window.toggleHeaderMenu = (name) => {
+        const menu = document.getElementById(`${name}-dropdown`);
+        if (!menu) return;
+        const willOpen = menu.classList.contains('hidden');
+        window.closeHeaderMenus();
+        if (willOpen) setMenuExpanded(name, true);
+    };
 
     function load() {
         const s = localStorage.getItem(KEY_CURRENT);
@@ -910,21 +952,29 @@
             : '';
 
         document.getElementById('app-root').innerHTML = `
-        <header class="bg-slate-900 text-white sticky top-0 z-50 shadow-md no-print w-full">
-            <div class="max-w-5xl mx-auto p-3 flex justify-between items-center">
-                <div class="flex items-center gap-2">
+        <header class="bg-slate-900 text-white sticky top-0 z-50 shadow-md no-print w-full relative">
+            <div class="max-w-5xl mx-auto p-3 flex justify-between items-center gap-2">
+                <div class="flex items-center gap-2 min-w-0">
                     <a href="index.html" aria-label="Home" class="w-8 h-8 flex items-center justify-center bg-orange-500 rounded-lg shadow-sm">
                         <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6">
                             <circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle>
                         </svg>
                     </a>
-                    <div>
+                    <div class="min-w-0">
                         <div class="text-[8px] text-orange-400 font-black uppercase tracking-widest leading-none">${D.code}</div>
-                        <h1 class="text-base font-bold tracking-tight uppercase italic leading-none mt-0.5">${D.name}</h1>
+                        <h1 class="text-base font-bold tracking-tight uppercase italic leading-none mt-0.5 truncate max-w-[82px] sm:max-w-none">${D.name}</h1>
                         <span id="offline-status" class="text-[7px] text-green-400 font-bold uppercase flex items-center gap-1 mt-0.5"><i data-lucide="wifi-off" size="7"></i> Offline Ready</span>
                     </div>
                 </div>
-                <div class="flex items-center gap-1.5">
+                <div class="flex items-center gap-1 flex-shrink-0">
+                    <button id="history-menu-btn" onclick="toggleHeaderMenu('history')" class="bg-slate-800 px-1.5 sm:px-2 py-1.5 rounded-lg border border-slate-700 inline-flex items-center gap-1" aria-expanded="false" aria-controls="history-dropdown">
+                        <i data-lucide="archive" class="w-4 h-4 text-slate-300"></i>
+                        <span id="history-count-badge" class="min-w-5 h-5 px-1 rounded bg-orange-500 text-white text-[10px] font-black leading-5 text-center">0</span>
+                    </button>
+                    <button id="cloud-menu-btn" onclick="toggleHeaderMenu('cloud')" class="bg-slate-800 px-1.5 sm:px-2 py-1.5 rounded-lg border border-slate-700 inline-flex items-center gap-1" aria-expanded="false" aria-controls="cloud-dropdown">
+                        <i data-lucide="cloud" class="w-4 h-4 text-slate-300"></i>
+                        <span id="cloud-status-badge" class="h-5 px-1.5 rounded bg-slate-700 text-slate-300 text-[9px] font-black leading-5 text-center uppercase">Off</span>
+                    </button>
                     <button id="lock-btn" onclick="toggleLock()" class="bg-slate-800 p-2 rounded-lg border border-slate-700">
                         <i data-lucide="unlock" id="lock-icon" class="w-4 h-4 text-slate-400"></i>
                     </button>
@@ -935,6 +985,16 @@
                 </div>
             </div>
             <div class="w-full bg-slate-800 h-1"><div id="progress-bar" class="bg-orange-500 h-full transition-all duration-500 w-0"></div></div>
+            <div id="header-dropdown-layer" class="absolute left-0 right-0 top-full pointer-events-none">
+                <div class="max-w-5xl mx-auto relative">
+                    <div id="history-dropdown" class="hidden pointer-events-auto absolute right-2 top-2 w-[calc(100vw-1rem)] max-w-md">
+                        <section id="history-section" class="bg-white text-slate-900 rounded-xl shadow-xl border border-slate-200 overflow-hidden"></section>
+                    </div>
+                    <div id="cloud-dropdown" class="hidden pointer-events-auto absolute right-2 top-2 w-[calc(100vw-1rem)] max-w-md">
+                        <div id="cloud-sync-panel"></div>
+                    </div>
+                </div>
+            </div>
         </header>
 
         <main id="app-container" class="max-w-5xl mx-auto p-2 space-y-3 transition-opacity duration-300">
@@ -954,8 +1014,6 @@
                     <input type="text" id="field-event" placeholder="e.g. Club Championship" class="w-full bg-slate-50 border-none rounded-lg p-2 text-xs font-bold" oninput="updateField('event', this.value)" onchange="commitField('event', this.value)">
                 </div>
             </section>
-
-            <section id="history-section" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden no-print"></section>
 
             <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print">
                 <div class="flex justify-between items-center mb-2">
@@ -1055,6 +1113,8 @@
             return (b[1]._updatedAt || 0) - (a[1]._updatedAt || 0);
         });
         const currentKey = state._roundKey;
+        const badge = document.getElementById('history-count-badge');
+        if (badge) badge.textContent = entries.length > 99 ? '99+' : String(entries.length);
 
         const rows = entries.map(([k, r]) => {
             const isCurrent = k === currentKey;
@@ -1090,12 +1150,11 @@
             </div>`;
         }).join('');
 
-        const countLabel = entries.length ? ` (${entries.length})` : '';
         const emptyHint = entries.length ? '' : '<p class="text-[10px] text-slate-400 mt-0.5 font-medium normal-case tracking-normal">Rounds are saved automatically once you enter a Ground or Event.</p>';
         el.innerHTML = `
             <div class="p-3 flex justify-between items-center gap-2">
                 <div class="min-w-0">
-                    <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400">Round History${countLabel}</h3>
+                    <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400">Round History</h3>
                     ${emptyHint}
                 </div>
                 <div class="flex-shrink-0 flex gap-1.5">
@@ -1354,6 +1413,21 @@
         });
     }
 
+    window.ClayScorerCloud = {
+        getDiscipline: () => ({
+            id: D.id,
+            name: D.name,
+            code: D.code,
+            storageKey: D.storageKey
+        }),
+        getCurrentState: () => cloneData(state),
+        getHistory: () => cloneData(readHistory()),
+        saveCurrent: () => save(),
+        replaceHistory,
+        loadRound: (key) => window.loadRound(key),
+        refreshCurrentRoundFromHistory
+    };
+
     document.addEventListener('DOMContentLoaded', () => {
         state = makeDefaultState();
         mountSkeleton();
@@ -1365,6 +1439,13 @@
             const action = btn.dataset.historyAction;
             if (action === 'load') window.loadRound(key);
             else if (action === 'delete') window.deleteRound(key);
+        });
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('#history-dropdown, #cloud-dropdown, #history-menu-btn, #cloud-menu-btn')) return;
+            window.closeHeaderMenus();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') window.closeHeaderMenus();
         });
         load();
         // Make sure a loaded named round is present in the history dict — otherwise a

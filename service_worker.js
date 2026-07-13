@@ -1,4 +1,4 @@
-const CACHE_NAME = 'clayscorer-v2';
+const CACHE_NAME = 'clayscorer-v5';
 
 // Same-origin assets: `cache.addAll` is all-or-nothing, but these are local files
 // we control, so a hard-fail here is the right behaviour.
@@ -12,6 +12,9 @@ const LOCAL_ASSETS = [
   './manifest.json',
   './assets/scorer.css',
   './assets/scorer.js',
+  './assets/firebase-config.js',
+  './assets/firebase-sync-loader.js',
+  './assets/firebase-sync.js',
   './assets/vendor/tailwindcss-3.4.17.js',
   './assets/vendor/lucide-0.468.0.min.js',
   './assets/vendor/html2canvas-1.4.1.min.js',
