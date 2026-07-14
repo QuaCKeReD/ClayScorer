@@ -19,7 +19,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-07-13 (header dropdown sync)';
+    const SCORER_BUILD = 'scorer 2026-07-14 (firebase round delete)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -287,6 +287,7 @@
     window.closeHeaderMenus = () => {
         setMenuExpanded('history', false);
         setMenuExpanded('cloud', false);
+        setMenuExpanded('export', false);
     };
 
     window.toggleHeaderMenu = (name) => {
@@ -461,12 +462,63 @@
         return t;
     }
 
-    window.resetAll = () => {
-        if (confirm(`Clear ALL ${D.name} data on this device (current round AND history)?`)) {
-            localStorage.removeItem(KEY_CURRENT);
-            localStorage.removeItem(KEY_HISTORY);
-            location.reload();
+    async function deleteRemoteRoundIfAvailable(key) {
+        const deleteRemoteRound = window.ClayScorerCloud?.deleteRemoteRound;
+        if (!key || typeof deleteRemoteRound !== 'function') return;
+        try {
+            await deleteRemoteRound(key);
+        } catch (err) {
+            console.warn('[ClayScorer] Firebase round delete failed', err);
+            alert('Deleted locally, but the Firebase delete failed. Try cloud sync again when you are online.');
         }
+    }
+
+    async function deleteRemoteHistoryIfAvailable() {
+        const deleteRemoteHistory = window.ClayScorerCloud?.deleteRemoteHistory;
+        if (typeof deleteRemoteHistory !== 'function') return;
+        try {
+            await deleteRemoteHistory();
+        } catch (err) {
+            console.warn('[ClayScorer] Firebase history delete failed', err);
+            alert('Deleted local history, but the Firebase history delete failed. Try cloud sync again when you are online.');
+        }
+    }
+
+    window.deleteCurrentRound = async () => {
+        const key = state._roundKey || (isNamedRound(state) ? roundKey(state) : null);
+        const store = readHistory();
+        const storedRound = key ? store[key] : null;
+        const label = ((storedRound || state).ground || '').trim()
+            || ((storedRound || state).event || '').trim()
+            || getUKDate((storedRound || state).date);
+        const hasStoredRound = key && !!storedRound;
+        const message = hasStoredRound
+            ? `Delete "${label}" from current round, history, and Firebase if synced?`
+            : `Delete the current ${D.name} round from this device?`;
+        if (!confirm(message)) return;
+
+        if (hasStoredRound) {
+            delete store[key];
+            writeHistory(store);
+            await deleteRemoteRoundIfAvailable(key);
+        }
+        localStorage.removeItem(KEY_CURRENT);
+        state = makeDefaultState();
+        history = null;
+        saveStateOnly();
+        render();
+    };
+
+    window.deleteHistory = async () => {
+        if (!confirm(`Delete all saved ${D.name} round history and the current round from this device and Firebase if synced?`)) return;
+        writeHistory({});
+        localStorage.removeItem(KEY_HISTORY);
+        localStorage.removeItem(KEY_CURRENT);
+        state = makeDefaultState();
+        history = null;
+        saveStateOnly();
+        render();
+        await deleteRemoteHistoryIfAvailable();
     };
 
     window.newRound = () => {
@@ -493,7 +545,7 @@
         render(); save();
     };
 
-    window.deleteRound = (key) => {
+    window.deleteRound = async (key) => {
         const store = readHistory();
         if (!store[key]) return;
         const round = store[key];
@@ -501,6 +553,7 @@
         if (!confirm(`Delete round "${label}" from history?`)) return;
         delete store[key];
         writeHistory(store);
+        await deleteRemoteRoundIfAvailable(key);
         if (state._roundKey === key) {
             state = makeDefaultState();
             history = null;
@@ -953,7 +1006,7 @@
 
         document.getElementById('app-root').innerHTML = `
         <header class="bg-slate-900 text-white sticky top-0 z-50 shadow-md no-print w-full relative">
-            <div class="max-w-5xl mx-auto p-3 flex justify-between items-center gap-2">
+            <div class="max-w-5xl mx-auto p-3 flex justify-between items-center gap-2 relative">
                 <div class="flex items-center gap-2 min-w-0">
                     <a href="index.html" aria-label="Home" class="w-8 h-8 flex items-center justify-center bg-orange-500 rounded-lg shadow-sm">
                         <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6">
@@ -963,11 +1016,13 @@
                     <div class="min-w-0">
                         <div class="text-[8px] text-orange-400 font-black uppercase tracking-widest leading-none">${D.code}</div>
                         <h1 class="text-base font-bold tracking-tight uppercase italic leading-none mt-0.5 truncate max-w-[82px] sm:max-w-none">${D.name}</h1>
-                        <span id="offline-status" class="text-[7px] text-green-400 font-bold uppercase flex items-center gap-1 mt-0.5"><i data-lucide="wifi-off" size="7"></i> Offline Ready</span>
                     </div>
                 </div>
+                <span id="offline-status" class="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 text-green-400/80 inline-flex items-center justify-center cursor-default pointer-events-none" title="Offline Ready" aria-label="Offline Ready">
+                    <i data-lucide="wifi-off" class="w-3 h-3"></i>
+                </span>
                 <div class="flex items-center gap-1 flex-shrink-0">
-                    <button id="history-menu-btn" onclick="toggleHeaderMenu('history')" class="bg-slate-800 px-1.5 sm:px-2 py-1.5 rounded-lg border border-slate-700 inline-flex items-center gap-1" aria-expanded="false" aria-controls="history-dropdown">
+                    <button id="history-menu-btn" onclick="toggleHeaderMenu('history')" class="bg-slate-800 px-1.5 sm:px-2 py-1.5 rounded-lg border border-slate-700 inline-flex items-center gap-1" aria-expanded="false" aria-controls="history-dropdown" title="History">
                         <i data-lucide="archive" class="w-4 h-4 text-slate-300"></i>
                         <span id="history-count-badge" class="min-w-5 h-5 px-1 rounded bg-orange-500 text-white text-[10px] font-black leading-5 text-center">0</span>
                     </button>
@@ -975,13 +1030,12 @@
                         <i data-lucide="cloud" class="w-4 h-4 text-slate-300"></i>
                         <span id="cloud-status-badge" class="h-5 px-1.5 rounded bg-slate-700 text-slate-300 text-[9px] font-black leading-5 text-center uppercase">Off</span>
                     </button>
+                    <button id="export-menu-btn" onclick="toggleHeaderMenu('export')" class="bg-orange-500 p-2 rounded-lg border border-orange-400 inline-flex items-center justify-center" aria-expanded="false" aria-controls="export-dropdown" title="Export">
+                        <i data-lucide="download" class="w-4 h-4 text-white"></i>
+                    </button>
                     <button id="lock-btn" onclick="toggleLock()" class="bg-slate-800 p-2 rounded-lg border border-slate-700">
                         <i data-lucide="unlock" id="lock-icon" class="w-4 h-4 text-slate-400"></i>
                     </button>
-                    <button onclick="shareAsImage()" id="share-btn" class="bg-slate-700 p-2 rounded-lg border border-slate-600">
-                        <i data-lucide="share-2" class="w-4 h-4 text-white"></i>
-                    </button>
-                    <button onclick="exportToPDF()" class="bg-orange-500 px-3 py-2 rounded-lg text-[10px] font-black uppercase">PDF</button>
                 </div>
             </div>
             <div class="w-full bg-slate-800 h-1"><div id="progress-bar" class="bg-orange-500 h-full transition-all duration-500 w-0"></div></div>
@@ -992,6 +1046,22 @@
                     </div>
                     <div id="cloud-dropdown" class="hidden pointer-events-auto absolute right-2 top-2 w-[calc(100vw-1rem)] max-w-md">
                         <div id="cloud-sync-panel"></div>
+                    </div>
+                    <div id="export-dropdown" class="hidden pointer-events-auto absolute right-2 top-2 w-48">
+                        <div class="bg-white text-slate-900 rounded-xl shadow-xl border border-slate-200 overflow-hidden p-2">
+                            <button onclick="closeHeaderMenus(); exportToPDF();" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-[10px] font-black uppercase text-slate-700 hover:bg-slate-100">
+                                <i data-lucide="file-text" class="w-4 h-4 text-slate-500"></i>
+                                Export PDF
+                            </button>
+                            <button onclick="closeHeaderMenus(); downloadCSV();" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-[10px] font-black uppercase text-slate-700 hover:bg-slate-100">
+                                <i data-lucide="file-spreadsheet" class="w-4 h-4 text-slate-500"></i>
+                                Export CSV
+                            </button>
+                            <button onclick="closeHeaderMenus(); shareAsImage();" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-[10px] font-black uppercase text-slate-700 hover:bg-slate-100">
+                                <i data-lucide="image" class="w-4 h-4 text-slate-500"></i>
+                                Export Image
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1053,10 +1123,6 @@
             <section class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden no-print">
                 <div class="p-2 bg-slate-100 border-b border-slate-200 flex justify-between items-center text-[9px] font-black uppercase text-slate-500">
                     <span>Leaderboard Summary</span>
-                    <div class="flex gap-4">
-                        <button onclick="downloadCSV()">CSV</button>
-                        <button onclick="resetAll()" class="text-red-600">Reset</button>
-                    </div>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-[10px]" id="leaderboard">
@@ -1152,12 +1218,14 @@
 
         const emptyHint = entries.length ? '' : '<p class="text-[10px] text-slate-400 mt-0.5 font-medium normal-case tracking-normal">Rounds are saved automatically once you enter a Ground or Event.</p>';
         el.innerHTML = `
-            <div class="p-3 flex justify-between items-center gap-2">
-                <div class="min-w-0">
+            <div class="p-3 border-b border-slate-100">
+                <div class="min-w-0 mb-2">
                     <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400">Round History</h3>
                     ${emptyHint}
                 </div>
-                <div class="flex-shrink-0 flex gap-1.5">
+                <div class="flex flex-wrap gap-1.5">
+                    <button onclick="deleteCurrentRound()" class="text-[9px] bg-red-50 text-red-600 px-3 py-1.5 rounded-lg font-black uppercase border border-red-100">Delete Round</button>
+                    <button onclick="deleteHistory()" class="text-[9px] bg-red-50 text-red-600 px-3 py-1.5 rounded-lg font-black uppercase border border-red-100">Delete History</button>
                     <label class="text-[9px] bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-black uppercase border border-slate-200 cursor-pointer inline-flex items-center">
                         Import CSV
                         <input type="file" accept=".csv,text/csv" onchange="handleImportChange(this)" style="display:none">
@@ -1441,7 +1509,7 @@
             else if (action === 'delete') window.deleteRound(key);
         });
         document.addEventListener('click', (e) => {
-            if (e.target.closest('#history-dropdown, #cloud-dropdown, #history-menu-btn, #cloud-menu-btn')) return;
+            if (e.target.closest('#history-dropdown, #cloud-dropdown, #export-dropdown, #history-menu-btn, #cloud-menu-btn, #export-menu-btn')) return;
             window.closeHeaderMenus();
         });
         document.addEventListener('keydown', (e) => {

@@ -45,16 +45,21 @@ function setCloudBadge(message, tone = 'slate') {
         'Sign-out failed': 'Error',
         'Upload failed': 'Error',
         'Download failed': 'Error',
+        'Delete failed': 'Error',
         'Uploading': 'Sync',
         'Uploading current': 'Sync',
         'Downloading': 'Sync',
         'Downloading current': 'Sync',
+        'Deleting round': 'Sync',
+        'Deleting history': 'Sync',
         'Signed out': 'Off',
         'No named rounds': 'Empty',
         'No current round': 'Empty',
         'Current not found': 'Missing',
         'Uploaded current': 'Done',
         'Downloaded current': 'Done',
+        'Deleted round': 'Done',
+        'Deleted history': 'Done',
         'Current up to date': 'Ready'
     };
     const classes = {
@@ -345,6 +350,55 @@ async function downloadRounds(scope) {
     } finally {
         setBusy(false);
     }
+}
+
+async function deleteRemoteRound(roundKey) {
+    if (!roundKey || !user || !db || !ui._firestoreSdk) return false;
+    const discipline = bridge.getDiscipline();
+    setBusy(true);
+    setStatus('Deleting round', 'slate');
+    try {
+        const { doc, deleteDoc } = ui._firestoreSdk;
+        await deleteDoc(doc(db, COLLECTION_ROOT, user.uid, 'rounds', roundDocId(discipline.id, roundKey)));
+        setStatus('Deleted round', 'green');
+        return true;
+    } catch (err) {
+        console.warn('[ClayScorer] Firebase delete failed', err);
+        setStatus('Delete failed', 'red');
+        throw err;
+    } finally {
+        setBusy(false);
+    }
+}
+
+async function deleteRemoteHistory() {
+    if (!user || !db || !ui._firestoreSdk) return false;
+    const discipline = bridge.getDiscipline();
+    setBusy(true);
+    setStatus('Deleting history', 'slate');
+    try {
+        const { collection, deleteDoc, getDocs } = ui._firestoreSdk;
+        const snapshot = await getDocs(collection(db, COLLECTION_ROOT, user.uid, 'rounds'));
+        const deletes = [];
+        snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            if (data.disciplineId === discipline.id) deletes.push(deleteDoc(docSnap.ref));
+        });
+        await Promise.all(deletes);
+        setStatus('Deleted history', 'green');
+        return true;
+    } catch (err) {
+        console.warn('[ClayScorer] Firebase history delete failed', err);
+        setStatus('Delete failed', 'red');
+        throw err;
+    } finally {
+        setBusy(false);
+    }
+}
+
+if (bridge) {
+    bridge.deleteRemoteRound = deleteRemoteRound;
+    bridge.deleteRemoteHistory = deleteRemoteHistory;
 }
 
 function start() {
