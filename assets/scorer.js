@@ -19,7 +19,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-07-14 (firebase round delete)';
+    const SCORER_BUILD = 'scorer 2026-07-14 (sportrap stand format defaults)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -28,10 +28,32 @@
     const KEY = D.storageKey;
     const MAX_SHOOTERS = D.maxShooters || 6;
     const CLASSES = ['AAA', 'AA', 'A', 'B', 'C', 'U'];
-    const ROTATE = D.showFirstUpRotation !== false;
     const HAS_STAND_DESCRIPTIONS = D.enableStandDescriptions !== false;
+    const HAS_PRESENTATION_MAP = D.id === 'compak' || D.id === 'sportrap';
+    const ROTATE = !HAS_PRESENTATION_MAP && D.showFirstUpRotation !== false;
+    const ROUND_LABEL = HAS_PRESENTATION_MAP ? 'Round' : D.standLabel;
+    const PHYSICAL_STAND_LABEL = 'Stand';
+    const STAND_ROTATION_DEFAULT_VERSION = 1;
+    const SPORTRAP_STAND_FORMAT_DEFAULT_VERSION = 1;
+    const CLAY_META_OPTIONS = {
+        presentation: ['Crosser', 'Teal', 'Crow', 'Driven', 'Looper', 'Batue', 'Rabbit'],
+        direction: ['LR', 'RL', 'Away', 'Towards'],
+        starting: ['Low', 'Mid', 'High'],
+        travelling: ['Up', 'Down', 'Level'],
+        claySize: ['Std110', 'Midi90', 'Mini70'],
+        clayFace: ['Edge', 'Belly', 'Top'],
+        clayVisibility: ['Full', 'Part'],
+        colour: ['Orange', 'Black', 'Pink', 'Green']
+    };
 
     const standTargets = (s) => s.targets + (s.extraClay ? 1 : 0);
+    const presentationCountForStand = (s) => s.presentationCount || D.presentationCount || (D.fixedStands ? standTargets(s) : 2 + (s.extraClay ? 1 : 0));
+    const presentationLabel = (idx) => {
+        const letter = String.fromCharCode(65 + idx);
+        if (D.id === 'sportrap') return letter;
+        if (D.id === 'compak') return `${idx + 1}/${letter}`;
+        return `Clay ${idx + 1}`;
+    };
     const OPTION = D.optionTarget || null;
     const scheduledRoundTargets = () => state.stands.reduce((sum, s) => sum + standTargets(s), 0);
 
@@ -89,6 +111,222 @@
         return null;
     }
 
+    function normalizeClayMeta(meta, total) {
+        const current = Array.isArray(meta) ? meta : [];
+        return Array.from({ length: total }, (_, idx) => {
+            const item = current[idx] || {};
+            return {
+                presentation: item.presentation || '',
+                direction: Array.isArray(item.direction) ? item.direction.filter(v => CLAY_META_OPTIONS.direction.includes(v)) : [],
+                starting: item.starting || '',
+                travelling: item.travelling || '',
+                claySize: item.claySize || '',
+                clayFace: item.clayFace || '',
+                clayVisibility: item.clayVisibility || '',
+                colour: item.colour || ''
+            };
+        });
+    }
+
+    function clayMetaSummary(meta, idx) {
+        if (!meta) return '';
+        const parts = [
+            meta.presentation,
+            ...(meta.direction || []),
+            meta.starting,
+            meta.travelling,
+            meta.claySize,
+            meta.clayFace,
+            meta.clayVisibility,
+            meta.colour
+        ].filter(Boolean);
+        return parts.length ? `C${idx + 1}: ${parts.join(' ')}` : '';
+    }
+
+    function clayMetaShortLabel(meta, fallback) {
+        const parts = [
+            meta.presentation,
+            (meta.direction || []).join('/'),
+            meta.starting,
+            meta.travelling,
+            meta.claySize,
+            meta.clayFace,
+            meta.clayVisibility,
+            meta.colour
+        ].filter(Boolean);
+        return parts.length ? parts.join(' ') : fallback;
+    }
+
+    function standPresentationText(stand) {
+        const clayText = (stand.clayMeta || []).map(clayMetaSummary).filter(Boolean).join(' | ');
+        return clayText;
+    }
+
+    function clayMetaOptionRow(targetIdx, key, label, options, value, multi = false) {
+        const selected = multi ? (Array.isArray(value) ? value : []) : [];
+        return `<div class="space-y-1">
+            <div class="text-[8px] font-black uppercase tracking-widest text-slate-400">${label}</div>
+            <div data-meta-row class="flex flex-wrap gap-1">
+                ${options.map(opt => {
+                    const checked = multi ? selected.includes(opt) : value === opt;
+                    const inputType = multi ? 'checkbox' : 'radio';
+                    const name = multi ? '' : `name="clay-${targetIdx}-${key}"`;
+                    const handler = multi
+                        ? `updateClayMeta(${targetIdx}, '${key}', Array.from(this.closest('[data-meta-row]').querySelectorAll('input:checked')).map(input => input.value).join(','))`
+                        : `updateClayMeta(${targetIdx}, '${key}', this.checked ? this.value : '')`;
+                    return `<label class="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-1 text-[9px] font-black uppercase text-slate-600">
+                        <input type="${inputType}" ${name} value="${escapeHtml(opt)}" ${checked ? 'checked' : ''} onchange="${handler}">
+                        ${escapeHtml(opt)}
+                    </label>`;
+                }).join('')}
+            </div>
+        </div>`;
+    }
+
+    function renderClayMetaControls(stand) {
+        if (!HAS_STAND_DESCRIPTIONS) return '';
+        const total = presentationCountForStand(stand);
+        stand.clayMeta = normalizeClayMeta(stand.clayMeta, total);
+        return stand.clayMeta.map((meta, idx) => {
+            const isSportingExtra = !D.fixedStands && stand.extraClay && idx === total - 1;
+            const label = isSportingExtra ? 'Extra' : presentationLabel(idx);
+            return `<details data-clay-meta-control class="relative">
+                <summary class="list-none cursor-pointer rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-[9px] font-black uppercase text-white truncate">
+                    <span class="text-orange-400">${label}</span>
+                    <span data-clay-meta-summary="${idx}" class="normal-case font-bold text-slate-300 ml-1">${escapeHtml(clayMetaShortLabel(meta, 'Set presentation'))}</span>
+                </summary>
+                <div class="absolute right-0 z-30 mt-1 w-[min(34rem,calc(100vw-2rem))] rounded-xl border border-slate-200 bg-white p-2 shadow-xl space-y-2">
+                    ${clayMetaOptionRow(idx, 'presentation', 'Presentation', CLAY_META_OPTIONS.presentation, meta.presentation)}
+                    ${clayMetaOptionRow(idx, 'direction', 'Direction', CLAY_META_OPTIONS.direction, meta.direction, true)}
+                    ${clayMetaOptionRow(idx, 'starting', 'Starting', CLAY_META_OPTIONS.starting, meta.starting)}
+                    ${clayMetaOptionRow(idx, 'travelling', 'Travelling', CLAY_META_OPTIONS.travelling, meta.travelling)}
+                    ${clayMetaOptionRow(idx, 'claySize', 'Clay Size', CLAY_META_OPTIONS.claySize, meta.claySize)}
+                    ${clayMetaOptionRow(idx, 'clayFace', 'Clay Face', CLAY_META_OPTIONS.clayFace, meta.clayFace)}
+                    ${clayMetaOptionRow(idx, 'clayVisibility', 'Clay Face Amount', CLAY_META_OPTIONS.clayVisibility, meta.clayVisibility)}
+                    ${clayMetaOptionRow(idx, 'colour', 'Colour', CLAY_META_OPTIONS.colour, meta.colour)}
+                </div>
+            </details>`;
+        }).join('');
+    }
+
+    function normalizeShotPresentationMap(values, totalShots, presentationCount) {
+        const current = Array.isArray(values) ? values : [];
+        return Array.from({ length: totalShots }, (_, idx) => {
+            const value = parseInt(current[idx], 10);
+            return value >= 1 && value <= presentationCount ? value : '';
+        });
+    }
+
+    function defaultShotFormat(idx) {
+        if (D.id === 'sportrap') {
+            if (idx === 1) return 'report';
+            if (idx === 3) return 'sim';
+        }
+        return 'single';
+    }
+
+    function isOldSportrapDefault(values, totalShots) {
+        if (D.id !== 'sportrap' || totalShots !== 5 || !Array.isArray(values)) return false;
+        const joined = values.slice(0, 5).join(',');
+        return joined === 'report,single,single,sim,single'
+            || joined === 'single,report,report,sim,sim';
+    }
+
+    function normalizeShotFormatMap(values, totalShots) {
+        const current = isOldSportrapDefault(values, totalShots) ? [] : (Array.isArray(values) ? values : []);
+        return Array.from({ length: totalShots }, (_, idx) => {
+            const value = current[idx];
+            return ['single', 'report', 'sim'].includes(value) ? value : defaultShotFormat(idx);
+        });
+    }
+
+    function legacyShotFormatMap(stand) {
+        if (!state.presentationFormat || !Array.isArray(state.shooters)) return [];
+        const shooterWithFormat = state.shooters.find(sh => Array.isArray(state.presentationFormat?.[sh.id]?.[stand.id]));
+        return shooterWithFormat ? state.presentationFormat[shooterWithFormat.id][stand.id] : [];
+    }
+
+    function legacyShotPresentationMap(stand) {
+        if (!state.presentationMap || !Array.isArray(state.shooters)) return [];
+        const shooterWithPresentation = state.shooters.find(sh => Array.isArray(state.presentationMap?.[sh.id]?.[stand.id]));
+        return shooterWithPresentation ? state.presentationMap[shooterWithPresentation.id][stand.id] : [];
+    }
+
+    function getShotPresentationMap(shId, stand) {
+        if (!HAS_PRESENTATION_MAP) return [];
+        state.presentationMap = state.presentationMap || {};
+        state.presentationMap[shId] = state.presentationMap[shId] || {};
+        const normalized = normalizeShotPresentationMap(
+            state.presentationMap[shId][stand.id],
+            standTargets(stand),
+            presentationCountForStand(stand)
+        );
+        state.presentationMap[shId][stand.id] = normalized;
+        return normalized;
+    }
+
+    function getStandPresentationMap(stand) {
+        if (!HAS_PRESENTATION_MAP) return [];
+        state.standPresentation = state.standPresentation || {};
+        const source = Array.isArray(state.standPresentation[stand.id]) ? state.standPresentation[stand.id] : legacyShotPresentationMap(stand);
+        const normalized = normalizeShotPresentationMap(source, standTargets(stand), presentationCountForStand(stand));
+        state.standPresentation[stand.id] = normalized;
+        return normalized;
+    }
+
+    function getStandFormatMap(stand) {
+        if (!HAS_PRESENTATION_MAP) return [];
+        state.standFormat = state.standFormat || {};
+        const source = Array.isArray(state.standFormat[stand.id]) ? state.standFormat[stand.id] : legacyShotFormatMap(stand);
+        const normalized = normalizeShotFormatMap(source, standTargets(stand));
+        state.standFormat[stand.id] = normalized;
+        return normalized;
+    }
+
+    function resetSportrapStandFormatDefaults() {
+        if (D.id !== 'sportrap') return;
+        state.standFormat = state.standFormat || {};
+        state.stands.forEach(st => {
+            state.standFormat[st.id] = normalizeShotFormatMap([], standTargets(st));
+        });
+        state._sportrapStandFormatDefaultVersion = SPORTRAP_STAND_FORMAT_DEFAULT_VERSION;
+    }
+
+    function physicalStandCount() {
+        return Math.max(1, D.fixedStands?.length || state.stands?.length || 1);
+    }
+
+    function defaultShooterRoundStand(shId, roundId) {
+        const count = physicalStandCount();
+        const shooterIdx = Math.max(0, state.shooters.findIndex(sh => sh.id === shId));
+        const roundIdx = Math.max(0, state.stands.findIndex(st => st.id === roundId));
+        return ((shooterIdx + roundIdx) % count) + 1;
+    }
+
+    function resetShooterStandDefaults() {
+        if (!HAS_PRESENTATION_MAP) return;
+        state.shooterStand = {};
+        state.shooters.forEach(sh => {
+            state.shooterStand[sh.id] = {};
+            state.stands.forEach(st => {
+                state.shooterStand[sh.id][st.id] = defaultShooterRoundStand(sh.id, st.id);
+            });
+        });
+        state._standRotationDefaultVersion = STAND_ROTATION_DEFAULT_VERSION;
+    }
+
+    function getShooterRoundStand(shId, roundId) {
+        if (!HAS_PRESENTATION_MAP) return '';
+        state.shooterStand = state.shooterStand || {};
+        state.shooterStand[shId] = state.shooterStand[shId] || {};
+        const count = physicalStandCount();
+        const existing = parseInt(state.shooterStand[shId][roundId], 10);
+        if (existing >= 1 && existing <= count) return existing;
+        const defaultStand = defaultShooterRoundStand(shId, roundId);
+        state.shooterStand[shId][roundId] = defaultStand;
+        return defaultStand;
+    }
+
     // Note: the outer `history` variable is the undo snapshot — the persisted round history
     // dict is read/written via readHistory()/writeHistory() to avoid the name collision.
     let history = null;
@@ -96,9 +334,13 @@
 
     function makeDefaultState() {
         const stands = D.fixedStands
-            ? D.fixedStands.map(s => ({ ...s, extraClay: !!s.extraClay, description: HAS_STAND_DESCRIPTIONS ? (s.description || '') : '' }))
+            ? D.fixedStands.map(s => {
+                const stand = { ...s, extraClay: !!s.extraClay, description: HAS_STAND_DESCRIPTIONS ? (s.description || '') : '' };
+                stand.clayMeta = normalizeClayMeta(s.clayMeta, presentationCountForStand(stand));
+                return stand;
+            })
             : Array.from({ length: D.defaults.standCount }, (_, i) => ({
-                id: i + 1, targets: D.defaults.targetsPerStand, extraClay: false, description: ''
+                id: i + 1, targets: D.defaults.targetsPerStand, extraClay: false, description: '', clayMeta: normalizeClayMeta([], 2)
             }));
         return {
             ground: '', date: new Date().toISOString().split('T')[0], event: '', notes: '',
@@ -110,21 +352,33 @@
     function normalizeStands(stands) {
         const current = Array.isArray(stands) ? stands : [];
         if (!D.fixedStands) {
-            return current.map(st => ({ ...st, extraClay: !!st.extraClay, description: HAS_STAND_DESCRIPTIONS ? (st.description || '') : '' }));
+            return current.map(st => {
+                const normalized = { ...st, extraClay: !!st.extraClay, description: HAS_STAND_DESCRIPTIONS ? (st.description || '') : '' };
+                normalized.clayMeta = normalizeClayMeta(st.clayMeta, presentationCountForStand(normalized));
+                return normalized;
+            });
         }
         return D.fixedStands.map((fixed, idx) => {
             const existing = current.find(st => st.id === fixed.id) || current[idx] || {};
-            return {
+            const normalized = {
                 ...fixed,
                 extraClay: !!fixed.extraClay,
-                description: HAS_STAND_DESCRIPTIONS ? (existing.description || fixed.description || '') : ''
+                description: HAS_STAND_DESCRIPTIONS ? (existing.description || fixed.description || '') : '',
+                ...(existing.presentationCount ? { presentationCount: existing.presentationCount } : {})
             };
+            normalized.clayMeta = normalizeClayMeta(existing.clayMeta || fixed.clayMeta, presentationCountForStand(normalized));
+            return normalized;
         });
     }
 
     function normalizeState() {
         state.stands = normalizeStands(state.stands);
         state.optionHits = state.optionHits || {};
+        state.presentationMap = state.presentationMap || {};
+        state.presentationFormat = state.presentationFormat || {};
+        state.standFormat = state.standFormat || {};
+        state.standPresentation = state.standPresentation || {};
+        state.shooterStand = state.shooterStand || {};
 
         // Previous Skeet build stored the option as a fifth Station 7 target.
         // Move that saved value into the per-shooter floating option slot.
@@ -140,6 +394,21 @@
             });
         }
         if (OPTION) state.shooters.forEach(sh => reconcileOptionHit(sh.id));
+        if (HAS_PRESENTATION_MAP) {
+            if (state._standRotationDefaultVersion !== STAND_ROTATION_DEFAULT_VERSION) {
+                resetShooterStandDefaults();
+            }
+            if (D.id === 'sportrap' && state._sportrapStandFormatDefaultVersion !== SPORTRAP_STAND_FORMAT_DEFAULT_VERSION) {
+                resetSportrapStandFormatDefaults();
+            }
+            state.stands.forEach(st => {
+                getStandFormatMap(st);
+                getStandPresentationMap(st);
+            });
+            state.shooters.forEach(sh => state.stands.forEach(st => {
+                getShooterRoundStand(sh.id, st.id);
+            }));
+        }
     }
 
     function shooterScheduledStats(shId) {
@@ -298,6 +567,10 @@
         if (willOpen) setMenuExpanded(name, true);
     };
 
+    function closeClayMetaControls() {
+        document.querySelectorAll('[data-clay-meta-control][open]').forEach(detail => { detail.open = false; });
+    }
+
     function load() {
         const s = localStorage.getItem(KEY_CURRENT);
         if (!s) return false;
@@ -336,7 +609,7 @@
         const current = state.stands.length;
         if (count > current) {
             for (let i = current + 1; i <= count; i++) {
-                state.stands.push({ id: i, targets: D.defaults.targetsPerStand, extraClay: false });
+                state.stands.push({ id: i, targets: D.defaults.targetsPerStand, extraClay: false, description: '', clayMeta: normalizeClayMeta([], 2) });
             }
         } else if (count < current) {
             state.stands = state.stands.slice(0, count);
@@ -354,6 +627,8 @@
     window.removeShooter = (id) => {
         if (state.shooters.length <= 1) return;
         state.shooters = state.shooters.filter(s => s.id !== id);
+        if (state.presentationMap) delete state.presentationMap[id];
+        if (state.presentationFormat) delete state.presentationFormat[id];
         render(); save();
     };
 
@@ -421,6 +696,7 @@
         if (state.isLocked || !D.editable.targetsPerStand) return;
         const st = state.stands[state.activeIdx];
         st.targets = c;
+        st.clayMeta = normalizeClayMeta(st.clayMeta, presentationCountForStand(st));
         state.shooters.forEach(sh => { if (state.hits[sh.id]?.[st.id]) ensureHitsArray(sh.id, st); });
         render(); save();
     };
@@ -429,6 +705,7 @@
         if (state.isLocked || !D.editable.extraClay) return;
         const st = state.stands[state.activeIdx];
         st.extraClay = !st.extraClay;
+        st.clayMeta = normalizeClayMeta(st.clayMeta, presentationCountForStand(st));
         state.shooters.forEach(sh => { if (state.hits[sh.id]?.[st.id]) ensureHitsArray(sh.id, st); });
         render(); save();
     };
@@ -443,6 +720,66 @@
         if (!st) return;
         st.description = v;
         save();
+    };
+
+    window.updateClayMeta = (targetIdx, key, value) => {
+        if (state.isLocked || !HAS_STAND_DESCRIPTIONS) return;
+        const st = state.stands[state.activeIdx];
+        if (!st) return;
+        st.clayMeta = normalizeClayMeta(st.clayMeta, presentationCountForStand(st));
+        if (!st.clayMeta[targetIdx]) return;
+        st.clayMeta[targetIdx][key] = key === 'direction'
+            ? String(value || '').split(',').filter(Boolean)
+            : value;
+        const summaryEl = document.querySelector(`[data-clay-meta-summary="${targetIdx}"]`);
+        if (summaryEl) summaryEl.textContent = clayMetaShortLabel(st.clayMeta[targetIdx], 'Set presentation');
+        save();
+    };
+
+    window.updateShotPresentation = (shId, stId, shotIdx, value) => {
+        if (state.isLocked || !HAS_PRESENTATION_MAP) return;
+        const st = state.stands.find(s => s.id === stId);
+        if (!st) return;
+        const map = getShotPresentationMap(shId, st);
+        const parsed = parseInt(value, 10);
+        map[shotIdx] = Number.isFinite(parsed) ? parsed : '';
+        save();
+    };
+
+    window.updateStandShotPresentation = (stId, shotIdx, value) => {
+        if (state.isLocked || !HAS_PRESENTATION_MAP) return;
+        const st = state.stands.find(s => s.id === stId);
+        if (!st) return;
+        const map = getStandPresentationMap(st);
+        const parsed = parseInt(value, 10);
+        map[shotIdx] = Number.isFinite(parsed) ? parsed : '';
+        save(); render();
+    };
+
+    window.updateStandShotFormat = (stId, shotIdx, value) => {
+        if (state.isLocked || !HAS_PRESENTATION_MAP) return;
+        const st = state.stands.find(s => s.id === stId);
+        if (!st) return;
+        const formats = getStandFormatMap(st);
+        formats[shotIdx] = ['single', 'report', 'sim'].includes(value) ? value : 'single';
+        save(); render();
+    };
+
+    window.updateShooterRoundStand = (shId, roundId, value) => {
+        if (state.isLocked || !HAS_PRESENTATION_MAP) return;
+        state.shooterStand = state.shooterStand || {};
+        state.shooterStand[shId] = state.shooterStand[shId] || {};
+        const parsed = parseInt(value, 10);
+        state.shooterStand[shId][roundId] = parsed >= 1 && parsed <= physicalStandCount() ? parsed : getShooterRoundStand(shId, roundId);
+        save(); render();
+    };
+
+    window.addPresentationOption = () => {
+        if (state.isLocked || D.id !== 'compak') return;
+        const st = state.stands[state.activeIdx];
+        st.presentationCount = presentationCountForStand(st) + 1;
+        st.clayMeta = normalizeClayMeta(st.clayMeta, presentationCountForStand(st));
+        render(); save();
     };
 
     window.nav = (d) => {
@@ -564,18 +901,21 @@
 
     window.downloadCSV = () => {
         const q = csvEscape;
-        const abbr = D.standLabel.slice(0, 2).toUpperCase();
-        // Header block: Discipline / Date / Ground / Event / Stands (base + optional +1 per stand)
+        const abbr = ROUND_LABEL.slice(0, 2).toUpperCase();
+        // Header block: Discipline / Date / Ground / Event / Rounds/Stands (base + optional +1 per row)
         let csv = `Discipline,${q(D.name)}\n`;
         csv += `Date,${yyyymmdd(state.date)}\n`;
         csv += `Ground,${q(state.ground)}\n`;
         csv += `Event,${q(state.event)}\n`;
-        csv += `Stands,${state.stands.map(s => `${s.targets}${s.extraClay ? '+1' : ''}`).join(',')}\n`;
+        csv += `${HAS_PRESENTATION_MAP ? 'Rounds' : 'Stands'},${state.stands.map(s => `${s.targets}${s.extraClay ? '+1' : ''}`).join(',')}\n`;
         if (OPTION) csv += `Option Target,${q(OPTION.label || 'OPT')}\n`;
         // Only emit the Descriptions line if any stand actually has one — keeps the CSV
         // tidy for rounds that never used the field.
         if (HAS_STAND_DESCRIPTIONS && state.stands.some(s => (s.description || '').trim())) {
             csv += `Descriptions,${state.stands.map(s => q(s.description || '')).join(',')}\n`;
+        }
+        if (HAS_STAND_DESCRIPTIONS && state.stands.some(s => (s.clayMeta || []).some(meta => clayMetaSummary(meta, 0)))) {
+            csv += `Clay Metadata,${state.stands.map(s => q(JSON.stringify(normalizeClayMeta(s.clayMeta, presentationCountForStand(s))))).join(',')}\n`;
         }
         csv += `\n`;
         // Totals block: per-shooter, per-stand hits + grand total
@@ -621,6 +961,7 @@
         const meta = {};
         let stands = null;              // [{ targets, extraClay, description? }]
         let descriptions = null;        // parallel array of strings, applied to stands below
+        let clayMetadata = null;        // parallel array of per-stand clay metadata JSON strings
         const shooters = [];            // [{ name, cpsa, class }]
         const totals = {};              // shooterName -> [perStandHits]
         const details = {};             // shooterName -> { standId -> shotString }
@@ -636,7 +977,7 @@
             else if (key === 'Ground') meta.ground = rest[0];
             else if (key === 'Event') meta.event = rest[0];
             else if (key === 'Option Target') meta.optionTarget = rest[0];
-            else if (key === 'Stands') {
+            else if (key === 'Stands' || key === 'Rounds') {
                 stands = rest.filter(spec => spec !== '' || rest.length === 1).map(spec => {
                     const m = String(spec).match(/^(\d+)(\+1)?$/);
                     return m ? { targets: parseInt(m[1], 10), extraClay: !!m[2] } : null;
@@ -646,11 +987,23 @@
                 // rest is a parallel array to Stands — one entry per stand, possibly empty.
                 descriptions = rest;
             }
+            else if (key === 'Clay Metadata') {
+                clayMetadata = rest;
+            }
             i++;
         }
         // Merge descriptions into stands (positional match)
         if (stands && descriptions) {
             stands = stands.map((s, idx) => ({ ...s, description: descriptions[idx] || '' }));
+        }
+        if (stands && clayMetadata) {
+            stands = stands.map((s, idx) => {
+                let parsedMeta = [];
+                try { parsedMeta = JSON.parse(clayMetadata[idx] || '[]'); } catch (e) { parsedMeta = []; }
+                const standForCount = { ...s, id: idx + 1 };
+                const presentationCount = Math.max(presentationCountForStand(standForCount), parsedMeta.length);
+                return { ...s, presentationCount, clayMeta: normalizeClayMeta(parsedMeta, presentationCount) };
+            });
         }
         while (i < lines.length && !lines[i].trim()) i++;
 
@@ -669,6 +1022,7 @@
             stands = standCols.map((sc, idx) => ({
                 targets: D.fixedStands ? (D.fixedStands[idx]?.targets ?? defaultTargets ?? 8) : defaultTargets,
                 extraClay: sc.extraClay,
+                clayMeta: [],
             }));
         }
         // Attach the id from the totals header (in case ids aren't 1..N contiguous)
@@ -756,6 +1110,8 @@
                 targets: fixed?.targets ?? s.targets,
                 extraClay: fixed ? !!fixed.extraClay : !!s.extraClay,
                 description: HAS_STAND_DESCRIPTIONS ? (s.description || '') : '',
+                ...(s.presentationCount ? { presentationCount: s.presentationCount } : {}),
+                clayMeta: normalizeClayMeta(s.clayMeta, presentationCountForStand({ ...(fixed || s), ...(s.presentationCount ? { presentationCount: s.presentationCount } : {}), extraClay: fixed ? !!fixed.extraClay : !!s.extraClay })),
                 ...(fixed?.labels ? { labels: fixed.labels } : {}),
             };
         });
@@ -855,7 +1211,7 @@
         const rowH = isShare ? '45px' : '30px';
         const headH = isShare ? '40px' : '25px';
         const pairH = isShare ? '25px' : '18px';
-        const abbr = D.standLabel.slice(0, 3).toUpperCase();
+        const abbr = ROUND_LABEL.slice(0, 3).toUpperCase();
         const hitBg = '#4ade80';
         const missBg = '#f87171';
         const markStyle = isShare ? 'font-weight:900;' : 'font-weight:400; color:#334155;';
@@ -881,7 +1237,7 @@
         state.stands.forEach(st => {
             const total = standTargets(st);
             const pairCount = Math.ceil(total / 2);
-            const descTxt = HAS_STAND_DESCRIPTIONS ? (st.description || '').trim() : '';
+            const descTxt = standPresentationText(st);
             const descHtml = descTxt
                 ? `<div style="font-size:${isShare ? '9pt' : '7pt'}; font-style:italic; font-weight:normal; line-height:1.1; padding:2px 4px 0; white-space:normal; word-break:break-word;">${escapeHtml(descTxt)}</div>`
                 : '';
@@ -985,22 +1341,18 @@
     function mountSkeleton() {
         const setupStand = D.editable.standCount
             ? `<div class="space-y-1">
-                 <label class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">${D.standLabel} Count</label>
+                 <label class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">${ROUND_LABEL} Count</label>
                  <select id="field-stand-count" onchange="updateStandCount(this.value)" class="w-full bg-slate-50 border-none rounded-lg p-2 text-xs font-black">
-                   ${Array.from({ length: 20 }, (_, i) => `<option value="${i + 1}">${i + 1} ${D.standLabel}${i > 0 ? 's' : ''}</option>`).join('')}
+                   ${Array.from({ length: 20 }, (_, i) => `<option value="${i + 1}">${i + 1} ${ROUND_LABEL}${i > 0 ? 's' : ''}</option>`).join('')}
                  </select>
                </div>`
             : `<div class="space-y-1">
                  <label class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Format</label>
                  <div id="field-format" class="bg-slate-50 rounded-lg p-2 text-xs font-black text-slate-700"></div>
                </div>`;
-        const standDescriptionControl = HAS_STAND_DESCRIPTIONS
+        const standDescriptionControl = HAS_STAND_DESCRIPTIONS && !HAS_PRESENTATION_MAP
             ? `<div class="bg-slate-800 px-3 py-2 border-t border-slate-700 no-print">
-                    <label class="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Presentation</label>
-                    <input id="field-stand-description" type="text" maxlength="120"
-                        placeholder="e.g. left-to-right crosser + going-away rabbit"
-                        class="w-full bg-slate-900 text-white text-xs font-medium rounded-md px-2 py-1.5 border border-slate-700 outline-none focus:border-orange-500 placeholder-slate-500"
-                        oninput="updateStandDescription(this.value)">
+                    <div id="clay-meta-controls" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5"></div>
                 </div>`
             : '';
 
@@ -1098,10 +1450,10 @@
             <section id="option-status" class="bg-white rounded-xl shadow-sm border border-slate-200 p-2 no-print"></section>
             ` : ''}
 
-            <section class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden no-print">
+            <section class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-visible no-print">
                 <div class="bg-slate-900 px-3 py-2.5 text-white flex justify-between items-center">
                     <div class="flex items-baseline gap-2">
-                        <h2 id="active-stand-title" class="text-lg font-black italic uppercase">${D.standLabel} 1</h2>
+                        <h2 id="active-stand-title" class="text-lg font-black italic uppercase">${ROUND_LABEL} 1</h2>
                         <span id="active-stand-targets" class="text-[9px] text-orange-400 font-bold uppercase"></span>
                     </div>
                     <button id="undo-btn" onclick="undo()" class="hidden text-[9px] font-black text-white uppercase flex items-center gap-1 bg-slate-800 px-2 py-1 rounded-lg border border-slate-700">
@@ -1116,9 +1468,27 @@
 
                 <div class="bg-slate-50 p-3 flex gap-3 no-print border-t border-slate-200">
                     <button onclick="nav(-1)" id="nav-prev" class="flex-1 bg-white border border-slate-300 py-3 rounded-xl text-xs font-black disabled:opacity-30 tracking-widest uppercase">Prev</button>
-                    <button onclick="nav(1)" id="nav-next" class="flex-1 bg-slate-900 text-white py-3 rounded-xl text-xs font-black disabled:opacity-30 tracking-widest uppercase">Next ${D.standLabel}</button>
+                    <button onclick="nav(1)" id="nav-next" class="flex-1 bg-slate-900 text-white py-3 rounded-xl text-xs font-black disabled:opacity-30 tracking-widest uppercase">Next ${ROUND_LABEL}</button>
                 </div>
             </section>
+
+            ${HAS_PRESENTATION_MAP ? `
+            <section class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-visible no-print">
+                <details class="group" open>
+                    <summary class="list-none cursor-pointer p-2 bg-slate-100 border-b border-slate-200 flex items-center justify-between gap-2 text-[9px] font-black uppercase text-slate-500">
+                        <span class="flex items-center gap-1"><i data-lucide="chevron-right" class="w-3 h-3 transition-transform group-open:rotate-90"></i> Presentation Options</span>
+                        ${D.id === 'compak' ? '<button onclick="event.preventDefault(); addPresentationOption()" class="bg-slate-900 text-white px-2 py-1 rounded-md">+ Presentation</button>' : ''}
+                    </summary>
+                    <div id="fixed-presentation-controls" class="p-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5"></div>
+                </details>
+                <details class="group border-t border-slate-200">
+                    <summary class="list-none cursor-pointer p-2 bg-slate-100 flex items-center gap-1 text-[9px] font-black uppercase text-slate-500">
+                        <i data-lucide="chevron-right" class="w-3 h-3 transition-transform group-open:rotate-90"></i> Stand Setup
+                    </summary>
+                    <div id="stand-shot-controls"></div>
+                </details>
+            </section>
+            ` : ''}
 
             <section class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden no-print">
                 <div class="p-2 bg-slate-100 border-b border-slate-200 flex justify-between items-center text-[9px] font-black uppercase text-slate-500">
@@ -1223,14 +1593,15 @@
                     <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400">Round History</h3>
                     ${emptyHint}
                 </div>
-                <div class="flex flex-wrap gap-1.5">
-                    <button onclick="deleteCurrentRound()" class="text-[9px] bg-red-50 text-red-600 px-3 py-1.5 rounded-lg font-black uppercase border border-red-100">Delete Round</button>
+                <div class="flex flex-wrap justify-between gap-4 items-center">
                     <button onclick="deleteHistory()" class="text-[9px] bg-red-50 text-red-600 px-3 py-1.5 rounded-lg font-black uppercase border border-red-100">Delete History</button>
-                    <label class="text-[9px] bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-black uppercase border border-slate-200 cursor-pointer inline-flex items-center">
-                        Import CSV
-                        <input type="file" accept=".csv,text/csv" onchange="handleImportChange(this)" style="display:none">
-                    </label>
-                    <button onclick="newRound()" class="text-[9px] bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-black uppercase border border-slate-200">+ New Round</button>
+                    <div class="ml-auto flex flex-wrap justify-end gap-1.5">
+                        <label class="text-[9px] bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-black uppercase border border-slate-200 cursor-pointer inline-flex items-center">
+                            Import CSV
+                            <input type="file" accept=".csv,text/csv" onchange="handleImportChange(this)" style="display:none">
+                        </label>
+                        <button onclick="newRound()" class="text-[9px] bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-black uppercase border border-slate-200">+ New Round</button>
+                    </div>
                 </div>
             </div>
             ${entries.length ? `<div class="max-h-64 overflow-y-auto">${rows}</div>` : ''}`;
@@ -1256,6 +1627,48 @@
             </div>`;
         }
         el.innerHTML = html;
+    }
+
+    function renderStandFormatControls() {
+        const el = document.getElementById('stand-shot-controls');
+        if (!el) return;
+        if (!HAS_PRESENTATION_MAP) { el.innerHTML = ''; return; }
+        const standRows = state.stands.map(stand => {
+            const total = standTargets(stand);
+            const formats = getStandFormatMap(stand);
+            const presentations = getStandPresentationMap(stand);
+            let clayHtml = '';
+            for (let p = 0; p < total;) {
+                const value = formats[p] || 'single';
+                const groupSize = value !== 'single' && (p + 1) < total ? 2 : 1;
+                const label = groupSize === 2 ? `${p + 1}-${p + 2}` : `${p + 1}`;
+                const shotIdxs = Array.from({ length: groupSize }, (_, offset) => p + offset);
+                const presentationSelects = shotIdxs.map(idx => {
+                    const selected = presentations[idx] || '';
+                    return `<select onchange="updateStandShotPresentation(${stand.id},${idx},this.value)" ${state.isLocked ? 'disabled' : ''} class="w-full h-7 bg-slate-50 border border-slate-200 rounded-md px-1 text-[8px] font-black text-slate-700 disabled:opacity-60">
+                        <option value="">Presentation</option>
+                        ${Array.from({ length: presentationCountForStand(stand) }, (_, optIdx) => optIdx + 1).map(opt => `<option value="${opt}" ${selected === opt ? 'selected' : ''}>${presentationLabel(opt - 1)}</option>`).join('')}
+                    </select>`;
+                }).join('');
+                clayHtml += `<div class="pair-stack" style="flex:${groupSize} 1 0;">
+                    <label class="block text-[7px] font-black uppercase tracking-widest text-slate-400 mb-1">Clay ${label}</label>
+                    <select onchange="updateStandShotFormat(${stand.id},${p},this.value)" ${state.isLocked ? 'disabled' : ''} class="w-full h-7 bg-slate-900 text-white border border-slate-700 rounded-md px-1 text-[8px] font-black uppercase disabled:opacity-60">
+                        <option value="single" ${value === 'single' ? 'selected' : ''}>Single</option>
+                        <option value="report" ${value === 'report' ? 'selected' : ''}>On Report</option>
+                        <option value="sim" ${value === 'sim' ? 'selected' : ''}>Sim Pair</option>
+                    </select>
+                    <div class="mt-1 flex gap-1">${presentationSelects}</div>
+                </div>`;
+                p += groupSize;
+            }
+            return `<div class="py-2 border-t border-slate-700 first:border-t-0">
+                <div class="text-[9px] font-black uppercase tracking-widest text-orange-400 mb-1.5">${PHYSICAL_STAND_LABEL} ${stand.id}</div>
+                <div class="flex gap-1 w-full overflow-x-hidden">${clayHtml}</div>
+            </div>`;
+        }).join('');
+        el.innerHTML = `<div class="bg-slate-800 px-2 py-2 no-print">
+            ${standRows}
+        </div>`;
     }
 
     function render() {
@@ -1295,7 +1708,7 @@
             document.getElementById('field-stand-count').value = state.stands.length;
         } else {
             const totalTargets = state.stands.reduce((sum, s) => sum + standTargets(s), 0);
-            document.getElementById('field-format').innerText = `${state.stands.length} ${D.standLabel}s / ${totalTargets + (OPTION ? 1 : 0)} Targets`;
+            document.getElementById('field-format').innerText = `${state.stands.length} ${ROUND_LABEL}s / ${totalTargets + (OPTION ? 1 : 0)} Targets`;
         }
 
         // Squad
@@ -1316,7 +1729,7 @@
         state.stands.forEach((s, i) => {
             const btn = document.createElement('button');
             btn.className = `flex-shrink-0 w-11 h-11 rounded-xl font-black text-xs border-2 transition-all ${state.activeIdx === i ? 'bg-orange-500 border-orange-500 text-white shadow-lg' : 'bg-white border-slate-200 text-slate-500'}`;
-            btn.innerText = s.id;
+            btn.innerText = HAS_PRESENTATION_MAP ? `R${s.id}` : s.id;
             btn.onclick = () => { if (!state.isLocked) { state.activeIdx = i; render(); save(); } };
             navDiv.appendChild(btn);
         });
@@ -1329,8 +1742,8 @@
                 const used = opt && opt.hit !== null && opt.hit !== undefined;
                 const available = !used && optStandId !== null;
                 const text = used
-                    ? `Used ${D.standLabel.slice(0, 2).toUpperCase()} ${opt.standId}`
-                    : (available ? `Available ${D.standLabel.slice(0, 2).toUpperCase()} ${optStandId}` : 'Not used');
+                    ? `Used ${ROUND_LABEL.slice(0, 2).toUpperCase()} ${opt.standId}`
+                    : (available ? `Available ${ROUND_LABEL.slice(0, 2).toUpperCase()} ${optStandId}` : 'Not used');
                 const cls = used
                     ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
                     : (available ? 'bg-orange-50 border-orange-300 text-orange-800' : 'bg-slate-50 border-slate-200 text-slate-500');
@@ -1348,21 +1761,26 @@
         }
 
         // Active header
-        document.getElementById('active-stand-title').innerText = `${D.standLabel} ${st.id}`;
+        document.getElementById('active-stand-title').innerText = `${ROUND_LABEL} ${st.id}`;
         const total = standTargets(st);
         const optionAvailableHere = OPTION && state.shooters.some(sh => getOptionStandId(sh.id) === st.id);
         document.getElementById('active-stand-targets').innerText = `${total} Target${total !== 1 ? 's' : ''}${st.extraClay ? ' (+1)' : ''}${optionAvailableHere ? ` + ${OPTION.label || 'OPT'}` : ''}`;
-        const descEl = document.getElementById('field-stand-description');
-        if (descEl) descEl.value = st.description || '';
+        const clayMetaEl = document.getElementById('clay-meta-controls');
+        if (clayMetaEl) clayMetaEl.innerHTML = renderClayMetaControls(st);
+        const fixedPresentationEl = document.getElementById('fixed-presentation-controls');
+        if (fixedPresentationEl) fixedPresentationEl.innerHTML = renderClayMetaControls(st);
         renderScoringControls();
+        renderStandFormatControls();
 
-        // Scoring rows (rotated first-up if enabled)
+        // Scoring rows. Sporting rotates first-up; Compak/Sportrap keep shooter order fixed.
         const n = state.shooters.length;
         const leadIdx = ROTATE ? (state.activeIdx % n) : 0;
         const sArea = document.getElementById('scoring-area'); sArea.innerHTML = '';
+        const visibleShooters = Array.from({ length: n }, (_, i) => state.shooters[(i + leadIdx) % n]);
+        const activeShooterId = visibleShooters.find(sh => !shooterStandStats(sh.id, st).completed)?.id || visibleShooters[visibleShooters.length - 1]?.id;
 
         for (let i = 0; i < n; i++) {
-            const s = state.shooters[(i + leadIdx) % n];
+            const s = visibleShooters[i];
             const hits = state.hits[s.id]?.[st.id] || Array(total).fill(null);
             const optionStandId = getOptionStandId(s.id);
             const optionOnThisStand = OPTION && optionStandId === st.id;
@@ -1370,31 +1788,52 @@
             const count = hits.filter(h => h === true).length + (optionHit === true ? 1 : 0);
             const possible = total + (optionOnThisStand ? 1 : 0);
             const row = document.createElement('div');
-            row.className = `p-2.5 space-y-1.5 ${i === 0 && ROTATE ? 'bg-orange-50/40 first-up-highlight' : ''} ${state.isLocked ? 'pointer-events-none' : ''}`;
+            row.className = `p-2.5 space-y-1.5 ${s.id === activeShooterId ? 'bg-orange-50/40 first-up-highlight' : ''} ${state.isLocked ? 'pointer-events-none' : ''}`;
 
             let gridHtml = '';
-            for (let p = 0; p < total; p += 2) {
-                const hasSecond = (p + 1) < total;
-                const b1 = hits[p], b2 = hits[p + 1];
-                const isExtra1 = st.extraClay && p === total - 1;
-                const isExtra2 = st.extraClay && (p + 1) === total - 1;
-                const label1 = st.labels?.[p] ?? (isExtra1 ? '+1' : '');
-                const label2 = hasSecond ? (st.labels?.[p + 1] ?? (isExtra2 ? '+1' : '')) : '';
-                const pairClass = (isExtra1 || isExtra2) ? 'pair-stack pair-extra' : 'pair-stack';
-                gridHtml += `<div class="${pairClass}">
+            const selectedStandId = HAS_PRESENTATION_MAP ? getShooterRoundStand(s.id, st.id) : st.id;
+            const setupStand = HAS_PRESENTATION_MAP ? (state.stands.find(stand => stand.id === selectedStandId) || st) : st;
+            const standFormatMap = HAS_PRESENTATION_MAP ? getStandFormatMap(setupStand) : [];
+            const standPresentationMap = HAS_PRESENTATION_MAP ? getStandPresentationMap(setupStand) : [];
+            const shooterStandSelect = HAS_PRESENTATION_MAP
+                ? `<select onchange="updateShooterRoundStand(${s.id},${st.id},this.value)" class="h-6 bg-slate-50 border border-slate-200 rounded-md px-1 text-[8px] font-black uppercase text-slate-700">
+                    ${state.stands.map(setup => `<option value="${setup.id}" ${selectedStandId === setup.id ? 'selected' : ''}>${PHYSICAL_STAND_LABEL} ${setup.id}</option>`).join('')}
+                </select>`
+                : '';
+            const presentationBadge = (shotIdx) => {
+                if (!HAS_PRESENTATION_MAP) return '';
+                const value = standPresentationMap[shotIdx];
+                return `<div class="flex-1 min-w-0 h-5 rounded-md bg-slate-100 border border-slate-200 px-1 text-[8px] font-black text-slate-600 flex items-center justify-center">${value ? presentationLabel(value - 1) : '-'}</div>`;
+            };
+            for (let p = 0; p < total;) {
+                const format = standFormatMap[p] || 'single';
+                const groupSize = HAS_PRESENTATION_MAP && format !== 'single' && (p + 1) < total ? 2 : 1;
+                const shotIdxs = Array.from({ length: groupSize }, (_, offset) => p + offset);
+                const pairClass = shotIdxs.some(idx => st.extraClay && idx === total - 1) ? 'pair-stack pair-extra' : 'pair-stack';
+                const hitRow = shotIdxs.map(idx => {
+                    const hit = hits[idx];
+                    return `<button onclick="toggleHit(${s.id},${st.id},${idx},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${hit === true ? 'hit-bg' : 'bg-white border-slate-300 text-slate-400'}">H</button>`;
+                }).join('');
+                const missRow = shotIdxs.map(idx => {
+                    const hit = hits[idx];
+                    return `<button onclick="toggleHit(${s.id},${st.id},${idx},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${hit === false ? 'miss-bg' : 'bg-white border-slate-300 text-slate-400'}">M</button>`;
+                }).join('');
+                const presentationLabels = shotIdxs.map(idx => presentationBadge(idx)).join('');
+                const labels = shotIdxs.map(idx => {
+                    const isExtra = st.extraClay && idx === total - 1;
+                    return `<div class="flex-1">${st.labels?.[idx] ?? (isExtra ? '+1' : '')}</div>`;
+                }).join('');
+                gridHtml += `<div class="${pairClass}" style="flex:${groupSize} 1 0;">
                     <div class="flex gap-1">
-                        <button onclick="toggleHit(${s.id},${st.id},${p},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b1 === true ? 'hit-bg' : 'bg-white border-slate-300 text-slate-400'}">H</button>
-                        ${hasSecond ? `<button onclick="toggleHit(${s.id},${st.id},${p + 1},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b2 === true ? 'hit-bg' : 'bg-white border-slate-300 text-slate-400'}">H</button>` : `<div class="flex-1"></div>`}
+                        ${hitRow}
                     </div>
                     <div class="flex gap-1">
-                        <button onclick="toggleHit(${s.id},${st.id},${p},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b1 === false ? 'miss-bg' : 'bg-white border-slate-300 text-slate-400'}">M</button>
-                        ${hasSecond ? `<button onclick="toggleHit(${s.id},${st.id},${p + 1},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${b2 === false ? 'miss-bg' : 'bg-white border-slate-300 text-slate-400'}">M</button>` : `<div class="flex-1"></div>`}
+                        ${missRow}
                     </div>
-                    ${(label1 || label2) ? `<div class="flex gap-1 text-[7px] font-black text-slate-500 text-center uppercase pt-0.5">
-                        <div class="flex-1">${label1}</div>
-                        ${hasSecond ? `<div class="flex-1">${label2}</div>` : `<div class="flex-1"></div>`}
-                    </div>` : ''}
+                    ${HAS_PRESENTATION_MAP ? `<div class="flex gap-1">${presentationLabels}</div>` : ''}
+                    ${labels.replace(/<div class="flex-1"><\/div>/g, '').trim() ? `<div class="flex gap-1 text-[7px] font-black text-slate-500 text-center uppercase pt-0.5">${labels}</div>` : ''}
                 </div>`;
+                p += groupSize;
             }
             if (optionOnThisStand) {
                 const optLabel = OPTION.label || 'OPT';
@@ -1415,6 +1854,7 @@
                 <div class="flex items-center gap-1.5">
                     <span class="text-[11px] font-black uppercase truncate max-w-[140px] tracking-tight">${s.name}</span>
                     ${i === 0 && ROTATE ? '<span class="bg-orange-500 text-white text-[6px] px-1 rounded-full font-black uppercase">First Up</span>' : ''}
+                    ${shooterStandSelect}
                 </div>
                 <div class="text-base font-black italic text-slate-900">${count}<span class="text-slate-300 text-[8px] not-italic ml-0.5">/${possible}</span></div>
             </div>
@@ -1424,7 +1864,7 @@
 
         // Leaderboard
         const lbHeader = document.getElementById('lb-header');
-        lbHeader.innerHTML = `<th class="p-2 border-b text-left w-12 tracking-tighter">${D.standLabel.slice(0, 3).toUpperCase()}</th>`;
+        lbHeader.innerHTML = `<th class="p-2 border-b text-left w-12 tracking-tighter">${ROUND_LABEL.slice(0, 3).toUpperCase()}</th>`;
         const perf = state.shooters.map(sh => {
             let totalH = 0, totalAtt = 0;
             state.stands.forEach(stnd => {
@@ -1438,7 +1878,8 @@
                 if (opt.hit === true) totalH++;
                 totalAtt++;
             }
-            return { ...sh, t: totalH, att: totalAtt, isStraight: totalH === totalAtt && totalH > 0 };
+            const pct = totalAtt > 0 ? Math.round((totalH / totalAtt) * 100) : null;
+            return { ...sh, t: totalH, att: totalAtt, pct, isStraight: totalH === totalAtt && totalH > 0 };
         }).sort((a, b) => b.t - a.t);
         perf.forEach(sh => {
             lbHeader.innerHTML += `<th class="p-1 border-b border-l border-slate-200 text-center align-bottom"><div class="break-words leading-tight min-w-[50px]">${sh.isStraight ? '&#128293;<br>' : ''}${sh.name}</div></th>`;
@@ -1449,7 +1890,7 @@
         const hardId = completedDifficulties.slice().sort((a, b) => a.avg - b.avg)[0]?.id;
 
         state.stands.forEach((stand, idx) => {
-            let row = `<td class="p-2 font-bold border-b text-slate-400 text-[8px]">${D.standLabel.slice(0, 2).toUpperCase()} ${stand.id}${stand.extraClay ? '+1' : ''} ${stand.id === hardId ? '&#10071;' : ''}</td>`;
+            let row = `<td class="p-2 font-bold border-b text-slate-400 text-[8px]">${ROUND_LABEL.slice(0, 2).toUpperCase()} ${stand.id}${stand.extraClay ? '+1' : ''} ${stand.id === hardId ? '&#10071;' : ''}</td>`;
             perf.forEach(sh => {
                 const base = state.hits[sh.id]?.[stand.id]?.filter(h => h === true).length || 0;
                 const opt = getOptionHitForStand(sh.id, stand.id) === true ? 1 : 0;
@@ -1462,8 +1903,12 @@
         });
 
         const f = document.getElementById('lb-footer');
-        let fRow = `<tr class="bg-slate-900 text-white font-black"><td class="p-2 uppercase text-[7px]">Total</td>`;
-        perf.forEach(sh => fRow += `<td class="p-2 text-center text-sm border-l border-slate-700">${sh.t}</td>`);
+        const scheduledClays = scheduledRoundTargets() + (OPTION ? 1 : 0);
+        let fRow = `<tr class="bg-slate-900 text-white font-black"><td class="p-2 uppercase text-[7px]">Total<br><span class="text-[8px] text-slate-400 normal-case">${scheduledClays} clays</span></td>`;
+        perf.forEach(sh => {
+            const pctHtml = sh.pct === null ? '' : `<div class="text-sm text-slate-400 leading-none mt-0.5">${sh.pct}%</div>`;
+            fRow += `<td class="p-2 text-center text-sm border-l border-slate-700">${sh.t}${pctHtml}</td>`;
+        });
         f.innerHTML = fRow + '</tr>';
 
         document.getElementById('nav-prev').disabled = state.activeIdx === 0;
@@ -1512,8 +1957,15 @@
             if (e.target.closest('#history-dropdown, #cloud-dropdown, #export-dropdown, #history-menu-btn, #cloud-menu-btn, #export-menu-btn')) return;
             window.closeHeaderMenus();
         });
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('[data-clay-meta-control]')) return;
+            closeClayMetaControls();
+        });
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') window.closeHeaderMenus();
+            if (e.key === 'Escape') {
+                window.closeHeaderMenus();
+                closeClayMetaControls();
+            }
         });
         load();
         // Make sure a loaded named round is present in the history dict — otherwise a
