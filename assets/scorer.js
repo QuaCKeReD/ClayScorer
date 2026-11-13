@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-13 (no assumed face amount)';
+    const SCORER_BUILD = 'scorer 2026-11-13 (clay distance + collapsible presentation)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -46,8 +46,17 @@
         claySize: ['Std110', 'Midi90', 'Mini70'],
         clayFace: ['Edge', 'Belly', 'Top'],
         clayVisibility: ['Full', 'Part'],
-        colour: ['Orange', 'Black', 'Pink', 'Green']
+        colour: ['Orange', 'Black', 'Pink', 'Green'],
+        distance: ['0-5', '5-10', '10-15', '15-20', '20-30', '30+']
     };
+    // Distance bands (metres) are picked as one choice across three labelled groups.
+    const CLAY_DISTANCE_GROUPS = [
+        { label: 'Close', options: ['0-5', '5-10'] },
+        { label: 'Medium', options: ['10-15', '15-20'] },
+        { label: 'Far', options: ['20-30', '30+'] }
+    ];
+    const clayDistanceText = (v) => `${v.replace('-', '–')} m`;
+    const clayDistanceRange = (v) => (CLAY_DISTANCE_GROUPS.find(g => g.options.includes(v))?.label || '').toLowerCase();
     // Presentation choices are laid out over two rows in the clay dialog.
     const CLAY_PRESENTATION_ROWS = [
         ['Crosser', 'Teal', 'Crow', 'Driven', 'Looper'],
@@ -64,6 +73,7 @@
     const CLAY_META_FIELDS = [
         { key: 'presentation', label: 'Presentation', rows: CLAY_PRESENTATION_ROWS },
         { key: 'direction', label: 'Direction', multi: true, groups: [['LR', 'RL'], ['Away', 'Towards']] },
+        { key: 'distance', label: 'Distance', labelledGroups: CLAY_DISTANCE_GROUPS },
         { key: 'starting', label: 'Starting' },
         { key: 'travelling', label: 'Travelling' },
         { key: 'claySize', label: 'Clay size' },
@@ -170,7 +180,10 @@
                 claySize: item.claySize || '',
                 clayFace: item.clayFace || '',
                 clayVisibility: item.clayVisibility || '',
-                colour: item.colour || ''
+                colour: item.colour || '',
+                // Only present once set, so rounds saved before distance existed don't
+                // change shape on load (which sync would treat as an edit).
+                ...(CLAY_META_OPTIONS.distance.includes(item.distance) ? { distance: item.distance } : {})
             };
         });
     }
@@ -209,7 +222,8 @@
         if (meta.travelling) moveParts.push(CLAY_TRAVEL_TEXT[meta.travelling] || meta.travelling.toLowerCase());
         const moveText = moveParts.join(' and ');
 
-        let flight = [meta.presentation, dirText].filter(Boolean).join(' ');
+        const distText = meta.distance ? `at ${clayDistanceRange(meta.distance)} range (${clayDistanceText(meta.distance)})` : '';
+        let flight = [meta.presentation, dirText, distText].filter(Boolean).join(' ');
         flight = [flight, moveText].filter(Boolean).join(', ');
 
         const face = (meta.clayFace || '').toLowerCase();
@@ -250,9 +264,11 @@
     const clayChipClass = (on) => `${CLAY_CHIP} ${on
         ? 'bg-orange-500 border-orange-500 text-white'
         : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-100'}`;
-    const clayOptionText = (key, opt) => (key === 'direction'
-        ? { LR: 'L → R', RL: 'R → L', Away: 'Away', Towards: 'Towards' }[opt] || opt
-        : opt);
+    const clayOptionText = (key, opt) => {
+        if (key === 'direction') return { LR: 'L → R', RL: 'R → L', Away: 'Away', Towards: 'Towards' }[opt] || opt;
+        if (key === 'distance') return opt.replace('-', '–');
+        return opt;
+    };
     const clayOptionOn = (meta, field, opt) => (field.multi
         ? (meta[field.key] || []).includes(opt)
         : meta[field.key] === opt);
@@ -265,11 +281,16 @@
                 return `<button type="button" data-meta-key="${field.key}" data-meta-value="${escapeHtml(opt)}" aria-pressed="${on}"
                     onclick="toggleClayMeta(${targetIdx}, '${field.key}', '${escapeHtml(opt)}')" class="${clayChipClass(on)}">${escapeHtml(clayOptionText(field.key, opt))}</button>`;
             };
-            const body = field.groups
+            const body = field.labelledGroups
+                ? `<div class="flex gap-2">${field.labelledGroups.map(g => `<div class="flex-1 min-w-0 p-1 rounded-xl bg-slate-100 border border-slate-200">
+                        <div class="text-[11px] font-bold uppercase tracking-wider text-slate-600 text-center pb-1">${g.label}</div>
+                        <div class="flex flex-col gap-1 [&>button]:flex-none">${g.options.map(chip).join('')}</div>
+                    </div>`).join('')}</div>`
+                : field.groups
                 ? `<div class="flex gap-2">${field.groups.map(g => `<div class="flex-1 min-w-0 flex gap-1 p-1 rounded-xl bg-slate-100 border border-slate-200">${g.map(chip).join('')}</div>`).join('')}</div>`
                 : (field.rows || [CLAY_META_OPTIONS[field.key]]).map(row => `<div class="flex gap-1">${row.map(chip).join('')}</div>`).join('');
             return `<div class="space-y-1" role="group" aria-label="${field.label}">
-                <div class="${LABEL}">${field.label}${field.groups ? ' <span class="font-normal text-slate-500">(one of each, both = quartering)</span>' : ''}</div>
+                <div class="${LABEL}">${field.label}${field.groups ? ' <span class="font-normal text-slate-500">(one of each, both = quartering)</span>' : ''}${field.labelledGroups ? ' <span class="font-normal text-slate-500">(metres)</span>' : ''}</div>
                 ${body}
             </div>`;
         }).join('');
@@ -298,6 +319,13 @@
                 </div>
             </details>`;
         }).join('');
+    }
+
+    function updateClayMetaCount(stand) {
+        const el = document.getElementById('clay-meta-count');
+        if (!el) return;
+        const metas = stand.clayMeta || [];
+        el.textContent = `${metas.filter(m => !isClayMetaEmpty(m)).length}/${metas.length} described`;
     }
 
     // Updates the open dialog in place (no innerHTML swap, so the outside-click handler
@@ -697,6 +725,15 @@
         if (willOpen) setMenuExpanded(name, true);
     };
 
+    // Open/closed state of the stand's clay presentation section is a per-device preference.
+    const PRESENTATION_OPEN_KEY = KEY + ':presentation-open';
+    function readPresentationOpen() {
+        try { return localStorage.getItem(PRESENTATION_OPEN_KEY) !== '0'; } catch (e) { return true; }
+    }
+    window.savePresentationOpen = (open) => {
+        try { localStorage.setItem(PRESENTATION_OPEN_KEY, open ? '1' : '0'); } catch (e) {}
+    };
+
     function closeClayMetaControls() {
         document.querySelectorAll('[data-clay-meta-control][open]').forEach(detail => { detail.open = false; });
     }
@@ -881,9 +918,11 @@
         } else {
             meta[key] = meta[key] === opt ? '' : opt;
         }
+        if (key === 'distance' && !meta.distance) delete meta.distance;
         // An edge-on clay shows no face, so the face amount doesn't apply.
         if (key === 'clayFace' && meta.clayFace === 'Edge') meta.clayVisibility = '';
         refreshClayMetaControl(targetIdx, meta);
+        updateClayMetaCount(st);
         save();
     };
 
@@ -1494,10 +1533,13 @@
                  <div id="field-format" class="h-11 flex items-center bg-slate-100 border border-slate-300 rounded-lg px-2 text-sm font-semibold text-slate-700"></div>
                </div>`;
         const standDescriptionControl = HAS_STAND_DESCRIPTIONS && !HAS_PRESENTATION_MAP
-            ? `<div class="bg-slate-500 px-3 py-2 border-t border-slate-400 no-print">
-                    <div class="text-[11px] font-semibold text-white mb-1.5">Clay presentation (optional) — tap a clay to describe it</div>
-                    <div id="clay-meta-controls" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5"></div>
-                </div>`
+            ? `<details id="clay-meta-panel" class="group bg-slate-500 border-t border-slate-400 no-print" ${readPresentationOpen() ? 'open' : ''} ontoggle="savePresentationOpen(this.open)">
+                    <summary class="list-none cursor-pointer px-3 py-2 flex items-center justify-between gap-2 text-xs font-semibold text-white">
+                        <span class="flex items-center gap-1.5 min-w-0"><i data-lucide="chevron-right" class="w-4 h-4 flex-shrink-0 transition-transform group-open:rotate-90"></i> Clay presentation <span class="font-normal text-slate-200 group-open:hidden">(tap to show)</span><span class="font-normal text-slate-200 hidden group-open:inline">— tap a clay to describe it</span></span>
+                        <span id="clay-meta-count" class="flex-shrink-0 font-normal text-slate-200"></span>
+                    </summary>
+                    <div id="clay-meta-controls" class="px-3 pb-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5"></div>
+                </details>`
             : '';
         const headerBtn = 'bg-slate-800 h-9 px-2 rounded-lg border border-slate-700 inline-flex items-center gap-1.5 text-slate-200';
 
@@ -2070,6 +2112,7 @@
         if (presentationRound) presentationRound.textContent = `· ${ROUND_LABEL.toLowerCase()} ${st.id}`;
         const clayMetaEl = document.getElementById('clay-meta-controls');
         if (clayMetaEl) clayMetaEl.innerHTML = renderClayMetaControls(st);
+        updateClayMetaCount(st);
         const fixedPresentationEl = document.getElementById('fixed-presentation-controls');
         if (fixedPresentationEl) fixedPresentationEl.innerHTML = renderClayMetaControls(st);
         renderScoringControls();
