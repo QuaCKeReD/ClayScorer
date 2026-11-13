@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-13 (distance value only)';
+    const SCORER_BUILD = 'scorer 2026-11-13 (export presentations list)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -1417,13 +1417,7 @@
         state.stands.forEach(st => {
             const total = standTargets(st);
             const pairCount = Math.ceil(total / 2);
-            const descLines = standPresentationLines(st);
-            const descTxt = descLines.length > 0;
-            const descHtml = descTxt
-                ? `<div style="font-size:${isShare ? '9pt' : '7pt'}; font-style:italic; font-weight:normal; line-height:1.15; padding:2px 4px 0; white-space:normal; word-break:break-word; text-align:left;">${descLines.map(escapeHtml).join('<br>')}</div>`
-                : '';
-            const heightStyle = descTxt ? '' : `height:${headH};`;
-            h += `<th colspan="${pairCount}" style="vertical-align:middle; ${heightStyle} ${standHeaderBorder}"><div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:2px 0;"><div style="font-weight:900;">${abbr} ${st.id}${st.extraClay ? '+1' : ''}</div>${descHtml}</div></th>`;
+            h += `<th colspan="${pairCount}" style="vertical-align:middle; height:${headH}; ${standHeaderBorder}"><div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:2px 0;"><div style="font-weight:900;">${abbr} ${st.id}${st.extraClay ? '+1' : ''}</div></div></th>`;
         });
         if (OPTION) {
             h += `<th style="width:70px; vertical-align:middle; border-left:${blockBorder} !important; border-right:${blockBorder} !important; ${headerBottomBorder}" rowspan="2"><div class="cell-center">${escapeHtml(OPTION.label || 'OPT')}</div></th>`;
@@ -1471,6 +1465,27 @@
         });
     }
 
+    // Clay presentation descriptions for the PDF/PNG, listed after the grid: one block per
+    // stand that has any, one line per described clay. Empty when nothing is described.
+    function exportPresentationsHtml(isShare) {
+        if (!HAS_STAND_DESCRIPTIONS) return '';
+        const blocks = state.stands
+            .map(st => ({ st, lines: standPresentationLines(st) }))
+            .filter(b => b.lines.length);
+        if (!blocks.length) return '';
+        const size = isShare ? '12pt' : '8.5pt';
+        const head = isShare ? '13pt' : '9pt';
+        return `<div style="margin-top:${isShare ? '24px' : '10pt'}; font-size:${size}; line-height:1.35; page-break-inside:auto;">
+            <div style="font-weight:bold; font-size:${head}; border-bottom:${isShare ? '1.5pt' : '0.75pt'} solid black; padding-bottom:${isShare ? '10px' : '3px'}; margin-bottom:${isShare ? '10px' : '6px'};">PRESENTATIONS</div>
+            ${blocks.map(({ st, lines }) => `<div style="margin-bottom:${isShare ? '10px' : '5pt'}; page-break-inside:avoid;">
+                <div style="font-weight:bold;">${escapeHtml(ROUND_LABEL)} ${st.id}${st.extraClay ? ' (+1)' : ''}</div>
+                <ul style="margin:2px 0 0; padding-left:${isShare ? '28px' : '14pt'}; list-style:disc;">
+                    ${lines.map(l => `<li style="margin:1px 0;">${escapeHtml(l)}</li>`).join('')}
+                </ul>
+            </div>`).join('')}
+        </div>`;
+    }
+
     window.exportToPDF = () => {
         document.getElementById('p-ground').innerText = state.ground || 'N/A';
         document.getElementById('p-date').innerText = yyyymmdd(state.date) || 'N/A';
@@ -1480,6 +1495,7 @@
         document.getElementById('p-notes').innerText = state.notes || '';
         document.getElementById('p-discipline').innerText = D.name;
         generateExportGrid('p-grid');
+        document.getElementById('p-presentations').innerHTML = exportPresentationsHtml(false);
 
         // The browser derives the print dialog's suggested filename from document.title.
         // Swap it, print, then restore on the afterprint event so the tab title stays clean.
@@ -1499,6 +1515,7 @@
         if (capEv) capEv.style.display = (state.event || '').trim() ? '' : 'none';
         document.getElementById('cap-discipline').innerText = D.name;
         generateExportGrid('cap-grid');
+        document.getElementById('cap-presentations').innerHTML = exportPresentationsHtml(true);
         const filename = `${filenameStem()}.png`;
         try {
             container.style.position = 'fixed'; container.style.left = '0'; container.style.top = '0'; container.style.zIndex = '-1';
@@ -1532,7 +1549,7 @@
                  <div id="field-format" class="h-11 flex items-center bg-slate-100 border border-slate-300 rounded-lg px-2 text-sm font-semibold text-slate-700"></div>
                </div>`;
         const standDescriptionControl = HAS_STAND_DESCRIPTIONS && !HAS_PRESENTATION_MAP
-            ? `<details id="clay-meta-panel" class="group bg-slate-500 border-t border-slate-400 no-print" ${readPresentationOpen() ? 'open' : ''} ontoggle="savePresentationOpen(this.open)">
+            ? `<details id="clay-meta-panel" class="group bg-slate-500 border-t border-slate-400 no-print" ${readPresentationOpen() ? 'open' : ''} ontoggle="window.savePresentationOpen && savePresentationOpen(this.open)">
                     <summary class="list-none cursor-pointer px-3 py-2 flex items-center justify-between gap-2 text-xs font-semibold text-white">
                         <span class="flex items-center gap-1.5 min-w-0"><i data-lucide="chevron-right" class="w-4 h-4 flex-shrink-0 transition-transform group-open:rotate-90"></i> Clay presentation <span class="font-normal text-slate-200 group-open:hidden">(tap to show)</span><span class="font-normal text-slate-200 hidden group-open:inline">— tap a clay to describe it</span></span>
                         <span id="clay-meta-count" class="flex-shrink-0 font-normal text-slate-200"></span>
@@ -1728,6 +1745,7 @@
                 <div id="cap-event-row" style="display:none; text-align:center; font-size: 12pt; font-weight: bold; font-style: italic; padding: 6px 0 10px; margin-bottom: 10px; border-bottom: 1pt solid #ccc;"><strong>EVENT:</strong> <span id="cap-event"></span></div>
                 <div style="height: 10px;"></div>
                 <table id="cap-grid"></table>
+                <div id="cap-presentations"></div>
                 <div style="margin-top: 30px; display: flex; justify-content: space-between; align-items: center; font-size: 11pt; font-weight: bold;">
                     <span>Generated by QuaCKeReD</span>
                     <div style="border-top: 1.5pt solid black; width: 300px; text-align: center; padding-top: 8px;">SCORER / SHOOTER SIGNATURE</div>
@@ -1743,6 +1761,7 @@
                 <div id="p-event-row" class="print-event" style="display:none;"><strong>EVENT:</strong> <span id="p-event"></span></div>
                 <table id="p-grid"></table>
                 <div class="print-notes"><strong>NOTES:</strong> <span id="p-notes"></span></div>
+                <div id="p-presentations"></div>
                 <div class="signature-section"><div class="sig-line">SIGNATURE</div></div>
                 <div style="text-align: center; margin-top: 20px; font-size: 8pt; font-weight: bold; color: #666;">Generated by QuaCKeReD</div>
             </div>
