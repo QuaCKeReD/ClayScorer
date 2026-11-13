@@ -152,3 +152,14 @@ Every export shares the same filename stem — `YYYYMMDD_${D.id}[_ground-slug][_
 5. Add the page to the `COPY` line in `Dockerfile`, and the discipline `id` to `DISCIPLINES` in `server/server.js` (the API rejects unknown disciplines).
 
 If the new discipline needs behaviour the shared engine doesn't yet support (e.g. a new scoring shape), extend `assets/scorer.js` gated by a new config flag rather than forking the engine.
+
+## Future cleanup
+
+Deferred tasks — not urgent, do them only when asked.
+
+- **Remove the Firebase import tool** (the Firebase → server migration was completed 2026-11-13):
+  - Delete `migrate.html`, `assets/firebase-migrate.js`, `assets/firebase-config.js`.
+  - Drop `migrate.html` from the `COPY` line in `Dockerfile`, then rebuild (`docker compose up -d --build`).
+  - Remove the "From the old Firebase cloud sync" paragraph under *Moving existing rounds* in `SELF_HOSTING.md`, and the `migrate.html` entry under *Files* above.
+  - Outside the repo: in the Firebase console (Authentication › Settings › Authorized domains), remove any domain added just for the migration.
+  - Don't confuse this with `migrateFromStandId` / `migrateFromIndex` in `skeet.html` / `scorer.js` — that's the ESK option-target handling and must stay.
