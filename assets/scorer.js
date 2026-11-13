@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-13 (presentation deck)';
+    const SCORER_BUILD = 'scorer 2026-11-13 (regular shooters)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -788,6 +788,134 @@
         if (state.shooters.length >= MAX_SHOOTERS) return;
         state.shooters.push({ id: Date.now(), name: `Shooter ${state.shooters.length + 1}`, cpsa: '', class: 'U' });
         render(); save();
+    };
+
+    // ---- Regular shooters: a saved list (name, CPSA no., class, gear) shared by every
+    // discipline on this device, and synced per user by server-sync.js when signed in.
+    // Stored as { items, updatedAt }; the newest whole list wins when syncing.
+    const REGULARS_KEY = 'clayscorer:regulars';
+    function readRegularsStore() {
+        try {
+            const v = JSON.parse(localStorage.getItem(REGULARS_KEY) || 'null');
+            return v && Array.isArray(v.items) ? v : { items: [], updatedAt: 0 };
+        } catch (e) { return { items: [], updatedAt: 0 }; }
+    }
+    const readRegulars = () => readRegularsStore().items;
+    function writeRegulars(items) {
+        try { localStorage.setItem(REGULARS_KEY, JSON.stringify({ items, updatedAt: Date.now() })); } catch (e) {}
+        document.dispatchEvent(new CustomEvent('clayscorer:regulars-written'));
+    }
+    const sameName = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+    const regularFields = (s) => ({ name: String(s.name || '').trim(), cpsa: s.cpsa || '', class: s.class || 'U', gun: s.gun || '', cartridges: s.cartridges || '' });
+    const shooterHasScores = (id) => Object.values(state.hits[id] || {}).some(arr => (arr || []).some(h => h !== null && h !== undefined))
+        || (state.optionHits?.[id]?.hit ?? null) !== null;
+    // 'saved' = matches a regular exactly, 'changed' = a regular with this name differs, '' = not saved.
+    function regularStatus(s) {
+        const reg = readRegulars().find(x => sameName(x.name, s.name));
+        if (!reg) return '';
+        const a = regularFields(s), b = regularFields(reg);
+        return Object.keys(a).every(k => a[k] === b[k]) ? 'saved' : 'changed';
+    }
+
+    window.saveShooterAsRegular = (idx) => {
+        const s = state.shooters[idx];
+        if (!s || !String(s.name || '').trim()) return;
+        const items = readRegulars();
+        const existing = items.find(x => sameName(x.name, s.name));
+        if (existing) Object.assign(existing, regularFields(s));
+        else items.push({ id: `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, ...regularFields(s) });
+        writeRegulars(items);
+        render();
+        notify(existing ? `Updated ${s.name.trim()} in your regular shooters.` : `Saved ${s.name.trim()} as a regular shooter.`, 'success');
+    };
+
+    window.addRegularToSquad = (id) => {
+        const reg = readRegulars().find(x => x.id === id);
+        if (!reg) return;
+        if (state.shooters.some(s => sameName(s.name, reg.name))) { notify(`${reg.name} is already in the squad.`); return; }
+        // Fill an untouched placeholder ("Shooter 2", no CPSA no., no scores) before adding a row.
+        let sh = state.shooters.find(s => /^Shooter \d+$/.test(s.name || '') && !s.cpsa && !s.gun && !s.cartridges && !shooterHasScores(s.id));
+        if (!sh) {
+            if (state.shooters.length >= MAX_SHOOTERS) { notify(`The squad is full (${MAX_SHOOTERS} shooters).`, 'error'); return; }
+            sh = { id: Date.now(), name: '', cpsa: '', class: 'U' };
+            state.shooters.push(sh);
+        }
+        const f = regularFields(reg);
+        sh.name = f.name; sh.cpsa = f.cpsa; sh.class = f.class;
+        if (f.gun) sh.gun = f.gun; else delete sh.gun;
+        if (f.cartridges) sh.cartridges = f.cartridges; else delete sh.cartridges;
+        render(); save();
+    };
+
+    // Manage regulars: a centred window listing every saved shooter with editable fields.
+    function regularsDialogHtml() {
+        const items = readRegulars();
+        const field = (r, key, ph, max) => `<input type="text" value="${escapeHtml(r[key] || '')}" maxlength="${max}" placeholder="${ph}" aria-label="${ph}" onchange="updateRegular('${r.id}', '${key}', this.value)" class="bg-white border border-slate-400 rounded-md px-2 py-1.5 text-sm w-full min-w-0">`;
+        return `<div class="fixed inset-0 z-[60] bg-slate-900/60" onclick="closeRegulars()" aria-hidden="true"></div>
+            <div role="dialog" aria-modal="true" aria-label="Regular shooters" class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[61] w-[min(34rem,calc(100vw-1rem))] max-h-[85vh] overflow-y-auto rounded-xl border-4 border-orange-500 ring-4 ring-white/80 bg-white shadow-2xl">
+                <div class="sticky top-0 z-10 flex items-center justify-between gap-2 px-3 py-2 bg-slate-100 border-b border-slate-300">
+                    <span class="${SECTION_HEAD}">Regular shooters <span class="normal-case font-semibold text-slate-500">(${items.length})</span></span>
+                    <button type="button" onclick="closeRegulars()" class="${BTN_SMALL} bg-slate-900 text-white border-slate-900">Done</button>
+                </div>
+                <div class="p-3 space-y-2">
+                    ${items.length ? '' : `<p class="text-sm text-slate-600">No regular shooters yet. Tap <strong>+ Add regular</strong> below, or the ☆ next to a shooter in the squad.</p>`}
+                    ${items.map(r => `<div class="rounded-xl border border-slate-300 bg-slate-50 p-2 space-y-2">
+                        <div class="flex gap-2 items-center">
+                            ${field(r, 'name', 'Name', 40)}
+                            <input type="text" value="${escapeHtml(r.cpsa || '')}" maxlength="8" placeholder="CPSA no." aria-label="CPSA no." onchange="updateRegular('${r.id}', 'cpsa', this.value)" class="bg-white border border-slate-400 rounded-md px-2 py-1.5 text-sm w-24 flex-shrink-0">
+                            <select onchange="updateRegular('${r.id}', 'class', this.value)" aria-label="Class" class="bg-white border border-slate-400 rounded-md px-1 py-1.5 text-sm font-semibold w-16 flex-shrink-0">${CLASSES.map(c => `<option ${r.class === c ? 'selected' : ''}>${c}</option>`).join('')}</select>
+                            <button type="button" onclick="deleteRegular('${r.id}')" class="text-red-500 flex-shrink-0 w-8 h-8 flex items-center justify-center" aria-label="Delete ${escapeHtml(r.name || 'regular')}" title="Delete"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </div>
+                        <div class="flex gap-2">${field(r, 'gun', 'Gun (optional)', 60)}${field(r, 'cartridges', 'Cartridges (optional)', 60)}</div>
+                    </div>`).join('')}
+                    <button type="button" onclick="addRegular()" class="${BTN_SMALL} bg-white text-slate-900 border-slate-400 w-full h-10">+ Add regular</button>
+                    <p class="text-xs text-slate-600">Saved on this device for every discipline${window.ClayScorerCloud?.isSignedIn?.() ? ', and synced to your account' : '. Sign in to sync them to your other devices'}. Changes here don't alter rounds you've already set up.</p>
+                </div>
+            </div>`;
+    }
+    function renderRegularsDialog() {
+        const el = document.getElementById('regulars-dialog');
+        if (!el) return;
+        el.innerHTML = regularsDialogHtml();
+        if (window.lucide) lucide.createIcons();
+    }
+    window.openRegulars = () => {
+        let el = document.getElementById('regulars-dialog');
+        if (!el) { el = document.createElement('div'); el.id = 'regulars-dialog'; el.className = 'no-print'; document.body.appendChild(el); }
+        renderRegularsDialog();
+    };
+    window.closeRegulars = () => {
+        const el = document.getElementById('regulars-dialog');
+        if (!el) return;
+        el.remove();
+        // Drop blank entries left by "+ Add regular".
+        const items = readRegulars();
+        const named = items.filter(x => String(x.name || '').trim());
+        if (named.length !== items.length) writeRegulars(named);
+        render();
+    };
+    window.updateRegular = (id, key, value) => {
+        const items = readRegulars();
+        const reg = items.find(x => x.id === id);
+        if (!reg) return;
+        reg[key] = key === 'class' ? value : String(value || '').trim();
+        writeRegulars(items);
+    };
+    window.addRegular = () => {
+        const items = readRegulars();
+        items.push({ id: `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, name: '', cpsa: '', class: 'U', gun: '', cartridges: '' });
+        writeRegulars(items);
+        renderRegularsDialog();
+        const inputs = document.querySelectorAll('#regulars-dialog input[aria-label="Name"]');
+        inputs[inputs.length - 1]?.focus();
+    };
+    window.deleteRegular = (id) => {
+        const items = readRegulars();
+        const reg = items.find(x => x.id === id);
+        if (!reg) return;
+        if (String(reg.name || '').trim() && !confirm(`Delete ${reg.name} from your regular shooters? Rounds they're in aren't affected.`)) return;
+        writeRegulars(items.filter(x => x.id !== id));
+        renderRegularsDialog();
     };
 
     window.removeShooter = (id) => {
@@ -1782,8 +1910,12 @@
                     <div>
                         <div class="flex justify-between items-center mb-2">
                             <h3 class="${SECTION_HEAD}">Squad <span id="squad-count" class="normal-case font-semibold text-slate-400"></span></h3>
-                            <button id="add-shooter-btn" onclick="addShooter()" class="${BTN_SMALL} bg-slate-900 text-white border-slate-900 disabled:opacity-40">+ Add shooter</button>
+                            <div class="flex gap-2">
+                                <button onclick="openRegulars()" class="${BTN_SMALL} bg-white text-slate-800 border-slate-400 inline-flex items-center gap-1"><i data-lucide="users" class="w-3.5 h-3.5"></i> Regulars</button>
+                                <button id="add-shooter-btn" onclick="addShooter()" class="${BTN_SMALL} bg-slate-900 text-white border-slate-900 disabled:opacity-40">+ Add shooter</button>
+                            </div>
                         </div>
+                        <div id="regular-picker" class="mb-2"></div>
                         <div class="squad-grid-item px-2.5 pb-1 text-[11px] font-semibold text-slate-700" aria-hidden="true">
                             <span>#</span><span>Name</span><span>CPSA no.</span><span>Class</span><span></span>
                         </div>
@@ -2211,9 +2343,30 @@
                 <div class="flex gap-2 min-w-0" style="grid-column: 2 / 5;">
                     <input type="text" value="${escapeHtml(s.gun || '')}" maxlength="40" placeholder="Gun (optional)" aria-label="Shooter ${i + 1} gun" onchange="updateShooter(${i}, 'gun', this.value)" class="bg-white border border-slate-300 rounded-md px-2 py-1.5 text-sm w-full min-w-0">
                     <input type="text" value="${escapeHtml(s.cartridges || '')}" maxlength="40" placeholder="Cartridges (optional)" aria-label="Shooter ${i + 1} cartridges" onchange="updateShooter(${i}, 'cartridges', this.value)" class="bg-white border border-slate-300 rounded-md px-2 py-1.5 text-sm w-full min-w-0">
-                </div>`;
+                </div>
+                ${(() => {
+                    const st = regularStatus(s);
+                    const label = st === 'saved' ? 'Saved as a regular shooter' : (st === 'changed' ? 'Update regular shooter with these details' : 'Save as a regular shooter');
+                    return `<button onclick="saveShooterAsRegular(${i})" class="flex justify-center items-center h-8 ${st ? 'text-amber-500' : 'text-slate-400'}" aria-label="${label}: ${escapeHtml(s.name)}" title="${label}"><i data-lucide="${st === 'changed' ? 'star-half' : 'star'}" class="w-5 h-5 ${st === 'saved' ? 'fill-amber-400' : ''}"></i></button>`;
+                })()}`;
             list.appendChild(div);
         });
+
+        // "Add a regular shooter" picker
+        const picker = document.getElementById('regular-picker');
+        if (picker) {
+            const regs = readRegulars().filter(x => String(x.name || '').trim()).slice().sort((a, b) => a.name.localeCompare(b.name));
+            picker.innerHTML = regs.length
+                ? `<select onchange="if (this.value) { addRegularToSquad(this.value); this.value = ''; }" aria-label="Add a regular shooter" class="${FIELD} !h-10 !text-slate-700">
+                        <option value="">+ Add a regular shooter…</option>
+                        ${regs.map(x => {
+                            const inSquad = state.shooters.some(s => sameName(s.name, x.name));
+                            const meta = [x.cpsa, x.class].filter(Boolean).join(' · ');
+                            return `<option value="${escapeHtml(x.id)}" ${inSquad ? 'disabled' : ''}>${escapeHtml(x.name)}${meta ? ` (${escapeHtml(meta)})` : ''}${inSquad ? ' — in squad' : ''}</option>`;
+                        }).join('')}
+                    </select>`
+                : `<p class="text-xs text-slate-600">Tap ☆ next to a shooter to save them as a regular, then pick them from a list next time.</p>`;
+        }
 
         // Stand nav — each button shows whether the squad has finished that stand.
         const navDiv = document.getElementById('stand-nav'); navDiv.innerHTML = '';
@@ -2450,7 +2603,14 @@
         saveCurrent: () => save(),
         replaceHistory,
         loadRound: (key) => window.loadRound(key),
-        refreshCurrentRoundFromHistory
+        refreshCurrentRoundFromHistory,
+        // Regular shooters (synced by server-sync.js): replace without re-stamping updatedAt.
+        getRegularsStore: () => readRegularsStore(),
+        replaceRegulars(store) {
+            try { localStorage.setItem(REGULARS_KEY, JSON.stringify({ items: Array.isArray(store.items) ? store.items : [], updatedAt: store.updatedAt || 0 })); } catch (e) {}
+            renderRegularsDialog();
+            render();
+        }
     };
 
     // Read-only snapshot of the current round for assets/presentation.js (the slide deck).
@@ -2544,6 +2704,7 @@
         });
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
+                window.closeRegulars();
                 window.closeScorecard();
                 window.closeHeaderMenus();
                 closeClayMetaControls();

@@ -63,6 +63,12 @@ db.exec(`
         deleted INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (user_id, discipline, round_key)
     );
+    -- Each user's saved "regular shooters" (one JSON list per user, newest version wins).
+    CREATE TABLE IF NOT EXISTS regulars (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        data TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
 `);
 
 const q = {
@@ -79,6 +85,11 @@ const q = {
     deleteUserSessionsExcept: db.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash <> ?'),
     deleteUserSessions: db.prepare('DELETE FROM sessions WHERE user_id = ?'),
     purgeSessions: db.prepare('DELETE FROM sessions WHERE expires_at <= ?'),
+    getRegulars: db.prepare('SELECT data, updated_at FROM regulars WHERE user_id = ?'),
+    upsertRegulars: db.prepare(`
+        INSERT INTO regulars (user_id, data, updated_at) VALUES (?, ?, ?)
+        ON CONFLICT (user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at
+        WHERE excluded.updated_at > regulars.updated_at`),
     listRounds: db.prepare('SELECT round_key, state, updated_at, deleted FROM rounds WHERE user_id = ? AND discipline = ?'),
     getRound: db.prepare('SELECT updated_at FROM rounds WHERE user_id = ? AND discipline = ? AND round_key = ?'),
     // Upserts only win when they are newer than what the server already holds.
@@ -250,6 +261,27 @@ async function handleApi(req, res, url) {
         // Sign out every other device that knew the old password.
         q.deleteUserSessionsExcept.run(user.id, sha256(sessionToken(req)));
         return sendJson(res, 200, { ok: true });
+    }
+
+    // --- Regular shooters: GET returns the list, PUT replaces it if newer ---
+    if (pathname === '/api/regulars') {
+        const user = requireUser(req);
+        if (method === 'GET') {
+            const row = q.getRegulars.get(user.id);
+            return sendJson(res, 200, { regulars: row ? JSON.parse(row.data) : null, updatedAt: row ? row.updated_at : 0 });
+        }
+        if (method === 'PUT') {
+            const { regulars, updatedAt } = await readJson(req);
+            if (!Array.isArray(regulars) || regulars.length > 200 || !Number.isFinite(updatedAt)) throw new HttpError(400, 'regulars (max 200) and updatedAt are required');
+            const str = (v, n) => String(v ?? '').slice(0, n);
+            const clean = regulars.filter(r => r && typeof r === 'object' && String(r.name || '').trim()).map(r => ({
+                id: str(r.id, 40), name: str(r.name, 40), cpsa: str(r.cpsa, 12), class: str(r.class, 4),
+                gun: str(r.gun, 60), cartridges: str(r.cartridges, 60)
+            }));
+            const result = q.upsertRegulars.run(user.id, JSON.stringify(clean), Math.trunc(updatedAt));
+            return sendJson(res, 200, { applied: result.changes > 0, serverUpdatedAt: q.getRegulars.get(user.id)?.updated_at ?? null });
+        }
+        throw new HttpError(405, 'Method not allowed');
     }
 
     // --- Rounds: /api/rounds/:discipline[/:roundKey] ---

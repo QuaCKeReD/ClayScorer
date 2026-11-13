@@ -52,6 +52,14 @@ const SQUAD = [
   await p.evaluate(() => { document.getElementById('setup-panel').open = true; window.scrollTo(0, 0); });
   await shot('setup');
 
+  // 2b. Regular shooters: save two via the star, then the picker and the manager
+  await p.evaluate(() => { saveShooterAsRegular(0); saveShooterAsRegular(1); document.getElementById('toast').className = 'toast hidden'; });
+  await scrollTo('#regular-picker', 200);
+  await shot('regulars-squad');
+  await p.locator('button:has-text("Regulars")').click();
+  await shot('regulars-manager');
+  await p.evaluate(() => closeRegulars());
+
   // 3. Scoring a stand: pairs, +1, Shooting / First up
   await p.evaluate(() => { setExtraClay(); });
   await scoreStand(1, ['HHMHHHM', 'HM.', '']);

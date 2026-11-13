@@ -20,6 +20,8 @@
     // { roundKey: updatedAt } — the version of each round this device last agreed with the server.
     // A key here that's missing from local history means "deleted on this device, tell the server".
     const SYNCED_KEY = `${discipline.storageKey}:synced`;
+    // updatedAt of the regular-shooters list this device last agreed with the server.
+    const REGULARS_SYNCED_KEY = 'clayscorer:regulars:synced';
     const PUSH_DELAY_MS = 1500;
     const REFRESH_AFTER_MS = 30 * 1000;
     const MUTATE_HEADERS = { 'Content-Type': 'application/json', 'X-ClayScorer': '1' };
@@ -100,6 +102,27 @@
             try { bridge.replaceHistory(local); } finally { applyingRemote = false; }
             if (currentChanged) bridge.refreshCurrentRoundFromHistory();
         }
+        await pullRegulars();
+    }
+
+    // Regular shooters: one list per user; the newer whole list wins.
+    async function pullRegulars() {
+        const { regulars, updatedAt } = await api('GET', '/api/regulars');
+        const local = bridge.getRegularsStore();
+        if (regulars && updatedAt > (local.updatedAt || 0)) {
+            applyingRemote = true;
+            try { bridge.replaceRegulars({ items: regulars, updatedAt }); } finally { applyingRemote = false; }
+        }
+        if (regulars && updatedAt >= (local.updatedAt || 0)) localStorage.setItem(REGULARS_SYNCED_KEY, String(updatedAt));
+    }
+
+    async function pushRegulars() {
+        const local = bridge.getRegularsStore();
+        const synced = Number(localStorage.getItem(REGULARS_SYNCED_KEY) || 0);
+        if (!local.updatedAt || local.updatedAt <= synced) return;
+        const result = await api('PUT', '/api/regulars', { regulars: local.items, updatedAt: local.updatedAt });
+        if (result.applied) localStorage.setItem(REGULARS_SYNCED_KEY, String(local.updatedAt));
+        else await pullRegulars();
     }
 
     async function push() {
@@ -122,6 +145,7 @@
             writeSynced(synced);
         }
         if (serverHadNewer) await pull();
+        await pushRegulars();
     }
 
     async function syncNow({ pullFirst = true } = {}) {
@@ -171,6 +195,7 @@
         user = null;
         // Rounds stay on this device; forget sync bookkeeping so the next account starts clean.
         localStorage.removeItem(SYNCED_KEY);
+        localStorage.removeItem(REGULARS_SYNCED_KEY);
         lastSyncedAt = 0;
         lastError = '';
         renderPanel();
@@ -274,6 +299,7 @@
     async function start() {
         bridge.isSignedIn = () => !!user;
         document.addEventListener('clayscorer:history-written', schedulePush);
+        document.addEventListener('clayscorer:regulars-written', schedulePush);
         window.addEventListener('online', () => syncNow());
         window.addEventListener('offline', renderPanel);
         document.addEventListener('visibilitychange', () => {

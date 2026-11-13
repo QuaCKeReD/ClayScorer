@@ -72,6 +72,19 @@ Open **Round setup** at the top of the page.
 
 Everything saves automatically; there's no Save button.
 
+### Regular shooters
+
+Save the people you shoot with regularly so you don't have to type their details every time.
+
+- **Save a shooter:** tap the ☆ on their row in the squad. A filled gold star means they're saved. A half star means their details in this round differ from the saved ones; tap it to update the saved copy.
+- **Add a regular to a round:** pick them from **+ Add a regular shooter…** above the squad. Their name, CPSA no., class, gun and cartridges are filled in. They take the place of an untouched placeholder shooter ("Shooter 1" with no details or scores) if there is one; otherwise they're added as a new shooter. Anyone already in the squad is greyed out in the list.
+- **Edit or delete regulars:** tap **Regulars**. Changes there don't alter rounds you've already set up.
+- **Shared across disciplines:** the same list appears on all four discipline pages. When you're signed in it's also saved to your account and appears on your other devices. If you edit the list on two devices before they sync, the most recent edit wins.
+
+<img src="guide/regulars-squad.png" width="300" alt="Squad with the regular shooters list and stars">
+
+<img src="guide/regulars-manager.png" width="300" alt="Managing regular shooters">
+
 Once the first target is scored, Round setup folds away to give the scoring more room. Tap its heading to open it again. A one-line summary (ground, event, date, shooters, targets) stays visible.
 
 ---
@@ -298,7 +311,7 @@ Tap the **cloud** button in the header and sign in with the username and passwor
 
 How syncing works:
 
-- **What syncs:** rounds in History, meaning rounds with a ground or event name. A round with no name is not synced.
+- **What syncs:** rounds in History, meaning rounds with a ground or event name, and your [regular shooters](#regular-shooters). A round with no name is not synced.
 - **When:** changes are sent automatically a moment after you make them. The app also checks for changes from your other devices when it opens, when you sign in, when the connection comes back, and when you return to it. **Sync now** forces a check.
 - **Same round on two devices:** the most recent change wins.
 - **Deleting:** deleting a round when signed in deletes it from the server and your other devices.
