@@ -150,7 +150,7 @@ Every export shares the same filename stem — `YYYYMMDD_${D.id}[_ground-slug][_
 - `Dockerfile`, `docker-compose.yml`, `.env.example`, `.dockerignore` — container build and stack; `./data` is bind-mounted to `/data`. `SELF_HOSTING.md` has deployment notes.
 - `service_worker.js` — service worker: cache-first for the listed assets, network fallback for everything else. On activate, deletes any cache whose name isn't the current `CACHE_NAME`.
 - `manifest.json` — PWA install metadata. `start_url` is the landing page.
-- `docs/USER_GUIDE.md` + `docs/guide/*.png` — end-user guide with iPhone screenshots (fictitious data). Screenshots come from `docs/tools/generate-guide-screenshots.js`.
+- `docs/USER_GUIDE.md` + `docs/guide/*.png` — end-user guide with iPhone screenshots (fictitious data). Screenshots come from `docs/tools/generate-guide-screenshots.js`. Keep each `<img width="300">` on its own line between paragraphs — no `align`/float, so text doesn't wrap beside images (readers use it on iPhones).
 - `docs/example-outputs.pdf` — sample scorecard image + Print/PDF output for every discipline (fictitious data), from `docs/tools/generate-examples.js`.
 - `docs/tools/generate-docs.sh [all|examples|guide]` — rebuilds the generated docs from the working tree: throwaway app container (in-memory DB) + Playwright image on a private Docker network, cleaned up afterwards.
 - `_archive/indexv1.html`, `_archive/indexv2.html`, `_archive/indexv3.html` — historical snapshots of the original sporting-only single-file app. Not linked from anywhere; ignore unless the user explicitly refers to them.

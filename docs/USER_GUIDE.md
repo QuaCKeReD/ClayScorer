@@ -29,7 +29,7 @@ Screenshots are from an iPhone. Names and grounds in them are made up. For what 
 
 ## 1. Getting started
 
-<img src="guide/home.png" width="300" align="right" alt="Home page with the four discipline tiles">
+<img src="guide/home.png" width="300" alt="Home page with the four discipline tiles">
 
 Open the app's web address and pick a discipline. Each discipline keeps its own rounds, so a Sporting round and a Skeet round never get mixed up.
 
@@ -54,13 +54,11 @@ If a discipline has a round in progress, its tile shows **Continue: …** with t
 
 The thin orange bar under the header shows how much of the round has been shot.
 
-<br clear="right">
-
 ---
 
 ## 2. Setting up a round
 
-<img src="guide/setup.png" width="300" align="right" alt="Round setup panel">
+<img src="guide/setup.png" width="300" alt="Round setup panel">
 
 Open **Round setup** at the top of the page.
 
@@ -73,13 +71,11 @@ Everything saves automatically; there's no Save button.
 
 Once the first target is scored, Round setup folds away to give the scoring more room. Tap its heading to open it again. A one-line summary (ground, event, date, shooters, targets) stays visible.
 
-<br clear="right">
-
 ---
 
 ## 3. Scoring
 
-<img src="guide/scoring.png" width="300" align="right" alt="Scoring a stand">
+<img src="guide/scoring.png" width="300" alt="Scoring a stand">
 
 **Moving between stands.** The numbered buttons under the header take you to a stand: **R1–R5** for rounds on Sportrap and Compak, stations on Skeet. You can also use **Prev** and **Next** at the bottom. A small dot on a stand button shows its progress: amber while it's partly shot, green once the whole squad has finished it. A finished stand's button also turns light green.
 
@@ -93,8 +89,6 @@ Once the first target is scored, Round setup folds away to give the scoring more
 
 **Scrolling scores on phones.** On English Sporting and Compak, each shooter's row scrolls sideways on a phone, with about three pairs in view. A soft fade at the edge means there's more to see. The row remembers where you scrolled, opens on the shooter's next unshot pair when you change stand, and slides on to the next pair when you finish one. Sportrap and Skeet rows wrap onto a second line instead when they don't fit.
 
-<br clear="right">
-
 ---
 
 ## 4. Discipline notes
@@ -105,7 +99,7 @@ On each stand, under **Pairs on this stand**, choose 2–6 pairs. Switch on **Ex
 
 ### Sportrap (STR) and Compak (CSP)
 
-<img src="guide/sportrap.png" width="300" align="right" alt="Sportrap scoring">
+<img src="guide/sportrap.png" width="300" alt="Sportrap scoring">
 
 A **round** (R1–R5) is one pass of the squad. Each shooter starts each round on a physical **stand** (1–5); the stand picker next to each name sets this. By default shooters rotate one stand per round.
 
@@ -113,14 +107,12 @@ Under **Round setup › Stand setup** you set, for each physical stand, how its 
 
 The **Presentations** panel above the scoring card is where you describe each presentation (see [section 5](#5-describing-clay-presentations)). Compak has seven presentations (1/A–7/G) by default; **+ Presentation** adds another.
 
-<br clear="right">
-
 <img src="guide/stand-setup.png" width="300" alt="Sportrap stand setup">
 <img src="guide/sportrap-presentations.png" width="300" alt="Sportrap presentations panel">
 
 ### English Skeet (ESK)
 
-<img src="guide/skeet.png" width="300" align="right" alt="English Skeet scoring with option target">
+<img src="guide/skeet.png" width="300" alt="English Skeet scoring with option target">
 
 Each box is labelled with what is thrown: **H** high house, **L** low house, **H+L** / **L+H** a double, with the first-named bird thrown first.
 
@@ -132,13 +124,11 @@ Each box is labelled with what is thrown: **H** high house, **L** low house, **H
 
 A shooter who is straight after 24 targets takes the option on station 7.
 
-<br clear="right">
-
 ---
 
 ## 5. Describing clay presentations
 
-<img src="guide/clay-presentation.png" width="300" align="right" alt="Clay presentation section">
+<img src="guide/clay-presentation.png" width="300" alt="Clay presentation section">
 
 You can record how each clay is presented. It's optional, and it doesn't affect scores. The descriptions appear in the app and on a separate page of the printed and shared scorecards.
 
@@ -147,7 +137,7 @@ You can record how each clay is presented. It's optional, and it doesn't affect 
 
 Tap a clay to open its description window:
 
-<img src="guide/clay-dialog.png" width="300" align="right" alt="Clay presentation window">
+<img src="guide/clay-dialog.png" width="300" alt="Clay presentation window">
 
 | Field | Options | Notes |
 |---|---|---|
@@ -169,8 +159,6 @@ The description builds itself as you go and is shown at the bottom of the window
 
 > Crosser quartering away left to right at 20–30 m, starting low and rising. Orange standard clay showing its full belly.
 
-<br clear="right">
-
 ---
 
 ## 6. Leaderboard, notes and locking
@@ -183,7 +171,7 @@ The description builds itself as you go and is shown at the bottom of the window
 
 **Round notes.** A free-text box for weather, conditions or anything else. Notes are saved with the round and printed on the PDF.
 
-<img src="guide/locked.png" width="300" align="right" alt="A locked round">
+<img src="guide/locked.png" width="300" alt="A locked round">
 
 **Locking a round.** Tap **Lock** in the header once a round is finished. A yellow banner shows the round is locked:
 
@@ -193,13 +181,11 @@ The description builds itself as you go and is shown at the bottom of the window
 
 Tap **Unlock**, on the banner or in the header, to make changes again.
 
-<br clear="right">
-
 ---
 
 ## 7. Round history
 
-<img src="guide/history.png" width="300" align="right" alt="Round history">
+<img src="guide/history.png" width="300" alt="Round history">
 
 Tap **History** in the header. Every round with a ground or event name is kept here automatically, newest shoot date first. Each entry shows the date, number of shooters and hits so far. The round you're on is marked **Open now**.
 
@@ -220,13 +206,11 @@ A round's identity is its **ground + date + event**. If you change any of these,
 - **The round needs a name.** It must have a ground or event name.
 - **What happens.** The round is added to History, and the app offers to open it.
 
-<br clear="right">
-
 ---
 
 ## 8. Exporting and sharing
 
-<img src="guide/export-menu.png" width="300" align="right" alt="Export menu">
+<img src="guide/export-menu.png" width="300" alt="Export menu">
 
 Tap the orange **Export** button:
 
@@ -244,15 +228,13 @@ How the scorecards look:
 
 See [example-outputs.pdf](example-outputs.pdf) for full examples of every discipline.
 
-<br clear="right">
-
 <img src="guide/scorecard-viewer.png" width="300" alt="Show scorecard viewer">
 
 ---
 
 ## 9. Signing in and syncing
 
-<img src="guide/sign-in.png" width="300" align="right" alt="Sign-in panel">
+<img src="guide/sign-in.png" width="300" alt="Sign-in panel">
 
 Signing in backs up your rounds to the server and lets you see them on your other devices. You don't need to sign in to score; without it, rounds stay on that device only.
 
@@ -275,13 +257,11 @@ How syncing works:
 - **Deleting:** deleting a round when signed in deletes it from the server and your other devices.
 - **Signing out:** the rounds already on the device stay there.
 
-<br clear="right">
-
 ---
 
 ## 10. Your account and managing users
 
-<img src="guide/account.png" width="300" align="right" alt="Account and users page">
+<img src="guide/account.png" width="300" alt="Account and users page">
 
 Open **Account & users** from the bottom of the home page.
 
@@ -294,8 +274,6 @@ Open **Account & users** from the bottom of the home page.
 - **Add user:** username, optional display name, password (8 or more characters) and role.
 
 Each user only sees their own rounds. You can't delete your own account or the last remaining admin.
-
-<br clear="right">
 
 ---
 
