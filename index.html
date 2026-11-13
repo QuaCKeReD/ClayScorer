@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="assets/scorer.css">
     <script src="assets/vendor/tailwindcss-3.4.17.js"></script>
 </head>
-<body class="bg-slate-50 text-slate-900 font-sans min-h-screen">
+<body class="bg-slate-300 text-slate-900 font-sans min-h-screen">
     <header class="bg-slate-900 text-white shadow-md">
         <div class="max-w-3xl mx-auto p-4 flex items-center gap-3">
             <div class="w-10 h-10 flex items-center justify-center bg-orange-500 rounded-lg shadow-sm">
@@ -24,48 +24,73 @@
             </div>
             <div>
                 <h1 class="text-xl font-black tracking-tight uppercase italic leading-none">ClayScorer Pro</h1>
-                <p class="text-[10px] text-orange-400 font-bold uppercase tracking-widest mt-1">Multi-Discipline Scorer</p>
+                <p class="text-[11px] text-orange-400 font-bold uppercase tracking-widest mt-1">Multi-Discipline Scorer</p>
             </div>
         </div>
     </header>
 
     <main class="max-w-3xl mx-auto p-4 space-y-4">
         <section>
-            <h2 class="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Choose a discipline</h2>
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">Choose a discipline</h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <a href="sporting.html" class="discipline-tile">
-                    <div class="text-[10px] font-black text-orange-500 uppercase tracking-widest">ESP</div>
+                <a href="sporting.html" class="discipline-tile" data-storage-key="clayscorer_esp">
+                    <div class="text-xs font-black text-orange-600 uppercase tracking-widest">ESP</div>
                     <div class="text-lg font-black uppercase italic mt-1">English Sporting</div>
-                    <p class="text-[11px] text-slate-500 mt-2 font-medium">Variable stands, variable pairs per stand, optional +1 extra clay per stand.</p>
+                    <p class="text-sm text-slate-700 mt-1.5">Choose the number of stands and pairs per stand, with an optional +1 single clay on each stand.</p>
+                    <p class="tile-resume hidden mt-2 text-xs font-semibold text-orange-800 bg-orange-50 border border-orange-200 rounded-lg px-2 py-1"></p>
                 </a>
-                <a href="sportrap.html" class="discipline-tile">
-                    <div class="text-[10px] font-black text-orange-500 uppercase tracking-widest">STR</div>
+                <a href="sportrap.html" class="discipline-tile" data-storage-key="clayscorer_str">
+                    <div class="text-xs font-black text-orange-600 uppercase tracking-widest">STR</div>
                     <div class="text-lg font-black uppercase italic mt-1">Sportrap</div>
-                    <p class="text-[11px] text-slate-500 mt-2 font-medium">5 stands · 5 targets per stand · 25 total.</p>
+                    <p class="text-sm text-slate-700 mt-1.5">5 stands · 5 targets per stand · 25 total.</p>
+                    <p class="tile-resume hidden mt-2 text-xs font-semibold text-orange-800 bg-orange-50 border border-orange-200 rounded-lg px-2 py-1"></p>
                 </a>
-                <a href="compak.html" class="discipline-tile">
-                    <div class="text-[10px] font-black text-orange-500 uppercase tracking-widest">CSP</div>
+                <a href="compak.html" class="discipline-tile" data-storage-key="clayscorer_csp">
+                    <div class="text-xs font-black text-orange-600 uppercase tracking-widest">CSP</div>
                     <div class="text-lg font-black uppercase italic mt-1">Compak Sporting</div>
-                    <p class="text-[11px] text-slate-500 mt-2 font-medium">5 stands · 5 targets per stand · 25 total.</p>
+                    <p class="text-sm text-slate-700 mt-1.5">5 stands · 5 targets per stand · 25 total.</p>
+                    <p class="tile-resume hidden mt-2 text-xs font-semibold text-orange-800 bg-orange-50 border border-orange-200 rounded-lg px-2 py-1"></p>
                 </a>
-                <a href="skeet.html" class="discipline-tile">
-                    <div class="text-[10px] font-black text-orange-500 uppercase tracking-widest">ESK</div>
+                <a href="skeet.html" class="discipline-tile" data-storage-key="clayscorer_esk">
+                    <div class="text-xs font-black text-orange-600 uppercase tracking-widest">ESK</div>
                     <div class="text-lg font-black uppercase italic mt-1">English Skeet</div>
-                    <p class="text-[11px] text-slate-500 mt-2 font-medium">7 stations · standard 25-target CPSA sequence (H / L / H+L / L+H).</p>
+                    <p class="text-sm text-slate-700 mt-1.5">7 stations · standard CPSA sequence (H / L / H+L / L+H) plus the option target.</p>
+                    <p class="tile-resume hidden mt-2 text-xs font-semibold text-orange-800 bg-orange-50 border border-orange-200 rounded-lg px-2 py-1"></p>
                 </a>
             </div>
         </section>
 
-        <section class="bg-white rounded-2xl border border-slate-200 p-4 text-[11px] font-medium text-slate-600 leading-relaxed">
-            Each discipline stores its round separately on this device. Works offline once loaded &mdash; on iOS/Android use "Add to Home Screen" to install.
+        <section class="bg-white rounded-2xl border border-slate-300 p-4 text-sm text-slate-800 leading-relaxed">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">How it works</h2>
+            <ul class="list-disc pl-5 space-y-1">
+                <li>Scores save automatically on this device as you tap. Each discipline keeps its own rounds.</li>
+                <li>Give a round a ground or event name to keep it in History, where you can reopen it later.</li>
+                <li>Works offline once loaded. On iOS/Android, use &ldquo;Add to Home Screen&rdquo; to install it.</li>
+            </ul>
         </section>
     </main>
 
-    <footer class="text-center text-[9px] text-slate-400 font-black uppercase tracking-widest py-6">
+    <footer class="text-center text-[11px] text-slate-700 font-black uppercase tracking-widest py-6">
         QuaCKeReD &middot; original idea by Sarge
     </footer>
 
     <script>
+        // Show "in progress" on a tile when that discipline has a round with scores on it.
+        document.querySelectorAll('[data-storage-key]').forEach((tile) => {
+            let round = null;
+            try { round = JSON.parse(localStorage.getItem(tile.dataset.storageKey) || 'null'); } catch (e) {}
+            if (!round) return;
+            let shot = 0;
+            Object.values(round.hits || {}).forEach(byStand => Object.values(byStand || {}).forEach(arr => (arr || []).forEach(h => {
+                if (h !== null && h !== undefined) shot++;
+            })));
+            if (!shot) return;
+            const name = [round.ground, round.event].map(v => (v || '').trim()).filter(Boolean).join(' · ') || 'Unnamed round';
+            const el = tile.querySelector('.tile-resume');
+            el.textContent = `Continue: ${name} · ${shot} target${shot !== 1 ? 's' : ''} scored`;
+            el.classList.remove('hidden');
+        });
+
         // Service workers require an http(s) origin — skip under file:// so we don't spam the console.
         if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:')) {
             window.addEventListener('load', () => {

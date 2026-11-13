@@ -2,6 +2,11 @@
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
 input, select, textarea { font-size: 16px !important; }
+/* iOS Safari gives date inputs a native look with an intrinsic min-width that overflows
+   narrow grid columns; strip it so the field fits its cell and lines up with the selects. */
+input[type="date"] { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; padding-top: 0; padding-bottom: 0; line-height: 42px; }
+/* Without native styling iOS pins the value to the top; give the value box the full inner height. */
+input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; min-height: 42px; line-height: 42px; }
 
 @media print {
     .no-print { display: none !important; }
@@ -36,7 +41,10 @@ input, select, textarea { font-size: 16px !important; }
 .cell-center { display: flex; align-items: center; justify-content: center; height: 100%; width: 100%; text-align: center; }
 
 .hit-bg { background-color: #16a34a !important; color: white !important; border-color: #15803d !important; }
-.miss-bg { background-color: #ef4444 !important; color: white !important; border-color: #b91c1c !important; }
+.miss-bg { background-color: #dc2626 !important; color: white !important; border-color: #b91c1c !important; }
+/* Unselected H/M are tinted so they're distinguishable before anything is tapped. */
+.score-btn-hit { background: #dcfce7; border-color: #4ade80; color: #15803d; }
+.score-btn-miss { background: #fee2e2; border-color: #f87171; color: #b91c1c; }
 
 .first-up-highlight { animation: lead-pulse 2s infinite; border: 2px solid #f97316 !important; }
 @keyframes lead-pulse {
@@ -46,23 +54,50 @@ input, select, textarea { font-size: 16px !important; }
 }
 
 .pair-stack {
-    display: flex; flex-direction: column; gap: 2px; padding: 2px;
-    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;
+    display: flex; flex-direction: column; gap: 3px; padding: 3px;
+    background: #ffffff; border: 2px solid #64748b; border-radius: 8px;
     flex: 1; min-width: 0;
 }
 
-.pair-stack.pair-extra { background: #fff7ed; border-color: #fdba74; }
+.pair-stack.pair-extra { background: #ffffff; border-color: #f97316; border-style: dashed; }
 
 .squad-grid-item {
     display: grid;
-    grid-template-columns: 20px 1fr 75px 45px 25px;
+    grid-template-columns: 20px minmax(0, 1fr) 84px 60px 32px;
     align-items: center;
     gap: 6px;
 }
 
 .discipline-tile {
     display: block; padding: 1rem; border-radius: 1rem; background: white;
-    border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    border: 1px solid #cbd5e1; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     transition: all 0.15s ease;
 }
 .discipline-tile:hover { border-color: #fb923c; box-shadow: 0 4px 12px rgba(0,0,0,0.06); transform: translateY(-1px); }
+
+/* Stand nav completion marker: amber = part shot, green = whole squad done. */
+.stand-nav-btn { position: relative; }
+.stand-nav-mark { position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 9999px; border: 1.5px solid white; }
+.stand-nav-partial { background: #f59e0b; }
+.stand-nav-done { background: #16a34a; }
+
+/* Switch used by the ESP extra-clay toggle. */
+.toggle-track { position: relative; width: 34px; height: 20px; border-radius: 9999px; background: #334155; flex-shrink: 0; transition: background 0.15s; }
+.toggle-track.is-on { background: #7c2d12; }
+.toggle-thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 9999px; background: white; transition: transform 0.15s; }
+.toggle-track.is-on .toggle-thumb { transform: translateX(14px); }
+
+/* Locked: only the scoring card is dimmed; the banner explains why. */
+#scoring-card.is-locked #scoring-area, #scoring-card.is-locked #scoring-controls { opacity: 0.55; }
+#lock-btn.lock-on { background: #f59e0b; border-color: #fbbf24; color: #1e293b; }
+
+summary::-webkit-details-marker { display: none; }
+
+.toast {
+    position: fixed; left: 50%; bottom: calc(80px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    z-index: 60; max-width: calc(100vw - 2rem); padding: 10px 14px; border-radius: 12px;
+    font-size: 14px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    background: #0f172a; color: white;
+}
+.toast-error { background: #991b1b; }
+.toast-success { background: #166534; }

@@ -19,7 +19,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-07-14 (sportrap stand format defaults)';
+    const SCORER_BUILD = 'scorer 2026-11-13 (legibility + layout review)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -45,6 +45,18 @@
         clayVisibility: ['Full', 'Part'],
         colour: ['Orange', 'Black', 'Pink', 'Green']
     };
+
+    // Shared class strings so sizing/contrast for field use (sunlight, gloves) is tuned in one place.
+    const LABEL = 'block text-xs font-semibold text-slate-800';
+    const FIELD = 'block w-full min-w-0 h-11 bg-white border border-slate-400 rounded-lg px-2 text-sm font-semibold text-slate-900';
+    const CARD = 'bg-white rounded-xl shadow border border-slate-300';
+    const SECTION_HEAD = 'text-xs font-bold uppercase tracking-wider text-slate-700';
+    const BTN_SCORE = 'flex-1 h-12 rounded-md font-black text-sm border-2 shadow-sm';
+    const BTN_SMALL = 'text-xs font-bold px-3 py-1.5 rounded-lg border';
+    const MENU_ITEM = 'w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-left text-sm font-semibold text-slate-700 hover:bg-slate-100';
+    const scoreBtnClass = (selected, isHit) => `${BTN_SCORE} ${selected
+        ? (isHit ? 'hit-bg' : 'miss-bg')
+        : (isHit ? 'score-btn-hit' : 'score-btn-miss')}`;
 
     const standTargets = (s) => s.targets + (s.extraClay ? 1 : 0);
     const presentationCountForStand = (s) => s.presentationCount || D.presentationCount || (D.fixedStands ? standTargets(s) : 2 + (s.extraClay ? 1 : 0));
@@ -165,7 +177,7 @@
     function clayMetaOptionRow(targetIdx, key, label, options, value, multi = false) {
         const selected = multi ? (Array.isArray(value) ? value : []) : [];
         return `<div class="space-y-1">
-            <div class="text-[8px] font-black uppercase tracking-widest text-slate-400">${label}</div>
+            <div class="text-[11px] font-bold uppercase tracking-wider text-slate-500">${label}</div>
             <div data-meta-row class="flex flex-wrap gap-1">
                 ${options.map(opt => {
                     const checked = multi ? selected.includes(opt) : value === opt;
@@ -174,7 +186,7 @@
                     const handler = multi
                         ? `updateClayMeta(${targetIdx}, '${key}', Array.from(this.closest('[data-meta-row]').querySelectorAll('input:checked')).map(input => input.value).join(','))`
                         : `updateClayMeta(${targetIdx}, '${key}', this.checked ? this.value : '')`;
-                    return `<label class="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-1 text-[9px] font-black uppercase text-slate-600">
+                    return `<label class="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700">
                         <input type="${inputType}" ${name} value="${escapeHtml(opt)}" ${checked ? 'checked' : ''} onchange="${handler}">
                         ${escapeHtml(opt)}
                     </label>`;
@@ -191,9 +203,9 @@
             const isSportingExtra = !D.fixedStands && stand.extraClay && idx === total - 1;
             const label = isSportingExtra ? 'Extra' : presentationLabel(idx);
             return `<details data-clay-meta-control class="relative">
-                <summary class="list-none cursor-pointer rounded-lg border border-slate-700 bg-slate-900 px-2 py-1.5 text-[9px] font-black uppercase text-white truncate">
+                <summary class="list-none cursor-pointer rounded-lg border border-slate-500 bg-slate-700 px-2 py-2 text-xs font-bold text-white truncate">
                     <span class="text-orange-400">${label}</span>
-                    <span data-clay-meta-summary="${idx}" class="normal-case font-bold text-slate-300 ml-1">${escapeHtml(clayMetaShortLabel(meta, 'Set presentation'))}</span>
+                    <span data-clay-meta-summary="${idx}" class="font-semibold text-slate-100 ml-1">${escapeHtml(clayMetaShortLabel(meta, 'Set presentation'))}</span>
                 </summary>
                 <div class="absolute right-0 z-30 mt-1 w-[min(34rem,calc(100vw-2rem))] rounded-xl border border-slate-200 bg-white p-2 shadow-xl space-y-2">
                     ${clayMetaOptionRow(idx, 'presentation', 'Presentation', CLAY_META_OPTIONS.presentation, meta.presentation)}
@@ -626,6 +638,10 @@
 
     window.removeShooter = (id) => {
         if (state.shooters.length <= 1) return;
+        const shooter = state.shooters.find(s => s.id === id);
+        const hasScores = Object.values(state.hits[id] || {}).some(arr => (arr || []).some(h => h !== null && h !== undefined))
+            || (state.optionHits?.[id]?.hit ?? null) !== null;
+        if (hasScores && !confirm(`Remove ${shooter?.name || 'this shooter'} and their recorded scores? This can't be undone.`)) return;
         state.shooters = state.shooters.filter(s => s.id !== id);
         if (state.presentationMap) delete state.presentationMap[id];
         if (state.presentationFormat) delete state.presentationFormat[id];
@@ -790,6 +806,18 @@
 
     const getUKDate = (d) => d ? new Date(d).toLocaleDateString('en-GB') : 'N/A';
 
+    // Non-blocking message for outcomes that need no decision (import results, sync failures).
+    // Keep confirm() for anything destructive.
+    let toastTimer = null;
+    function notify(message, tone = 'info') {
+        const el = document.getElementById('toast');
+        if (!el) { alert(message); return; }
+        el.textContent = message;
+        el.className = `toast toast-${tone}`;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { el.className = 'toast hidden'; }, 5000);
+    }
+
     function getShooterTotal(shId) {
         let t = 0;
         state.stands.forEach(st => {
@@ -806,7 +834,7 @@
             await deleteRemoteRound(key);
         } catch (err) {
             console.warn('[ClayScorer] Firebase round delete failed', err);
-            alert('Deleted locally, but the Firebase delete failed. Try cloud sync again when you are online.');
+            notify('Deleted locally, but the Firebase delete failed. Try cloud sync again when you are online.', 'error');
         }
     }
 
@@ -817,7 +845,7 @@
             await deleteRemoteHistory();
         } catch (err) {
             console.warn('[ClayScorer] Firebase history delete failed', err);
-            alert('Deleted local history, but the Firebase history delete failed. Try cloud sync again when you are online.');
+            notify('Deleted local history, but the Firebase history delete failed. Try cloud sync again when you are online.', 'error');
         }
     }
 
@@ -1075,13 +1103,13 @@
 
     window.importCSV = async (file) => {
         let text;
-        try { text = await file.text(); } catch (err) { alert('Could not read file: ' + err.message); return; }
+        try { text = await file.text(); } catch (err) { notify('Could not read file: ' + err.message, 'error'); return; }
         let parsed;
-        try { parsed = parseCSV(text); } catch (err) { alert('Could not parse CSV: ' + err.message); return; }
+        try { parsed = parseCSV(text); } catch (err) { notify('Could not parse CSV: ' + err.message, 'error'); return; }
 
         // Discipline guard — the shared engine can only score what the current page is set up for.
         if (parsed.meta.discipline && parsed.meta.discipline !== D.name && parsed.meta.discipline !== D.code) {
-            alert(`This CSV is from "${parsed.meta.discipline}". Open that discipline's page and import there.`);
+            notify(`This CSV is from "${parsed.meta.discipline}". Open that discipline's page and import there.`, 'error');
             return;
         }
 
@@ -1095,7 +1123,7 @@
                         && s.targets === fixed.targets + 1;
                     return s.targets === fixed.targets || isMigratedOptionStand;
                 });
-            if (!ok) { alert(`Stand structure doesn't match ${D.name}'s fixed layout — import cancelled.`); return; }
+            if (!ok) { notify(`Stand structure doesn't match ${D.name}'s fixed layout — import cancelled.`, 'error'); return; }
         }
 
         const importedState = makeDefaultState();
@@ -1190,7 +1218,7 @@
         const importKey = roundKey(importedState);
         const store = readHistory();
         if (!isNamedRound(importedState)) {
-            alert('Import needs at least a Ground or Event so the round has an identity — aborting.');
+            notify('Import needs at least a Ground or Event so the round has an identity — import cancelled.', 'error');
             return;
         }
         if (store[importKey] && !confirm('A round already exists in history for this date/ground/event. Overwrite it?')) return;
@@ -1201,6 +1229,8 @@
 
         if (confirm(`Imported "${importedState.ground || importedState.event}". Load it as the current round now?`)) {
             window.loadRound(importKey);
+        } else {
+            notify('Import saved to round history.', 'success');
         }
     };
 
@@ -1340,53 +1370,58 @@
 
     function mountSkeleton() {
         const setupStand = D.editable.standCount
-            ? `<div class="space-y-1">
-                 <label class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">${ROUND_LABEL} Count</label>
-                 <select id="field-stand-count" onchange="updateStandCount(this.value)" class="w-full bg-slate-50 border-none rounded-lg p-2 text-xs font-black">
+            ? `<div class="space-y-1 min-w-0">
+                 <label for="field-stand-count" class="${LABEL}">Number of ${ROUND_LABEL.toLowerCase()}s</label>
+                 <select id="field-stand-count" onchange="updateStandCount(this.value)" class="${FIELD}">
                    ${Array.from({ length: 20 }, (_, i) => `<option value="${i + 1}">${i + 1} ${ROUND_LABEL}${i > 0 ? 's' : ''}</option>`).join('')}
                  </select>
                </div>`
-            : `<div class="space-y-1">
-                 <label class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Format</label>
-                 <div id="field-format" class="bg-slate-50 rounded-lg p-2 text-xs font-black text-slate-700"></div>
+            : `<div class="space-y-1 min-w-0">
+                 <span class="${LABEL}">Format</span>
+                 <div id="field-format" class="h-11 flex items-center bg-slate-100 border border-slate-300 rounded-lg px-2 text-sm font-semibold text-slate-700"></div>
                </div>`;
         const standDescriptionControl = HAS_STAND_DESCRIPTIONS && !HAS_PRESENTATION_MAP
-            ? `<div class="bg-slate-800 px-3 py-2 border-t border-slate-700 no-print">
+            ? `<div class="bg-slate-500 px-3 py-2 border-t border-slate-400 no-print">
+                    <div class="text-[11px] font-semibold text-white mb-1.5">Clay presentation (optional) — tap a clay to describe it</div>
                     <div id="clay-meta-controls" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5"></div>
                 </div>`
             : '';
+        const headerBtn = 'bg-slate-800 h-9 px-2 rounded-lg border border-slate-700 inline-flex items-center gap-1.5 text-slate-200';
 
         document.getElementById('app-root').innerHTML = `
-        <header class="bg-slate-900 text-white sticky top-0 z-50 shadow-md no-print w-full relative">
+        <header id="app-header" class="bg-slate-900 text-white sticky top-0 z-50 shadow-md no-print w-full relative">
             <div class="max-w-5xl mx-auto p-3 flex justify-between items-center gap-2 relative">
                 <div class="flex items-center gap-2 min-w-0">
-                    <a href="index.html" aria-label="Home" class="w-8 h-8 flex items-center justify-center bg-orange-500 rounded-lg shadow-sm">
+                    <a href="index.html" aria-label="All disciplines" title="All disciplines" class="w-9 h-9 flex-shrink-0 flex items-center justify-center bg-orange-500 rounded-lg shadow-sm">
                         <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6">
                             <circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle>
                         </svg>
                     </a>
                     <div class="min-w-0">
-                        <div class="text-[8px] text-orange-400 font-black uppercase tracking-widest leading-none">${D.code}</div>
-                        <h1 class="text-base font-bold tracking-tight uppercase italic leading-none mt-0.5 truncate max-w-[82px] sm:max-w-none">${D.name}</h1>
+                        <div class="text-[11px] text-orange-400 font-black uppercase tracking-widest leading-none">${D.code}</div>
+                        <h1 class="text-base font-bold tracking-tight uppercase italic leading-none mt-0.5 truncate max-w-[110px] sm:max-w-none">${D.name}</h1>
                     </div>
+                    <span id="offline-status" class="hidden flex-shrink-0 items-center gap-1 rounded-full bg-slate-800 border border-slate-700 px-2 py-0.5 text-[11px] font-semibold text-amber-300" title="No connection — scores are still saved on this device">
+                        <i data-lucide="wifi-off" class="w-3 h-3"></i><span class="hidden sm:inline">Offline</span>
+                    </span>
                 </div>
-                <span id="offline-status" class="absolute left-1/2 top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 text-green-400/80 inline-flex items-center justify-center cursor-default pointer-events-none" title="Offline Ready" aria-label="Offline Ready">
-                    <i data-lucide="wifi-off" class="w-3 h-3"></i>
-                </span>
                 <div class="flex items-center gap-1 flex-shrink-0">
-                    <button id="history-menu-btn" onclick="toggleHeaderMenu('history')" class="bg-slate-800 px-1.5 sm:px-2 py-1.5 rounded-lg border border-slate-700 inline-flex items-center gap-1" aria-expanded="false" aria-controls="history-dropdown" title="History">
-                        <i data-lucide="archive" class="w-4 h-4 text-slate-300"></i>
-                        <span id="history-count-badge" class="min-w-5 h-5 px-1 rounded bg-orange-500 text-white text-[10px] font-black leading-5 text-center">0</span>
+                    <button id="history-menu-btn" onclick="toggleHeaderMenu('history')" class="${headerBtn}" aria-expanded="false" aria-controls="history-dropdown" aria-label="Round history" title="Round history">
+                        <i data-lucide="archive" class="w-4 h-4"></i>
+                        <span class="hidden sm:inline text-xs font-semibold">History</span>
+                        <span id="history-count-badge" class="min-w-5 h-5 px-1 rounded bg-orange-500 text-white text-[11px] font-black leading-5 text-center">0</span>
                     </button>
-                    <button id="cloud-menu-btn" onclick="toggleHeaderMenu('cloud')" class="bg-slate-800 px-1.5 sm:px-2 py-1.5 rounded-lg border border-slate-700 inline-flex items-center gap-1" aria-expanded="false" aria-controls="cloud-dropdown">
-                        <i data-lucide="cloud" class="w-4 h-4 text-slate-300"></i>
-                        <span id="cloud-status-badge" class="h-5 px-1.5 rounded bg-slate-700 text-slate-300 text-[9px] font-black leading-5 text-center uppercase">Off</span>
+                    <button id="cloud-menu-btn" onclick="toggleHeaderMenu('cloud')" class="${headerBtn}" aria-expanded="false" aria-controls="cloud-dropdown" aria-label="Cloud sync" title="Cloud sync">
+                        <i data-lucide="cloud" class="w-4 h-4"></i>
+                        <span id="cloud-status-badge" class="h-5 px-1.5 rounded bg-slate-700 text-slate-300 text-[11px] font-black leading-5 text-center uppercase">Off</span>
                     </button>
-                    <button id="export-menu-btn" onclick="toggleHeaderMenu('export')" class="bg-orange-500 p-2 rounded-lg border border-orange-400 inline-flex items-center justify-center" aria-expanded="false" aria-controls="export-dropdown" title="Export">
-                        <i data-lucide="download" class="w-4 h-4 text-white"></i>
+                    <button id="export-menu-btn" onclick="toggleHeaderMenu('export')" class="bg-orange-500 h-9 px-2 rounded-lg border border-orange-400 inline-flex items-center gap-1.5 text-white" aria-expanded="false" aria-controls="export-dropdown" aria-label="Export or share" title="Export or share">
+                        <i data-lucide="share-2" class="w-4 h-4"></i>
+                        <span class="hidden sm:inline text-xs font-semibold">Export</span>
                     </button>
-                    <button id="lock-btn" onclick="toggleLock()" class="bg-slate-800 p-2 rounded-lg border border-slate-700">
-                        <i data-lucide="unlock" id="lock-icon" class="w-4 h-4 text-slate-400"></i>
+                    <button id="lock-btn" onclick="toggleLock()" class="${headerBtn}" aria-pressed="false" aria-label="Lock scores" title="Lock scores">
+                        <i data-lucide="unlock" id="lock-icon" class="w-4 h-4"></i>
+                        <span id="lock-label" class="hidden sm:inline text-xs font-semibold">Lock</span>
                     </button>
                 </div>
             </div>
@@ -1399,19 +1434,19 @@
                     <div id="cloud-dropdown" class="hidden pointer-events-auto absolute right-2 top-2 w-[calc(100vw-1rem)] max-w-md">
                         <div id="cloud-sync-panel"></div>
                     </div>
-                    <div id="export-dropdown" class="hidden pointer-events-auto absolute right-2 top-2 w-48">
+                    <div id="export-dropdown" class="hidden pointer-events-auto absolute right-2 top-2 w-60">
                         <div class="bg-white text-slate-900 rounded-xl shadow-xl border border-slate-200 overflow-hidden p-2">
-                            <button onclick="closeHeaderMenus(); exportToPDF();" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-[10px] font-black uppercase text-slate-700 hover:bg-slate-100">
-                                <i data-lucide="file-text" class="w-4 h-4 text-slate-500"></i>
-                                Export PDF
+                            <button onclick="closeHeaderMenus(); exportToPDF();" class="${MENU_ITEM}">
+                                <i data-lucide="printer" class="w-4 h-4 text-slate-500"></i>
+                                Print / save as PDF
                             </button>
-                            <button onclick="closeHeaderMenus(); downloadCSV();" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-[10px] font-black uppercase text-slate-700 hover:bg-slate-100">
-                                <i data-lucide="file-spreadsheet" class="w-4 h-4 text-slate-500"></i>
-                                Export CSV
-                            </button>
-                            <button onclick="closeHeaderMenus(); shareAsImage();" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-[10px] font-black uppercase text-slate-700 hover:bg-slate-100">
+                            <button onclick="closeHeaderMenus(); shareAsImage();" class="${MENU_ITEM}">
                                 <i data-lucide="image" class="w-4 h-4 text-slate-500"></i>
-                                Export Image
+                                Share scorecard image
+                            </button>
+                            <button onclick="closeHeaderMenus(); downloadCSV();" class="${MENU_ITEM}">
+                                <i data-lucide="file-spreadsheet" class="w-4 h-4 text-slate-500"></i>
+                                Download CSV
                             </button>
                         </div>
                     </div>
@@ -1419,93 +1454,115 @@
             </div>
         </header>
 
-        <main id="app-container" class="max-w-5xl mx-auto p-2 space-y-3 transition-opacity duration-300">
+        <main id="app-container" class="max-w-5xl mx-auto p-2 space-y-3">
 
-            <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print grid grid-cols-2 gap-2">
-                <div class="col-span-2 sm:col-span-1 space-y-1">
-                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Shoot Ground</label>
-                    <input type="text" id="field-ground" placeholder="Ground name..." class="w-full bg-slate-50 border-none rounded-lg p-2 text-xs font-bold" oninput="updateField('ground', this.value)" onchange="commitField('ground', this.value)">
-                </div>
-                <div class="space-y-1">
-                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Shoot Date</label>
-                    <input type="date" id="field-date" class="w-full bg-slate-50 border-none rounded-lg p-2 text-xs font-bold" onchange="commitField('date', this.value)">
-                </div>
-                ${setupStand}
-                <div class="col-span-2 space-y-1">
-                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Event Name</label>
-                    <input type="text" id="field-event" placeholder="e.g. Club Championship" class="w-full bg-slate-50 border-none rounded-lg p-2 text-xs font-bold" oninput="updateField('event', this.value)" onchange="commitField('event', this.value)">
-                </div>
-            </section>
+            <details id="setup-panel" class="${CARD} no-print group" open>
+                <summary class="list-none cursor-pointer p-3 block">
+                    <!-- Flex lives on inner divs: iOS Safari doesn't reliably lay out a flex <summary>. -->
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="chevron-right" class="w-4 h-4 text-slate-500 flex-shrink-0 transition-transform group-open:rotate-90"></i>
+                        <div class="flex-1 min-w-0 ${SECTION_HEAD}">Round setup</div>
+                        <button onclick="event.preventDefault(); newRound()" class="${BTN_SMALL} bg-white text-slate-700 border-slate-300 flex-shrink-0">+ New round</button>
+                    </div>
+                    <div id="setup-summary" class="mt-1 pl-6 text-sm font-semibold text-slate-800 break-words"></div>
+                </summary>
+                <div class="px-3 pb-3 pt-3 space-y-4 border-t border-slate-100">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="col-span-2 sm:col-span-1 space-y-1 min-w-0">
+                            <label for="field-ground" class="${LABEL}">Shooting ground</label>
+                            <input type="text" id="field-ground" placeholder="e.g. West Wycombe" class="${FIELD}" oninput="updateField('ground', this.value)" onchange="commitField('ground', this.value)">
+                        </div>
+                        <div class="space-y-1 min-w-0">
+                            <label for="field-date" class="${LABEL}">Date</label>
+                            <input type="date" id="field-date" class="${FIELD}" onchange="commitField('date', this.value)">
+                        </div>
+                        ${setupStand}
+                        <div class="col-span-2 space-y-1">
+                            <label for="field-event" class="${LABEL}">Event name</label>
+                            <input type="text" id="field-event" placeholder="e.g. Club Championship" class="${FIELD}" oninput="updateField('event', this.value)" onchange="commitField('event', this.value)">
+                        </div>
+                        <p class="col-span-2 text-xs text-slate-500">Scores save automatically. Enter a ground or event name to keep this round in History.</p>
+                    </div>
 
-            <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print">
-                <div class="flex justify-between items-center mb-2">
-                    <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400">Squad Members</h3>
-                    <button onclick="addShooter()" class="text-[9px] bg-slate-900 text-white px-3 py-1 rounded-lg font-black uppercase">Add Shooter</button>
-                </div>
-                <div id="squad-list" class="space-y-2"></div>
-            </section>
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <h3 class="${SECTION_HEAD}">Squad <span id="squad-count" class="normal-case font-semibold text-slate-400"></span></h3>
+                            <button id="add-shooter-btn" onclick="addShooter()" class="${BTN_SMALL} bg-slate-900 text-white border-slate-900 disabled:opacity-40">+ Add shooter</button>
+                        </div>
+                        <div class="squad-grid-item px-2.5 pb-1 text-[11px] font-semibold text-slate-700" aria-hidden="true">
+                            <span>#</span><span>Name</span><span>CPSA no.</span><span>Class</span><span></span>
+                        </div>
+                        <div id="squad-list" class="space-y-2"></div>
+                    </div>
 
-            <div id="stand-nav" class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide no-scrollbar px-1 no-print"></div>
+                    ${HAS_PRESENTATION_MAP ? `
+                    <details class="group/stand rounded-xl border border-slate-200 overflow-hidden">
+                        <summary class="list-none cursor-pointer p-2.5 bg-slate-100 block ${SECTION_HEAD}">
+                            <div class="flex items-center gap-1.5"><i data-lucide="chevron-right" class="w-4 h-4 flex-shrink-0 transition-transform group-open/stand:rotate-90"></i> Stand setup</div>
+                        </summary>
+                        <p class="px-3 py-2 text-xs text-slate-600 bg-white">A <strong>round</strong> (R1–R${state.stands.length}) is one pass of the squad. Each shooter starts each round on a physical <strong>stand</strong> (1–${physicalStandCount()}). Set how each stand's clays are thrown here.</p>
+                        <div id="stand-shot-controls"></div>
+                    </details>
+                    ` : ''}
+                </div>
+            </details>
+
+            <div id="stand-nav-wrap" class="sticky z-40 -mx-2 px-2 py-1 bg-slate-300/95 backdrop-blur no-print" style="top: var(--header-h, 64px)">
+                <div id="stand-nav" class="flex items-center gap-1.5 overflow-x-auto scrollbar-hide px-1 py-1" role="tablist" aria-label="${ROUND_LABEL}s"></div>
+            </div>
             ${OPTION ? `
-            <section id="option-status" class="bg-white rounded-xl shadow-sm border border-slate-200 p-2 no-print"></section>
+            <section id="option-status" class="${CARD} p-2 no-print"></section>
             ` : ''}
 
-            <section class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-visible no-print">
-                <div class="bg-slate-900 px-3 py-2.5 text-white flex justify-between items-center">
-                    <div class="flex items-baseline gap-2">
-                        <h2 id="active-stand-title" class="text-lg font-black italic uppercase">${ROUND_LABEL} 1</h2>
-                        <span id="active-stand-targets" class="text-[9px] text-orange-400 font-bold uppercase"></span>
+            ${HAS_PRESENTATION_MAP ? `
+            <details id="presentation-panel" class="${CARD} group overflow-visible no-print" open>
+                <summary class="list-none cursor-pointer p-2.5 bg-slate-100 rounded-xl block ${SECTION_HEAD}">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="flex items-center gap-1.5 min-w-0"><i data-lucide="chevron-right" class="w-4 h-4 flex-shrink-0 transition-transform group-open:rotate-90"></i> Presentations <span id="presentation-round" class="normal-case font-semibold text-slate-500"></span></span>
+                        ${D.id === 'compak' ? `<button onclick="event.preventDefault(); addPresentationOption()" class="${BTN_SMALL} bg-slate-900 text-white border-slate-900 normal-case tracking-normal flex-shrink-0">+ Presentation</button>` : ''}
                     </div>
-                    <button id="undo-btn" onclick="undo()" class="hidden text-[9px] font-black text-white uppercase flex items-center gap-1 bg-slate-800 px-2 py-1 rounded-lg border border-slate-700">
-                        <i data-lucide="rotate-ccw" size="10"></i> Undo
+                </summary>
+                <div id="fixed-presentation-controls" class="p-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5"></div>
+            </details>
+            ` : ''}
+
+            <div id="lock-banner" class="hidden no-print rounded-xl border border-amber-300 bg-amber-100 text-amber-900 p-3 items-center justify-between gap-2">
+                <span class="text-sm font-semibold flex items-center gap-2"><i data-lucide="lock" class="w-4 h-4"></i> Round locked — scores can't be changed</span>
+                <button onclick="toggleLock()" class="${BTN_SMALL} bg-amber-900 text-white border-amber-900">Unlock</button>
+            </div>
+
+            <section id="scoring-card" class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-visible no-print">
+                <div class="bg-slate-600 px-3 py-2.5 text-white flex justify-between items-center rounded-t-xl">
+                    <div class="flex items-baseline gap-2">
+                        <h2 id="active-stand-title" class="text-xl font-black italic uppercase">${ROUND_LABEL} 1</h2>
+                        <span id="active-stand-targets" class="text-xs text-orange-200 font-semibold"></span>
+                    </div>
+                    <button id="undo-btn" onclick="undo()" class="hidden ${BTN_SMALL} text-white items-center gap-1 bg-slate-700 border-slate-500">
+                        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Undo
                     </button>
                 </div>
 
                 ${standDescriptionControl}
 
                 <div id="scoring-controls"></div>
-                <div id="scoring-area" class="divide-y divide-slate-100"></div>
-
-                <div class="bg-slate-50 p-3 flex gap-3 no-print border-t border-slate-200">
-                    <button onclick="nav(-1)" id="nav-prev" class="flex-1 bg-white border border-slate-300 py-3 rounded-xl text-xs font-black disabled:opacity-30 tracking-widest uppercase">Prev</button>
-                    <button onclick="nav(1)" id="nav-next" class="flex-1 bg-slate-900 text-white py-3 rounded-xl text-xs font-black disabled:opacity-30 tracking-widest uppercase">Next ${ROUND_LABEL}</button>
-                </div>
+                <div id="scoring-area" class="divide-y divide-slate-300"></div>
             </section>
 
-            ${HAS_PRESENTATION_MAP ? `
-            <section class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-visible no-print">
-                <details class="group" open>
-                    <summary class="list-none cursor-pointer p-2 bg-slate-100 border-b border-slate-200 flex items-center justify-between gap-2 text-[9px] font-black uppercase text-slate-500">
-                        <span class="flex items-center gap-1"><i data-lucide="chevron-right" class="w-3 h-3 transition-transform group-open:rotate-90"></i> Presentation Options</span>
-                        ${D.id === 'compak' ? '<button onclick="event.preventDefault(); addPresentationOption()" class="bg-slate-900 text-white px-2 py-1 rounded-md">+ Presentation</button>' : ''}
-                    </summary>
-                    <div id="fixed-presentation-controls" class="p-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5"></div>
-                </details>
-                <details class="group border-t border-slate-200">
-                    <summary class="list-none cursor-pointer p-2 bg-slate-100 flex items-center gap-1 text-[9px] font-black uppercase text-slate-500">
-                        <i data-lucide="chevron-right" class="w-3 h-3 transition-transform group-open:rotate-90"></i> Stand Setup
-                    </summary>
-                    <div id="stand-shot-controls"></div>
-                </details>
-            </section>
-            ` : ''}
-
-            <section class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden no-print">
-                <div class="p-2 bg-slate-100 border-b border-slate-200 flex justify-between items-center text-[9px] font-black uppercase text-slate-500">
-                    <span>Leaderboard Summary</span>
-                </div>
+            <section class="${CARD} overflow-hidden no-print">
+                <div class="p-2.5 bg-slate-100 border-b border-slate-300 ${SECTION_HEAD}">Leaderboard</div>
                 <div class="overflow-x-auto">
-                    <table class="w-full text-[10px]" id="leaderboard">
-                        <thead><tr id="lb-header" class="bg-slate-50 font-black uppercase border-b border-slate-200"></tr></thead>
+                    <table class="w-full text-xs" id="leaderboard">
+                        <thead><tr id="lb-header" class="bg-slate-100 font-bold border-b border-slate-300"></tr></thead>
                         <tbody id="lb-body"></tbody>
                         <tfoot id="lb-footer"></tfoot>
                     </table>
                 </div>
+                <p class="px-3 py-2 text-[11px] text-slate-700 border-t border-slate-200">&#128293; no misses so far &middot; &#10071; hardest completed ${ROUND_LABEL.toLowerCase()} &middot; shaded row = current ${ROUND_LABEL.toLowerCase()}</p>
             </section>
 
-            <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-3 no-print">
-                <label class="text-[9px] font-black uppercase text-slate-400 mb-1 flex items-center gap-1"><i data-lucide="sticky-note" size="10"></i> Round Notes</label>
-                <textarea id="field-notes" placeholder="Notes..." class="w-full h-20 bg-slate-50 border-none rounded-xl p-3 text-xs font-bold outline-none focus:ring-1 focus:ring-orange-500 resize-none" oninput="updateField('notes', this.value)"></textarea>
+            <section class="${CARD} p-3 no-print">
+                <label for="field-notes" class="${SECTION_HEAD} mb-1.5 flex items-center gap-1"><i data-lucide="sticky-note" class="w-3.5 h-3.5"></i> Round notes</label>
+                <textarea id="field-notes" placeholder="Weather, conditions, anything to remember…" class="w-full h-20 bg-white border border-slate-400 rounded-xl p-3 text-sm outline-none focus:ring-1 focus:ring-orange-500 resize-none" oninput="updateField('notes', this.value)"></textarea>
             </section>
 
             <div id="capture-container">
@@ -1536,6 +1593,14 @@
                 <div style="text-align: center; margin-top: 20px; font-size: 8pt; font-weight: bold; color: #666;">Generated by QuaCKeReD</div>
             </div>
         </main>
+
+        <nav id="stand-nav-bar" class="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-slate-300 shadow-[0_-4px_12px_rgba(15,23,42,0.12)] no-print" style="padding-bottom: env(safe-area-inset-bottom)">
+            <div class="max-w-5xl mx-auto p-2 flex gap-2">
+                <button onclick="nav(-1)" id="nav-prev" class="flex-1 bg-white border border-slate-300 h-12 rounded-xl text-sm font-bold disabled:opacity-30 inline-flex items-center justify-center gap-1"><i data-lucide="chevron-left" class="w-4 h-4"></i> Prev</button>
+                <button onclick="nav(1)" id="nav-next" class="flex-[2] bg-slate-900 text-white h-12 rounded-xl text-sm font-bold disabled:opacity-30 inline-flex items-center justify-center gap-1">Next ${ROUND_LABEL.toLowerCase()} <i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+            </div>
+        </nav>
+        <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
         `;
     }
 
@@ -1573,38 +1638,39 @@
             const title = g || ev || 'Untitled';
             const subtitle = g && ev ? ev : '';
             const parts = [getUKDate(r.date), `${shooterCount} shooter${shooterCount !== 1 ? 's' : ''}`];
-            if (totalShot) parts.push(`${totalHits}/${totalShot} hits`);
+            if (totalShot) parts.push(`${totalHits}/${totalShot} hit`);
             const meta = parts.join(' &middot; ');
             const encKey = escapeHtml(k);
-            return `<div class="flex items-center gap-2 px-3 py-2 border-t border-slate-100 ${isCurrent ? 'bg-orange-50' : ''}">
+            return `<div class="flex items-center gap-2 px-3 py-2.5 border-t border-slate-100 ${isCurrent ? 'bg-orange-50' : ''}">
                 <div class="flex-1 min-w-0">
-                    <div class="text-[11px] font-black uppercase truncate">${escapeHtml(title)}${subtitle ? ` <span class="text-slate-400">&middot; ${escapeHtml(subtitle)}</span>` : ''}</div>
-                    <div class="text-[9px] text-slate-500 font-bold mt-0.5">${meta}${isCurrent ? ' &middot; <span class="text-orange-600 uppercase">Editing</span>' : ''}</div>
+                    <div class="text-sm font-bold truncate">${escapeHtml(title)}${subtitle ? ` <span class="font-semibold text-slate-500">&middot; ${escapeHtml(subtitle)}</span>` : ''}</div>
+                    <div class="text-xs text-slate-500 mt-0.5">${meta}${isCurrent ? ' &middot; <span class="text-orange-700 font-semibold">Open now</span>' : ''}</div>
                 </div>
-                ${isCurrent ? '' : `<button data-history-action="load" data-history-key="${encKey}" class="text-[9px] bg-slate-900 text-white px-2.5 py-1.5 rounded-lg font-black uppercase">Load</button>`}
-                <button data-history-action="delete" data-history-key="${encKey}" class="text-red-400 p-1" aria-label="Delete round"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                ${isCurrent ? '' : `<button data-history-action="load" data-history-key="${encKey}" class="${BTN_SMALL} bg-slate-900 text-white border-slate-900">Open</button>`}
+                <button data-history-action="delete" data-history-key="${encKey}" class="text-red-500 p-1.5" aria-label="Delete round ${escapeHtml(title)}" title="Delete round"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
             </div>`;
         }).join('');
 
-        const emptyHint = entries.length ? '' : '<p class="text-[10px] text-slate-400 mt-0.5 font-medium normal-case tracking-normal">Rounds are saved automatically once you enter a Ground or Event.</p>';
+        const emptyHint = entries.length ? '' : '<p class="text-xs text-slate-500 mt-1">No saved rounds yet. A round is saved here automatically once it has a ground or event name.</p>';
         el.innerHTML = `
             <div class="p-3 border-b border-slate-100">
-                <div class="min-w-0 mb-2">
-                    <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400">Round History</h3>
-                    ${emptyHint}
-                </div>
-                <div class="flex flex-wrap justify-between gap-4 items-center">
-                    <button onclick="deleteHistory()" class="text-[9px] bg-red-50 text-red-600 px-3 py-1.5 rounded-lg font-black uppercase border border-red-100">Delete History</button>
-                    <div class="ml-auto flex flex-wrap justify-end gap-1.5">
-                        <label class="text-[9px] bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-black uppercase border border-slate-200 cursor-pointer inline-flex items-center">
-                            Import CSV
+                <div class="flex items-center justify-between gap-2">
+                    <h3 class="${SECTION_HEAD}">Round history</h3>
+                    <div class="flex flex-wrap justify-end gap-1.5">
+                        <label class="${BTN_SMALL} bg-slate-100 text-slate-700 border-slate-200 cursor-pointer inline-flex items-center gap-1">
+                            <i data-lucide="upload" class="w-3.5 h-3.5"></i> Import CSV
                             <input type="file" accept=".csv,text/csv" onchange="handleImportChange(this)" style="display:none">
                         </label>
-                        <button onclick="newRound()" class="text-[9px] bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-black uppercase border border-slate-200">+ New Round</button>
+                        <button onclick="closeHeaderMenus(); newRound()" class="${BTN_SMALL} bg-slate-900 text-white border-slate-900">+ New round</button>
                     </div>
                 </div>
+                ${emptyHint}
             </div>
-            ${entries.length ? `<div class="max-h-64 overflow-y-auto">${rows}</div>` : ''}`;
+            ${entries.length ? `<div class="max-h-72 overflow-y-auto">${rows}</div>` : ''}
+            ${entries.length ? `<div class="p-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
+                <span class="text-[11px] font-semibold text-slate-500">Danger zone</span>
+                <button onclick="deleteHistory()" class="${BTN_SMALL} bg-white text-red-600 border-red-200">Delete all history</button>
+            </div>` : ''}`;
         if (window.lucide) lucide.createIcons();
     }
 
@@ -1615,14 +1681,18 @@
         let html = '';
         if (D.editable.targetsPerStand) {
             const opts = D.targetOptions || [4, 6, 8, 10];
-            html += `<div class="bg-slate-800 p-1 flex gap-1 no-print">${opts.map(o => `
-                <button onclick="setBirds(${o})" class="flex-1 py-2 rounded-lg text-[9px] font-black ${st.targets === o ? 'bg-orange-500 text-white' : 'bg-slate-700 text-slate-400'}">${o / 2} PR</button>
-            `).join('')}</div>`;
+            html += `<div class="bg-slate-500 px-2 pt-2 pb-1 no-print">
+                <div class="text-[11px] font-semibold text-white mb-1">Pairs on this ${ROUND_LABEL.toLowerCase()}</div>
+                <div class="flex gap-1">${opts.map(o => `
+                    <button onclick="setBirds(${o})" aria-pressed="${st.targets === o}" class="flex-1 h-9 rounded-lg text-sm font-bold ${st.targets === o ? 'bg-orange-500 text-white ring-2 ring-white' : 'bg-slate-600 text-white'}">${o / 2}</button>
+                `).join('')}</div>
+            </div>`;
         }
         if (D.editable.extraClay) {
-            html += `<div class="bg-slate-800 px-1 pb-1 no-print">
-                <button onclick="setExtraClay()" class="w-full py-1.5 rounded-lg text-[9px] font-black flex items-center justify-center gap-1 ${st.extraClay ? 'bg-orange-500 text-white' : 'bg-slate-700 text-slate-400'}">
-                    ${st.extraClay ? '&#10003; EXTRA CLAY ON' : '+ ADD EXTRA CLAY (single)'}
+            html += `<div class="bg-slate-500 px-2 pb-2 pt-1 no-print">
+                <button onclick="setExtraClay()" role="switch" aria-checked="${!!st.extraClay}" class="w-full h-9 px-2 rounded-lg text-sm font-semibold flex items-center justify-between ${st.extraClay ? 'bg-orange-500 text-white' : 'bg-slate-600 text-white'}">
+                    <span>Extra single clay (+1)</span>
+                    <span class="toggle-track ${st.extraClay ? 'is-on' : ''}"><span class="toggle-thumb"></span></span>
                 </button>
             </div>`;
         }
@@ -1634,51 +1704,90 @@
         if (!el) return;
         if (!HAS_PRESENTATION_MAP) { el.innerHTML = ''; return; }
         const standRows = state.stands.map(stand => {
-            const total = standTargets(stand);
-            const formats = getStandFormatMap(stand);
             const presentations = getStandPresentationMap(stand);
-            let clayHtml = '';
-            for (let p = 0; p < total;) {
-                const value = formats[p] || 'single';
-                const groupSize = value !== 'single' && (p + 1) < total ? 2 : 1;
-                const label = groupSize === 2 ? `${p + 1}-${p + 2}` : `${p + 1}`;
-                const shotIdxs = Array.from({ length: groupSize }, (_, offset) => p + offset);
+            const clayHtml = shotGroups(stand, getStandFormatMap(stand)).map(shotIdxs => {
+                const p = shotIdxs[0];
+                const value = getStandFormatMap(stand)[p] || 'single';
+                const label = shotIdxs.length === 2 ? `${p + 1}–${p + 2}` : `${p + 1}`;
                 const presentationSelects = shotIdxs.map(idx => {
                     const selected = presentations[idx] || '';
-                    return `<select onchange="updateStandShotPresentation(${stand.id},${idx},this.value)" ${state.isLocked ? 'disabled' : ''} class="w-full h-7 bg-slate-50 border border-slate-200 rounded-md px-1 text-[8px] font-black text-slate-700 disabled:opacity-60">
-                        <option value="">Presentation</option>
+                    return `<select onchange="updateStandShotPresentation(${stand.id},${idx},this.value)" ${state.isLocked ? 'disabled' : ''} aria-label="${PHYSICAL_STAND_LABEL} ${stand.id} clay ${idx + 1} presentation" class="w-full h-8 bg-slate-50 border border-slate-200 rounded-md px-1 text-xs font-semibold text-slate-700 disabled:opacity-60">
+                        <option value="">–</option>
                         ${Array.from({ length: presentationCountForStand(stand) }, (_, optIdx) => optIdx + 1).map(opt => `<option value="${opt}" ${selected === opt ? 'selected' : ''}>${presentationLabel(opt - 1)}</option>`).join('')}
                     </select>`;
                 }).join('');
-                clayHtml += `<div class="pair-stack" style="flex:${groupSize} 1 0;">
-                    <label class="block text-[7px] font-black uppercase tracking-widest text-slate-400 mb-1">Clay ${label}</label>
-                    <select onchange="updateStandShotFormat(${stand.id},${p},this.value)" ${state.isLocked ? 'disabled' : ''} class="w-full h-7 bg-slate-900 text-white border border-slate-700 rounded-md px-1 text-[8px] font-black uppercase disabled:opacity-60">
+                return `<div class="pair-stack" style="flex:${shotIdxs.length} 1 0; min-width:${shotIdxs.length * 64}px;">
+                    <label class="block text-[11px] font-semibold text-slate-500 mb-0.5">Clay ${label}</label>
+                    <select onchange="updateStandShotFormat(${stand.id},${p},this.value)" ${state.isLocked ? 'disabled' : ''} aria-label="${PHYSICAL_STAND_LABEL} ${stand.id} clay ${label} format" class="w-full h-8 bg-slate-900 text-white border border-slate-700 rounded-md px-1 text-xs font-semibold disabled:opacity-60">
                         <option value="single" ${value === 'single' ? 'selected' : ''}>Single</option>
-                        <option value="report" ${value === 'report' ? 'selected' : ''}>On Report</option>
-                        <option value="sim" ${value === 'sim' ? 'selected' : ''}>Sim Pair</option>
+                        <option value="report" ${value === 'report' ? 'selected' : ''}>On report</option>
+                        <option value="sim" ${value === 'sim' ? 'selected' : ''}>Sim pair</option>
                     </select>
                     <div class="mt-1 flex gap-1">${presentationSelects}</div>
                 </div>`;
-                p += groupSize;
-            }
-            return `<div class="py-2 border-t border-slate-700 first:border-t-0">
-                <div class="text-[9px] font-black uppercase tracking-widest text-orange-400 mb-1.5">${PHYSICAL_STAND_LABEL} ${stand.id}</div>
-                <div class="flex gap-1 w-full overflow-x-hidden">${clayHtml}</div>
+            }).join('');
+            return `<div class="py-2 border-t border-slate-200 first:border-t-0">
+                <div class="text-xs font-bold uppercase tracking-wider text-orange-600 mb-1.5">${PHYSICAL_STAND_LABEL} ${stand.id}</div>
+                <div class="flex flex-wrap gap-1 w-full">${clayHtml}</div>
             </div>`;
         }).join('');
-        el.innerHTML = `<div class="bg-slate-800 px-2 py-2 no-print">
+        el.innerHTML = `<div class="bg-white px-3 pb-3">
             ${standRows}
         </div>`;
     }
+
+    // Groups a stand's target indices by how they're thrown, so pairs render side by side in
+    // one pair-stack and singles get their own. STR/CSP follow the per-stand format map;
+    // labelled stands (ESK) pair the doubles (H+L / L+H / H/L); ESP pairs consecutive
+    // targets and leaves the +1 extra clay single.
+    function shotGroups(stand, formatMap) {
+        const total = standTargets(stand);
+        const isDouble = (idx) => /[+/]/.test(stand.labels?.[idx] || '');
+        const groups = [];
+        for (let p = 0; p < total;) {
+            let size;
+            if (HAS_PRESENTATION_MAP) size = (formatMap[p] || 'single') !== 'single' ? 2 : 1;
+            else if (stand.labels) size = isDouble(p) && isDouble(p + 1) ? 2 : 1;
+            else size = stand.extraClay && p === total - 1 ? 1 : 2;
+            size = Math.min(size, total - p);
+            groups.push(Array.from({ length: size }, (_, offset) => p + offset));
+            p += size;
+        }
+        return groups;
+    }
+
+    // 'empty' | 'partial' | 'done' across the whole squad, for the stand nav markers.
+    function standProgress(stand) {
+        let shot = 0, done = state.shooters.length > 0;
+        state.shooters.forEach(sh => {
+            const stats = shooterStandStats(sh.id, stand);
+            shot += stats.shot;
+            if (!stats.completed) done = false;
+        });
+        return done ? 'done' : (shot > 0 ? 'partial' : 'empty');
+    }
+
+    // Setup auto-collapses once the first target is recorded and re-opens for a fresh round;
+    // in between, the user's own open/close choice is left alone.
+    let lastAnyShot = null;
 
     function render() {
         if (!state.stands.length) return;
         if (state.activeIdx >= state.stands.length) state.activeIdx = state.stands.length - 1;
         const st = state.stands[state.activeIdx];
 
+        const lockBtn = document.getElementById('lock-btn');
         document.getElementById('lock-icon').setAttribute('data-lucide', state.isLocked ? 'lock' : 'unlock');
-        document.getElementById('app-container').style.opacity = state.isLocked ? '0.6' : '1';
-        document.getElementById('undo-btn').style.display = history ? 'flex' : 'none';
+        document.getElementById('lock-label').textContent = state.isLocked ? 'Locked' : 'Lock';
+        lockBtn.setAttribute('aria-pressed', state.isLocked ? 'true' : 'false');
+        lockBtn.setAttribute('aria-label', state.isLocked ? 'Unlock scores' : 'Lock scores');
+        lockBtn.title = state.isLocked ? 'Unlock scores' : 'Lock scores';
+        lockBtn.classList.toggle('lock-on', !!state.isLocked);
+        const lockBanner = document.getElementById('lock-banner');
+        lockBanner.classList.toggle('hidden', !state.isLocked);
+        lockBanner.classList.toggle('flex', !!state.isLocked);
+        document.getElementById('scoring-card').classList.toggle('is-locked', !!state.isLocked);
+        document.getElementById('undo-btn').style.display = history ? 'inline-flex' : 'none';
 
         let sTotalShot = 0, sTotalPossible = 0;
         state.stands.forEach(s => {
@@ -1704,34 +1813,63 @@
         document.getElementById('field-date').value = state.date || '';
         document.getElementById('field-event').value = state.event || '';
         document.getElementById('field-notes').value = state.notes || '';
+        const totalTargets = scheduledRoundTargets() + (OPTION ? 1 : 0);
         if (D.editable.standCount) {
             document.getElementById('field-stand-count').value = state.stands.length;
         } else {
-            const totalTargets = state.stands.reduce((sum, s) => sum + standTargets(s), 0);
-            document.getElementById('field-format').innerText = `${state.stands.length} ${ROUND_LABEL}s / ${totalTargets + (OPTION ? 1 : 0)} Targets`;
+            document.getElementById('field-format').innerText = `${state.stands.length} ${ROUND_LABEL.toLowerCase()}s · ${totalTargets} targets`;
         }
+        const anyShot = sTotalShot > 0;
+        const setupPanel = document.getElementById('setup-panel');
+        if (anyShot !== lastAnyShot) {
+            setupPanel.open = !anyShot;
+            const presentationPanel = document.getElementById('presentation-panel');
+            if (presentationPanel) presentationPanel.open = !anyShot;
+            lastAnyShot = anyShot;
+        }
+        const nameParts = [(state.ground || '').trim(), (state.event || '').trim()].filter(Boolean);
+        document.getElementById('setup-summary').textContent = [
+            nameParts.length ? nameParts.join(' · ') : 'Unnamed round',
+            getUKDate(state.date),
+            `${state.shooters.length} shooter${state.shooters.length !== 1 ? 's' : ''}`,
+            `${totalTargets} targets`
+        ].join(' · ');
 
         // Squad
+        document.getElementById('squad-count').textContent = `(${state.shooters.length}/${MAX_SHOOTERS})`;
+        document.getElementById('add-shooter-btn').disabled = state.shooters.length >= MAX_SHOOTERS;
         const list = document.getElementById('squad-list'); list.innerHTML = '';
         state.shooters.forEach((s, i) => {
             const div = document.createElement('div');
-            div.className = 'bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm squad-grid-item';
-            div.innerHTML = `<span class="text-[9px] font-black text-slate-300">${i + 1}</span>
-                <input type="text" value="${s.name}" maxlength="20" placeholder="Name" onchange="updateShooter(${i}, 'name', this.value)" class="bg-transparent border-none p-0 text-[11px] font-black outline-none w-full">
-                <input type="text" value="${s.cpsa}" maxlength="8" placeholder="CPSA #" onchange="updateShooter(${i}, 'cpsa', this.value)" class="bg-slate-50 p-1 text-[9px] rounded font-bold w-full border border-slate-100">
-                <select onchange="updateShooter(${i}, 'class', this.value)" class="text-[9px] font-black bg-slate-50 rounded p-1 border border-slate-100">${CLASSES.map(c => `<option ${s.class === c ? 'selected' : ''}>${c}</option>`).join('')}</select>
-                <button onclick="removeShooter(${s.id})" class="text-red-400 flex justify-center"><i data-lucide="x" size="16"></i></button>`;
+            div.className = 'bg-slate-50 p-2 rounded-xl border border-slate-300 squad-grid-item';
+            div.innerHTML = `<span class="text-xs font-bold text-slate-700 text-center">${i + 1}</span>
+                <input type="text" value="${escapeHtml(s.name)}" maxlength="20" placeholder="Name" aria-label="Shooter ${i + 1} name" onchange="updateShooter(${i}, 'name', this.value)" class="bg-white border border-slate-400 rounded-md px-2 py-1.5 text-sm font-semibold w-full min-w-0">
+                <input type="text" value="${escapeHtml(s.cpsa)}" maxlength="8" placeholder="CPSA no." aria-label="Shooter ${i + 1} CPSA number" onchange="updateShooter(${i}, 'cpsa', this.value)" class="bg-white border border-slate-400 rounded-md px-2 py-1.5 text-sm w-full min-w-0">
+                <select onchange="updateShooter(${i}, 'class', this.value)" aria-label="Shooter ${i + 1} class" class="bg-white border border-slate-400 rounded-md px-1 py-1.5 text-sm font-semibold w-full">${CLASSES.map(c => `<option ${s.class === c ? 'selected' : ''}>${c}</option>`).join('')}</select>
+                <button onclick="removeShooter(${s.id})" ${state.shooters.length <= 1 ? 'disabled' : ''} class="text-red-500 flex justify-center items-center h-8 disabled:opacity-20" aria-label="Remove ${escapeHtml(s.name)}" title="Remove shooter"><i data-lucide="x" class="w-5 h-5"></i></button>`;
             list.appendChild(div);
         });
 
-        // Stand nav
+        // Stand nav — each button shows whether the squad has finished that stand.
         const navDiv = document.getElementById('stand-nav'); navDiv.innerHTML = '';
         state.stands.forEach((s, i) => {
+            const progress = standProgress(s);
+            const isActive = state.activeIdx === i;
             const btn = document.createElement('button');
-            btn.className = `flex-shrink-0 w-11 h-11 rounded-xl font-black text-xs border-2 transition-all ${state.activeIdx === i ? 'bg-orange-500 border-orange-500 text-white shadow-lg' : 'bg-white border-slate-200 text-slate-500'}`;
-            btn.innerText = HAS_PRESENTATION_MAP ? `R${s.id}` : s.id;
+            btn.className = `stand-nav-btn flex-shrink-0 w-12 h-12 rounded-xl font-black text-sm border-2 transition-all ${isActive ? 'bg-orange-500 border-orange-500 text-white shadow-lg' : (progress === 'done' ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-white border-slate-400 text-slate-800')}`;
+            btn.setAttribute('role', 'tab');
+            btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            btn.setAttribute('aria-label', `${ROUND_LABEL} ${s.id}, ${progress === 'done' ? 'complete' : (progress === 'partial' ? 'in progress' : 'not started')}`);
+            btn.innerHTML = `${HAS_PRESENTATION_MAP ? `R${s.id}` : s.id}${progress !== 'empty' ? `<span class="stand-nav-mark stand-nav-${progress}"></span>` : ''}`;
             btn.onclick = () => { if (!state.isLocked) { state.activeIdx = i; render(); save(); } };
             navDiv.appendChild(btn);
+            // Scroll only the nav strip (not the page) so the active stand stays visible.
+            if (isActive) requestAnimationFrame(() => {
+                const left = btn.offsetLeft - navDiv.offsetLeft;
+                if (left < navDiv.scrollLeft || left + btn.offsetWidth > navDiv.scrollLeft + navDiv.clientWidth) {
+                    navDiv.scrollLeft = left - (navDiv.clientWidth - btn.offsetWidth) / 2;
+                }
+            });
         });
         const optionStatus = document.getElementById('option-status');
         if (optionStatus) {
@@ -1742,21 +1880,21 @@
                 const used = opt && opt.hit !== null && opt.hit !== undefined;
                 const available = !used && optStandId !== null;
                 const text = used
-                    ? `Used ${ROUND_LABEL.slice(0, 2).toUpperCase()} ${opt.standId}`
-                    : (available ? `Available ${ROUND_LABEL.slice(0, 2).toUpperCase()} ${optStandId}` : 'Not used');
+                    ? `used on ${ROUND_LABEL.toLowerCase()} ${opt.standId}`
+                    : (available ? `due on ${ROUND_LABEL.toLowerCase()} ${optStandId}` : 'not yet');
                 const cls = used
                     ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
-                    : (available ? 'bg-orange-50 border-orange-300 text-orange-800' : 'bg-slate-50 border-slate-200 text-slate-500');
+                    : (available ? 'bg-orange-50 border-orange-300 text-orange-800' : 'bg-slate-50 border-slate-200 text-slate-600');
                 const dot = used ? 'bg-emerald-500' : (available ? 'bg-orange-500' : 'bg-slate-300');
                 return `<div class="min-w-0 flex items-center gap-1.5 rounded-lg border px-2 py-1 ${cls}">
-                    <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}"></span>
-                    <span class="truncate font-black">${escapeHtml(sh.name)}</span>
-                    <span class="flex-shrink-0 font-bold opacity-80">${text}</span>
+                    <span class="w-2 h-2 rounded-full flex-shrink-0 ${dot}"></span>
+                    <span class="truncate font-bold">${escapeHtml(sh.name)}</span>
+                    <span class="flex-shrink-0">${text}</span>
                 </div>`;
             }).join('');
             optionStatus.innerHTML = `<div class="flex items-center gap-2">
-                <div class="flex-shrink-0 text-[9px] font-black uppercase tracking-widest text-slate-400">${escapeHtml(optLabel)}</div>
-                <div class="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1 text-[9px] uppercase">${chips}</div>
+                <div class="flex-shrink-0 ${SECTION_HEAD}" title="Option target: first miss is re-shot; if straight, taken on ${ROUND_LABEL.toLowerCase()} ${OPTION.fallbackStandId || ''}">${escapeHtml(optLabel)}</div>
+                <div class="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1 text-xs">${chips}</div>
             </div>`;
         }
 
@@ -1764,7 +1902,9 @@
         document.getElementById('active-stand-title').innerText = `${ROUND_LABEL} ${st.id}`;
         const total = standTargets(st);
         const optionAvailableHere = OPTION && state.shooters.some(sh => getOptionStandId(sh.id) === st.id);
-        document.getElementById('active-stand-targets').innerText = `${total} Target${total !== 1 ? 's' : ''}${st.extraClay ? ' (+1)' : ''}${optionAvailableHere ? ` + ${OPTION.label || 'OPT'}` : ''}`;
+        document.getElementById('active-stand-targets').innerText = `${total} target${total !== 1 ? 's' : ''}${st.extraClay ? ' incl. +1' : ''}${optionAvailableHere ? ` + ${OPTION.label || 'OPT'}` : ''}`;
+        const presentationRound = document.getElementById('presentation-round');
+        if (presentationRound) presentationRound.textContent = `· ${ROUND_LABEL.toLowerCase()} ${st.id}`;
         const clayMetaEl = document.getElementById('clay-meta-controls');
         if (clayMetaEl) clayMetaEl.innerHTML = renderClayMetaControls(st);
         const fixedPresentationEl = document.getElementById('fixed-presentation-controls');
@@ -1777,7 +1917,8 @@
         const leadIdx = ROTATE ? (state.activeIdx % n) : 0;
         const sArea = document.getElementById('scoring-area'); sArea.innerHTML = '';
         const visibleShooters = Array.from({ length: n }, (_, i) => state.shooters[(i + leadIdx) % n]);
-        const activeShooterId = visibleShooters.find(sh => !shooterStandStats(sh.id, st).completed)?.id || visibleShooters[visibleShooters.length - 1]?.id;
+        // "Shooting" = first shooter in order who hasn't finished this stand; none once everyone's done.
+        const activeShooterId = visibleShooters.find(sh => !shooterStandStats(sh.id, st).completed)?.id ?? null;
 
         for (let i = 0; i < n; i++) {
             const s = visibleShooters[i];
@@ -1787,84 +1928,72 @@
             const optionHit = optionOnThisStand ? getOptionHit(s.id) : null;
             const count = hits.filter(h => h === true).length + (optionHit === true ? 1 : 0);
             const possible = total + (optionOnThisStand ? 1 : 0);
+            const isShooting = s.id === activeShooterId;
             const row = document.createElement('div');
-            row.className = `p-2.5 space-y-1.5 ${s.id === activeShooterId ? 'bg-orange-50/40 first-up-highlight' : ''} ${state.isLocked ? 'pointer-events-none' : ''}`;
+            row.className = `p-2.5 space-y-1.5 ${isShooting ? 'first-up-highlight' : ''} ${state.isLocked ? 'pointer-events-none' : ''}`;
 
-            let gridHtml = '';
             const selectedStandId = HAS_PRESENTATION_MAP ? getShooterRoundStand(s.id, st.id) : st.id;
             const setupStand = HAS_PRESENTATION_MAP ? (state.stands.find(stand => stand.id === selectedStandId) || st) : st;
             const standFormatMap = HAS_PRESENTATION_MAP ? getStandFormatMap(setupStand) : [];
             const standPresentationMap = HAS_PRESENTATION_MAP ? getStandPresentationMap(setupStand) : [];
             const shooterStandSelect = HAS_PRESENTATION_MAP
-                ? `<select onchange="updateShooterRoundStand(${s.id},${st.id},this.value)" class="h-6 bg-slate-50 border border-slate-200 rounded-md px-1 text-[8px] font-black uppercase text-slate-700">
+                ? `<select onchange="updateShooterRoundStand(${s.id},${st.id},this.value)" aria-label="${escapeHtml(s.name)} starts on stand" class="h-7 bg-slate-50 border border-slate-200 rounded-md px-1 text-xs font-semibold text-slate-700">
                     ${state.stands.map(setup => `<option value="${setup.id}" ${selectedStandId === setup.id ? 'selected' : ''}>${PHYSICAL_STAND_LABEL} ${setup.id}</option>`).join('')}
                 </select>`
                 : '';
-            const presentationBadge = (shotIdx) => {
-                if (!HAS_PRESENTATION_MAP) return '';
-                const value = standPresentationMap[shotIdx];
-                return `<div class="flex-1 min-w-0 h-5 rounded-md bg-slate-100 border border-slate-200 px-1 text-[8px] font-black text-slate-600 flex items-center justify-center">${value ? presentationLabel(value - 1) : '-'}</div>`;
-            };
-            for (let p = 0; p < total;) {
-                const format = standFormatMap[p] || 'single';
-                const groupSize = HAS_PRESENTATION_MAP && format !== 'single' && (p + 1) < total ? 2 : 1;
-                const shotIdxs = Array.from({ length: groupSize }, (_, offset) => p + offset);
-                const pairClass = shotIdxs.some(idx => st.extraClay && idx === total - 1) ? 'pair-stack pair-extra' : 'pair-stack';
-                const hitRow = shotIdxs.map(idx => {
-                    const hit = hits[idx];
-                    return `<button onclick="toggleHit(${s.id},${st.id},${idx},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${hit === true ? 'hit-bg' : 'bg-white border-slate-300 text-slate-400'}">H</button>`;
+            const formatCaption = { single: 'Single', report: 'On report', sim: 'Sim pair' };
+            let pairNo = 0;
+            const groups = shotGroups(st, standFormatMap);
+            const gridHtml = groups.map(shotIdxs => {
+                const isExtra = st.extraClay && shotIdxs.includes(total - 1);
+                if (shotIdxs.length === 2) pairNo++;
+                // Caption above each stack says what's being thrown: a pair number, the +1, or the STR/CSP format.
+                const caption = HAS_PRESENTATION_MAP
+                    ? formatCaption[standFormatMap[shotIdxs[0]] || 'single']
+                    : (isExtra ? '+1 single' : (st.labels ? '' : `Pair ${pairNo}`));
+                const scoreBtn = (idx, val) => {
+                    const selected = hits[idx] === val;
+                    return `<button onclick="toggleHit(${s.id},${st.id},${idx},${val})" aria-pressed="${selected}" aria-label="${escapeHtml(s.name)}, target ${idx + 1}, ${val ? 'hit' : 'miss'}" class="${scoreBtnClass(selected, val)}">${val ? 'H' : 'M'}</button>`;
+                };
+                const presentationBadges = shotIdxs.map(idx => {
+                    const value = standPresentationMap[idx];
+                    return `<div class="flex-1 min-w-0 h-6 rounded-md bg-slate-100 border border-slate-200 px-1 text-[11px] font-bold text-slate-700 flex items-center justify-center">${value ? presentationLabel(value - 1) : '–'}</div>`;
                 }).join('');
-                const missRow = shotIdxs.map(idx => {
-                    const hit = hits[idx];
-                    return `<button onclick="toggleHit(${s.id},${st.id},${idx},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${hit === false ? 'miss-bg' : 'bg-white border-slate-300 text-slate-400'}">M</button>`;
-                }).join('');
-                const presentationLabels = shotIdxs.map(idx => presentationBadge(idx)).join('');
-                const labels = shotIdxs.map(idx => {
-                    const isExtra = st.extraClay && idx === total - 1;
-                    return `<div class="flex-1">${st.labels?.[idx] ?? (isExtra ? '+1' : '')}</div>`;
-                }).join('');
-                gridHtml += `<div class="${pairClass}" style="flex:${groupSize} 1 0;">
-                    <div class="flex gap-1">
-                        ${hitRow}
-                    </div>
-                    <div class="flex gap-1">
-                        ${missRow}
-                    </div>
-                    ${HAS_PRESENTATION_MAP ? `<div class="flex gap-1">${presentationLabels}</div>` : ''}
-                    ${labels.replace(/<div class="flex-1"><\/div>/g, '').trim() ? `<div class="flex gap-1 text-[7px] font-black text-slate-500 text-center uppercase pt-0.5">${labels}</div>` : ''}
+                const labels = shotIdxs.map(idx => st.labels?.[idx] ?? '');
+                return `<div class="${isExtra ? 'pair-stack pair-extra' : 'pair-stack'}" style="flex:${shotIdxs.length} 1 0; min-width:${shotIdxs.length * 40 + 8}px;">
+                    ${caption ? `<div class="text-[11px] font-bold text-slate-700 text-center leading-none pt-0.5">${caption}</div>` : ''}
+                    <div class="flex gap-1">${shotIdxs.map(idx => scoreBtn(idx, true)).join('')}</div>
+                    <div class="flex gap-1">${shotIdxs.map(idx => scoreBtn(idx, false)).join('')}</div>
+                    ${HAS_PRESENTATION_MAP ? `<div class="flex gap-1">${presentationBadges}</div>` : ''}
+                    ${labels.some(Boolean) ? `<div class="flex gap-1 text-xs font-bold text-slate-600 text-center">${labels.map(l => `<div class="flex-1">${escapeHtml(l)}</div>`).join('')}</div>` : ''}
                 </div>`;
-                p += groupSize;
-            }
-            if (optionOnThisStand) {
+            }).join('');
+            const optionHtml = optionOnThisStand ? (() => {
                 const optLabel = OPTION.label || 'OPT';
-                gridHtml += `<div class="pair-stack pair-extra">
-                    <div class="flex gap-1">
-                        <button onclick="toggleOptionHit(${s.id},${st.id},true)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${optionHit === true ? 'hit-bg' : 'bg-white border-slate-300 text-slate-400'}">H</button>
-                    </div>
-                    <div class="flex gap-1">
-                        <button onclick="toggleOptionHit(${s.id},${st.id},false)" class="flex-1 h-9 rounded-md font-black text-[10px] border shadow-sm ${optionHit === false ? 'miss-bg' : 'bg-white border-slate-300 text-slate-400'}">M</button>
-                    </div>
-                    <div class="flex gap-1 text-[7px] font-black text-slate-500 text-center uppercase pt-0.5">
-                        <div class="flex-1">${escapeHtml(optLabel)}</div>
-                    </div>
+                const optBtn = (val) => `<button onclick="toggleOptionHit(${s.id},${st.id},${val})" aria-pressed="${optionHit === val}" aria-label="${escapeHtml(s.name)}, option target, ${val ? 'hit' : 'miss'}" class="${scoreBtnClass(optionHit === val, val)}">${val ? 'H' : 'M'}</button>`;
+                return `<div class="pair-stack pair-extra" style="flex:1 1 0; min-width:48px;">
+                    <div class="flex gap-1">${optBtn(true)}</div>
+                    <div class="flex gap-1">${optBtn(false)}</div>
+                    <div class="flex gap-1 text-xs font-bold text-orange-700 text-center"><div class="flex-1">${escapeHtml(optLabel)}</div></div>
                 </div>`;
-            }
+            })() : '';
 
-            row.innerHTML = `<div class="flex justify-between items-center px-1">
-                <div class="flex items-center gap-1.5">
-                    <span class="text-[11px] font-black uppercase truncate max-w-[140px] tracking-tight">${s.name}</span>
-                    ${i === 0 && ROTATE ? '<span class="bg-orange-500 text-white text-[6px] px-1 rounded-full font-black uppercase">First Up</span>' : ''}
+            row.innerHTML = `<div class="flex justify-between items-center gap-2 px-1">
+                <div class="flex items-center gap-1.5 min-w-0 flex-wrap">
+                    <span class="text-sm font-black uppercase truncate max-w-[160px] tracking-tight">${escapeHtml(s.name)}</span>
+                    ${isShooting ? '<span class="bg-orange-500 text-white text-[11px] px-1.5 py-0.5 rounded-full font-bold leading-none">Shooting</span>' : ''}
+                    ${i === 0 && ROTATE ? '<span class="border border-slate-300 text-slate-600 text-[11px] px-1.5 py-0.5 rounded-full font-semibold leading-none">First up</span>' : ''}
                     ${shooterStandSelect}
                 </div>
-                <div class="text-base font-black italic text-slate-900">${count}<span class="text-slate-300 text-[8px] not-italic ml-0.5">/${possible}</span></div>
+                <div class="text-xl font-black italic text-slate-900 flex-shrink-0">${count}<span class="text-slate-600 text-xs not-italic font-bold ml-0.5">/${possible}</span></div>
             </div>
-            <div class="flex gap-1 w-full overflow-x-hidden">${gridHtml}</div>`;
+            <div class="flex flex-wrap gap-1 w-full">${gridHtml}${optionHtml}</div>`;
             sArea.appendChild(row);
         }
 
         // Leaderboard
         const lbHeader = document.getElementById('lb-header');
-        lbHeader.innerHTML = `<th class="p-2 border-b text-left w-12 tracking-tighter">${ROUND_LABEL.slice(0, 3).toUpperCase()}</th>`;
+        lbHeader.innerHTML = `<th class="p-2 border-b text-left w-14 text-slate-800">${ROUND_LABEL}</th>`;
         const perf = state.shooters.map(sh => {
             let totalH = 0, totalAtt = 0;
             state.stands.forEach(stnd => {
@@ -1882,7 +2011,7 @@
             return { ...sh, t: totalH, att: totalAtt, pct, isStraight: totalH === totalAtt && totalH > 0 };
         }).sort((a, b) => b.t - a.t);
         perf.forEach(sh => {
-            lbHeader.innerHTML += `<th class="p-1 border-b border-l border-slate-200 text-center align-bottom"><div class="break-words leading-tight min-w-[50px]">${sh.isStraight ? '&#128293;<br>' : ''}${sh.name}</div></th>`;
+            lbHeader.innerHTML += `<th class="p-1.5 border-b border-l border-slate-200 text-center align-bottom"><div class="break-words leading-tight min-w-[56px]">${sh.isStraight ? '&#128293;<br>' : ''}${escapeHtml(sh.name)}</div></th>`;
         });
 
         const lbBody = document.getElementById('lb-body'); lbBody.innerHTML = '';
@@ -1890,11 +2019,11 @@
         const hardId = completedDifficulties.slice().sort((a, b) => a.avg - b.avg)[0]?.id;
 
         state.stands.forEach((stand, idx) => {
-            let row = `<td class="p-2 font-bold border-b text-slate-400 text-[8px]">${ROUND_LABEL.slice(0, 2).toUpperCase()} ${stand.id}${stand.extraClay ? '+1' : ''} ${stand.id === hardId ? '&#10071;' : ''}</td>`;
+            let row = `<td class="p-2 font-semibold border-b border-slate-200 text-slate-800 whitespace-nowrap">${stand.id}${stand.extraClay ? '+1' : ''} ${stand.id === hardId ? '&#10071;' : ''}</td>`;
             perf.forEach(sh => {
                 const base = state.hits[sh.id]?.[stand.id]?.filter(h => h === true).length || 0;
                 const opt = getOptionHitForStand(sh.id, stand.id) === true ? 1 : 0;
-                row += `<td class="p-2 text-center border-b border-l border-slate-100 font-black">${base + opt}</td>`;
+                row += `<td class="p-2 text-center border-b border-l border-slate-200 font-black text-sm">${base + opt}</td>`;
             });
             const tr = document.createElement('tr');
             tr.className = state.activeIdx === idx ? 'bg-orange-50' : '';
@@ -1904,15 +2033,15 @@
 
         const f = document.getElementById('lb-footer');
         const scheduledClays = scheduledRoundTargets() + (OPTION ? 1 : 0);
-        let fRow = `<tr class="bg-slate-900 text-white font-black"><td class="p-2 uppercase text-[7px]">Total<br><span class="text-[8px] text-slate-400 normal-case">${scheduledClays} clays</span></td>`;
+        let fRow = `<tr class="bg-slate-600 text-white font-black"><td class="p-2 text-xs">Total<br><span class="text-[11px] text-slate-100 font-semibold">of ${scheduledClays}</span></td>`;
         perf.forEach(sh => {
-            const pctHtml = sh.pct === null ? '' : `<div class="text-sm text-slate-400 leading-none mt-0.5">${sh.pct}%</div>`;
-            fRow += `<td class="p-2 text-center text-sm border-l border-slate-700">${sh.t}${pctHtml}</td>`;
+            const pctHtml = sh.pct === null ? '' : `<div class="text-xs text-slate-100 font-semibold leading-none mt-0.5">${sh.pct}%</div>`;
+            fRow += `<td class="p-2 text-center text-lg border-l border-slate-500">${sh.t}${pctHtml}</td>`;
         });
         f.innerHTML = fRow + '</tr>';
 
-        document.getElementById('nav-prev').disabled = state.activeIdx === 0;
-        document.getElementById('nav-next').disabled = state.activeIdx === state.stands.length - 1;
+        document.getElementById('nav-prev').disabled = state.isLocked || state.activeIdx === 0;
+        document.getElementById('nav-next').disabled = state.isLocked || state.activeIdx === state.stands.length - 1;
 
         if (window.lucide) lucide.createIcons();
     }
@@ -1944,6 +2073,23 @@
     document.addEventListener('DOMContentLoaded', () => {
         state = makeDefaultState();
         mountSkeleton();
+        // The stand nav sticks just under the header. Observe rather than measure once: the Tailwind
+        // CDN styles the header after this runs, so its first measured height is unstyled.
+        const header = document.getElementById('app-header');
+        const syncHeaderHeight = () => document.documentElement.style.setProperty('--header-h', `${header.offsetHeight}px`);
+        syncHeaderHeight();
+        if (window.ResizeObserver) new ResizeObserver(syncHeaderHeight).observe(header);
+        else window.addEventListener('resize', syncHeaderHeight);
+        // Only show the offline pill when there's actually no connection — scoring works either way.
+        const syncOnlineStatus = () => {
+            const el = document.getElementById('offline-status');
+            if (!el) return;
+            el.classList.toggle('hidden', navigator.onLine);
+            el.classList.toggle('inline-flex', !navigator.onLine);
+        };
+        syncOnlineStatus();
+        window.addEventListener('online', syncOnlineStatus);
+        window.addEventListener('offline', syncOnlineStatus);
         // History rows are re-rendered as innerHTML, so we delegate clicks from the stable parent.
         document.getElementById('history-section').addEventListener('click', (e) => {
             const btn = e.target.closest('[data-history-action]');

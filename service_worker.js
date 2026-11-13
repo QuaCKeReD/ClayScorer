@@ -1,4 +1,4 @@
-const CACHE_NAME = 'clayscorer-v5';
+const CACHE_NAME = 'clayscorer-v10';
 
 // Same-origin assets: `cache.addAll` is all-or-nothing, but these are local files
 // we control, so a hard-fail here is the right behaviour.
@@ -48,6 +48,12 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
+  // Only cache this site's own files. Cross-origin calls (Firebase SDK, Google sign-in,
+  // Firestore) must always hit the network — serving them from cache breaks auth and sync.
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
+  // Firebase Hosting serves the sign-in helper under /__/ on this origin; never cache it.
+  if (url.pathname.startsWith('/__/')) return;
   event.respondWith((async () => {
     const cached = await caches.match(req);
     if (cached) return cached;

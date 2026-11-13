@@ -15,7 +15,7 @@ ClayScorer Pro — a static, offline-capable Progressive Web App for scoring CPS
   - Lucide (`assets/vendor/lucide-0.468.0.min.js`) — icons, initialised via `lucide.createIcons()` after every `render()`
   - html2canvas (`assets/vendor/html2canvas-1.4.1.min.js`) — used only by `shareAsImage()`
 - Firebase cloud sync is optional and disabled by default. `assets/firebase-sync-loader.js` only loads `assets/firebase-sync.js` on `http(s)` origins, and `assets/firebase-config.js` must be filled in with a Firebase Web config plus `FIREBASE_ENABLED = true`. Setup notes and Firestore rules live in `FIREBASE_SETUP.md`.
-- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v5`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names. `scorer.js` also logs a `SCORER_BUILD` banner on load — bumping that string when you ship changes gives you a quick DevTools signal that the page is running the new code (not a stale SW-cached copy).
+- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v10`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names. `scorer.js` also logs a `SCORER_BUILD` banner on load — bumping that string when you ship changes gives you a quick DevTools signal that the page is running the new code (not a stale SW-cached copy).
 - The SW pre-caches same-origin files with `cache.addAll`. If you add new app shell assets, put them in `LOCAL_ASSETS`.
 
 ## Architecture
@@ -40,7 +40,7 @@ Each discipline HTML declares its config inline. Shape:
 ```
 
 Notable per-discipline choices:
-- **ESP** uses `fixedStands: null` + `defaults/targetOptions`, so setup lets the user pick stand count (1–20) and per-stand pair count (2/3/4/5 PR) plus toggle a +1 extra clay per stand.
+- **ESP** uses `fixedStands: null` + `defaults/targetOptions`, so setup lets the user pick stand count (1–20, default 10) and per-stand pair count (2–6 pairs, default 3) plus toggle a +1 extra clay per stand.
 - **STR / CSP** hard-code 5 stands × 5 targets = 25.
 - **ESK** hard-codes 7 stations × the standard 25-target CPSA sequence with per-target `labels` (`H`, `L`, `H+L`, `L+H`) that the engine renders under each score button.
 
@@ -96,12 +96,18 @@ On DOMContentLoaded, after `load()`, we call `save()` if the restored state is n
 
 `render()` is a full re-render of dynamic sections (squad, stand nav, scoring area, leaderboard) from `state`. Static inputs (ground, date, event, notes, stand-count select) are mounted **once** by `mountSkeleton()` and only have their `.value` set inside `render()` — this preserves focus while the user types (`oninput` handlers don't trigger render; `onchange` fires on blur).
 
+Page layout (top to bottom): header (history / cloud / export / lock), collapsible **Round setup** `<details id="setup-panel">` (fields, squad, and for STR/CSP the Stand setup), sticky stand nav (`top: var(--header-h)`, kept in sync by a `ResizeObserver` on the header; each button shows a partial/done marker from `standProgress()`), option-target status (ESK), STR/CSP Presentations panel, lock banner, scoring card, leaderboard + legend, notes, and a fixed bottom Prev/Next bar. `render()` auto-collapses setup (and the Presentations panel) the first time any target is recorded and re-opens it for a fresh round, tracked by `lastAnyShot`; otherwise the user's own open/close choice is left alone. Locking shows `#lock-banner`, dims only the scoring area, and disables Prev/Next.
+
+Non-blocking outcomes (import errors/results, Firebase delete failures) use `notify(message, tone)` → `#toast`; `confirm()` is kept for destructive actions (delete round/history, remove a shooter who has scores, overwrite on import).
+
 ### Scoring UI conventions
 
-- Stands are laid out in **pairs** via `.pair-stack`. When a stand has an odd total (ESP with +1 extra clay, or ESK station 7 with 3 targets), the last pair-stack shows only one column of H/M buttons — the other half renders as empty flex spacers.
+- Targets are grouped by how they're thrown via `shotGroups(stand, formatMap)`: each group is one `.pair-stack` with its H/M buttons side by side. ESP pairs consecutive targets (captioned `Pair N`) and leaves the +1 extra clay single; labelled stands (ESK) pair the doubles (`H+L` / `L+H` / `H/L`) and keep `H` / `L` single; STR/CSP follow the per-stand format map (`single` / `report` / `sim`). Stacks `flex-wrap` on narrow screens.
 - Extra-clay pair-stacks get `.pair-extra` for the orange tint.
-- **Rotation glow** (ESP/STR/CSP): the "First Up" shooter is `state.shooters[state.activeIdx % n]`. The scoring area rotates shooter order so the lead is always at the top with the orange pulse. ESK disables this — the whole squad shoots in fixed order because a single shooter takes the entire skeet round.
-- **Hits tri-state**: `true` = hit, `false` = miss, `null` = not shot. Tapping the same button again clears it back to `null`.
+- **First up vs Shooting**: with rotation (ESP), the "First up" shooter is `state.shooters[state.activeIdx % n]` and the scoring area rotates order so they're at the top (neutral outlined pill). Separately, the orange pulse + "Shooting" pill marks the first shooter in order who hasn't completed the stand; no one is highlighted once the whole squad is done. ESK/STR/CSP don't rotate.
+- **Hits tri-state**: `true` = hit, `false` = miss, `null` = not shot. Tapping the same button again clears it back to `null`. Unselected H/M buttons are tinted (`.score-btn-hit` / `.score-btn-miss`); build them with `scoreBtnClass()`.
+- **Shared class strings**: `LABEL`, `FIELD`, `CARD`, `SECTION_HEAD`, `BTN_SCORE`, `BTN_SMALL`, `MENU_ITEM` near the top of `scorer.js`. Use them (and keep text ≥ 11px) rather than inventing new tiny arbitrary sizes — the app is used outdoors on phones.
+- **Escape user text**: shooter names, ground, event go through `escapeHtml()` whenever interpolated into HTML (including `value="…"`).
 - **Target labels** (`stand.labels`) — only ESK sets these currently; the engine renders them as a caption row beneath each pair. Any discipline can opt in.
 
 ### Export paths
@@ -111,7 +117,7 @@ Three export flows share `generateExportGrid(tid)`, which uses `standTargets()` 
 - `shareAsImage()` — off-screen `#capture-container` (via `position: absolute; left: -9999px`), briefly moved to `position: fixed; left:0; z-index:-1` for html2canvas measurement, then `navigator.share({ files })` on mobile or falls back to download. Preserve the position dance if you touch it.
 - `downloadCSV()` — header block `Discipline / Date / Ground / Event / Stands` (Date as `YYYYMMDD`, `Stands` is a comma-separated list of `targets[+1]` specs), then a per-stand columns + totals block, then a `Details` block (`Shooter,Stand,Shots`) whose shot strings use `H` = hit, `M` = miss, `.` = not shot. The `Stands` line + `Details` block make CSVs fully round-trippable through `importCSV`.
 
-Every export shares the same filename stem — `${D.id}-YYYYMMDD[-ground-slug][-event-slug]` — built by `filenameStem()`. Empty parts are skipped, so an unnamed round yields `${D.id}-YYYYMMDD`. Ground and event are lowercased and non-alphanumerics collapse to single dashes. The PDF/PNG header blocks show ground + date (yyyymmdd) + discipline unconditionally and an italic EVENT row directly below (`#p-event-row` / `#cap-event-row`) that stays hidden unless `state.event` is set.
+Every export shares the same filename stem — `YYYYMMDD_${D.id}[_ground-slug][_event-slug]` — built by `filenameStem()`. Empty parts are skipped, so an unnamed round yields `YYYYMMDD_${D.id}`. Ground and event are lowercased and non-alphanumerics collapse to single dashes. The PDF/PNG header blocks show ground + date (yyyymmdd) + discipline unconditionally and an italic EVENT row directly below (`#p-event-row` / `#cap-event-row`) that stays hidden unless `state.event` is set.
 
 ### CSV import
 
@@ -121,7 +127,7 @@ Every export shares the same filename stem — `${D.id}-YYYYMMDD[-ground-slug][-
 
 ## Files
 
-- `index.html` — landing page with 4 discipline tiles.
+- `index.html` — landing page with 4 discipline tiles. Each tile carries `data-storage-key` and shows a "Continue: …" line when that discipline's live round has scores.
 - `sporting.html`, `sportrap.html`, `compak.html`, `skeet.html` — thin per-discipline shells that set `window.DISCIPLINE` and load the shared engine.
 - `assets/scorer.js` — shared scoring engine (state, mount, render, exports). All global `window.*` handlers used by inline `onclick`s are defined here.
 - `assets/scorer.css` — shared styles including print media, capture container, pair-stack, first-up glow, and discipline tiles.

@@ -12,6 +12,39 @@ let user = null;
 let ui = {};
 let busy = false;
 
+// Redirect sign-in only works when the auth helper is served from this site's own domain:
+// Safari 16.1+ (and Chrome/Firefox) block the cross-site storage it relies on otherwise.
+// https://firebase.google.com/docs/auth/web/redirect-best-practices
+const authOnSameSite = () => FIREBASE_CONFIG?.authDomain === location.hostname;
+// Installed to the iOS Home Screen: popups open in a separate window that can't hand the
+// result back to the app, so popup sign-in typically fails there.
+const isStandalone = () => window.navigator.standalone === true || window.matchMedia?.('(display-mode: standalone)').matches;
+const isIos = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+// Plain-language reason for a failed sign-in; the raw code is shown alongside so it can be reported.
+function signInErrorHint(err) {
+    const hints = {
+        'auth/popup-blocked': 'The Google sign-in window was blocked. Allow pop-ups for this site (iPhone: Settings › Apps › Safari › Block Pop-ups off) and try again.',
+        'auth/popup-closed-by-user': isStandalone() && isIos()
+            ? 'Sign-in can\'t finish inside the Home Screen app on iPhone. Open ClayScorer in Safari to use cloud sync.'
+            : 'The sign-in window closed before sign-in finished.',
+        'auth/cancelled-popup-request': 'Another sign-in window was already open. Try again.',
+        'auth/unauthorized-domain': `${location.hostname} isn't an authorised domain. Add it in Firebase › Authentication › Settings › Authorized domains.`,
+        'auth/network-request-failed': 'No connection to Google. Check signal and try again.',
+        'auth/web-storage-unsupported': 'This browser is blocking site storage (Private Browsing, or cookies blocked). Turn that off and try again.',
+        'auth/operation-not-supported-in-this-environment': 'Sign-in isn\'t supported in this browser mode. Open the site in Safari.'
+    };
+    return hints[err?.code] || (isStandalone() && isIos()
+        ? 'Sign-in from the Home Screen app is unreliable on iPhone. Open ClayScorer in Safari to use cloud sync.'
+        : 'Sign-in didn\'t complete.');
+}
+
+function showDetail(message) {
+    if (!ui.detail) return;
+    ui.detail.textContent = message || '';
+    ui.detail.classList.toggle('hidden', !message);
+}
+
 const hasConfig = () => FIREBASE_ENABLED && FIREBASE_CONFIG?.apiKey && FIREBASE_CONFIG?.authDomain && FIREBASE_CONFIG?.projectId && FIREBASE_CONFIG?.appId;
 const clean = (value) => JSON.parse(JSON.stringify(value || {}));
 const roundDocId = (disciplineId, roundKey) => `${disciplineId}_${encodeURIComponent(roundKey)}`;
@@ -25,7 +58,7 @@ function setStatus(message, tone = 'slate') {
         red: '#dc2626'
     };
     ui.status.textContent = message;
-    ui.status.className = 'text-[9px] font-bold uppercase';
+    ui.status.className = 'text-xs font-bold uppercase';
     ui.status.style.color = colors[tone] || colors.slate;
     setCloudBadge(message, tone);
 }
@@ -70,7 +103,7 @@ function setCloudBadge(message, tone = 'slate') {
     };
     const label = labels[message] || (/^Uploaded|^Downloaded/.test(message) ? 'Done' : message);
     badge.textContent = label;
-    badge.className = `h-5 px-1.5 rounded text-[9px] font-black leading-5 text-center uppercase ${classes[tone] || classes.slate}`;
+    badge.className = `h-5 px-1.5 rounded text-xs font-black leading-5 text-center uppercase ${classes[tone] || classes.slate}`;
 }
 
 function setBusy(isBusy) {
@@ -105,29 +138,30 @@ function mountUi() {
     section.innerHTML = `
         <div class="p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div class="min-w-0">
-                <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
+                <h3 class="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-1">
                     <i data-lucide="cloud" class="w-3 h-3"></i> Cloud Sync
                 </h3>
-                <div id="cloud-sync-identity" class="text-[9px] text-slate-500 font-bold mt-0.5">Not signed in</div>
-                <div id="cloud-sync-status" class="text-[9px] font-bold uppercase text-slate-500 mt-0.5">${STATUS_IDLE}</div>
+                <div id="cloud-sync-identity" class="text-xs text-slate-500 font-bold mt-0.5">Not signed in</div>
+                <div id="cloud-sync-status" class="text-xs font-bold uppercase text-slate-500 mt-0.5">${STATUS_IDLE}</div>
+                <p id="cloud-sync-detail" class="hidden text-xs text-red-700 mt-1 leading-snug"></p>
             </div>
             <div class="grid grid-cols-2 gap-1.5">
-                <button id="cloud-sign-in" class="text-[9px] bg-slate-900 text-white px-3 py-1.5 rounded-lg font-black uppercase border border-slate-900 inline-flex items-center gap-1">
+                <button id="cloud-sign-in" class="text-xs bg-slate-900 text-white px-3 py-1.5 rounded-lg font-black uppercase border border-slate-900 inline-flex items-center gap-1">
                     <i data-lucide="log-in" class="w-3 h-3"></i> Sign In
                 </button>
-                <button id="cloud-sign-out" class="hidden text-[9px] bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-black uppercase border border-slate-200 inline-flex items-center gap-1">
+                <button id="cloud-sign-out" class="hidden text-xs bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-black uppercase border border-slate-200 inline-flex items-center gap-1">
                     <i data-lucide="log-out" class="w-3 h-3"></i> Sign Out
                 </button>
-                <button id="cloud-upload-current" class="text-[9px] bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-black uppercase border border-slate-200 inline-flex items-center gap-1 disabled:opacity-40">
+                <button id="cloud-upload-current" class="text-xs bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-black uppercase border border-slate-200 inline-flex items-center gap-1 disabled:opacity-40">
                     <i data-lucide="upload-cloud" class="w-3 h-3"></i> Upload Current
                 </button>
-                <button id="cloud-upload-all" class="text-[9px] bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-black uppercase border border-slate-200 inline-flex items-center gap-1 disabled:opacity-40">
+                <button id="cloud-upload-all" class="text-xs bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-black uppercase border border-slate-200 inline-flex items-center gap-1 disabled:opacity-40">
                     <i data-lucide="upload-cloud" class="w-3 h-3"></i> Upload All
                 </button>
-                <button id="cloud-download-current" class="text-[9px] bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-black uppercase border border-slate-200 inline-flex items-center gap-1 disabled:opacity-40">
+                <button id="cloud-download-current" class="text-xs bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-black uppercase border border-slate-200 inline-flex items-center gap-1 disabled:opacity-40">
                     <i data-lucide="download-cloud" class="w-3 h-3"></i> Download Current
                 </button>
-                <button id="cloud-download-all" class="text-[9px] bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-black uppercase border border-slate-200 inline-flex items-center gap-1 disabled:opacity-40">
+                <button id="cloud-download-all" class="text-xs bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg font-black uppercase border border-slate-200 inline-flex items-center gap-1 disabled:opacity-40">
                     <i data-lucide="download-cloud" class="w-3 h-3"></i> Download All
                 </button>
             </div>
@@ -139,6 +173,7 @@ function mountUi() {
         panel: section,
         identity: section.querySelector('#cloud-sync-identity'),
         status: section.querySelector('#cloud-sync-status'),
+        detail: section.querySelector('#cloud-sync-detail'),
         signIn: section.querySelector('#cloud-sign-in'),
         signOut: section.querySelector('#cloud-sign-out'),
         uploadCurrent: section.querySelector('#cloud-upload-current'),
@@ -179,8 +214,19 @@ async function initFirebase() {
         authSdk.onAuthStateChanged(auth, (currentUser) => {
             user = currentUser;
             updateUi();
-            if (currentUser) setStatus(STATUS_IDLE, 'green');
+            if (currentUser) {
+                setStatus(STATUS_IDLE, 'green');
+                showDetail('');
+            }
         });
+        // Surface the outcome of a redirect sign-in started on a previous page load.
+        if (authOnSameSite()) {
+            authSdk.getRedirectResult(auth).catch((err) => {
+                console.warn('[ClayScorer] Firebase redirect sign-in failed', err);
+                setStatus('Sign-in failed', 'red');
+                showDetail(`${signInErrorHint(err)} (${err.code || err.message})`);
+            });
+        }
     } catch (err) {
         console.warn('[ClayScorer] Firebase init failed', err);
         setStatus('Cloud unavailable', 'red');
@@ -189,20 +235,29 @@ async function initFirebase() {
 
 async function signIn() {
     if (!auth || !ui._authSdk) return;
+    const provider = new ui._authSdk.GoogleAuthProvider();
+    showDetail('');
+    // Redirect is the reliable flow for an installed app, but only when the auth helper is
+    // same-site; otherwise stick with the popup (which must open straight from the tap).
+    if (isStandalone() && authOnSameSite()) {
+        setStatus('Opening redirect', 'slate');
+        await ui._authSdk.signInWithRedirect(auth, provider);
+        return;
+    }
     setBusy(true);
     setStatus('Signing in', 'slate');
     try {
-        const provider = new ui._authSdk.GoogleAuthProvider();
         await ui._authSdk.signInWithPopup(auth, provider);
         setStatus(STATUS_IDLE, 'green');
     } catch (err) {
-        if (err.code === 'auth/popup-blocked') {
+        if (err.code === 'auth/popup-blocked' && authOnSameSite()) {
             setStatus('Opening redirect', 'slate');
-            await ui._authSdk.signInWithRedirect(auth, new ui._authSdk.GoogleAuthProvider());
+            await ui._authSdk.signInWithRedirect(auth, provider);
             return;
         }
         console.warn('[ClayScorer] Firebase sign-in failed', err);
         setStatus('Sign-in failed', 'red');
+        showDetail(`${signInErrorHint(err)} (${err.code || err.message})`);
     } finally {
         setBusy(false);
     }
