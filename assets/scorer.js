@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-13 (scrolling score rows)';
+    const SCORER_BUILD = 'scorer 2026-11-13 (clay dialog modal + quartering)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -63,7 +63,7 @@
     };
     const CLAY_META_FIELDS = [
         { key: 'presentation', label: 'Presentation', rows: CLAY_PRESENTATION_ROWS },
-        { key: 'direction', label: 'Direction', multi: true },
+        { key: 'direction', label: 'Direction', multi: true, groups: [['LR', 'RL'], ['Away', 'Towards']] },
         { key: 'starting', label: 'Starting' },
         { key: 'travelling', label: 'Travelling' },
         { key: 'claySize', label: 'Clay size' },
@@ -178,7 +178,6 @@
     const CLAY_DIRECTION_TEXT = { LR: 'left to right', RL: 'right to left', Away: 'away', Towards: 'towards you' };
     const CLAY_TRAVEL_TEXT = { Up: 'rising', Level: 'staying level', Down: 'dropping' };
     const CLAY_SIZE_TEXT = { Std110: 'standard', Midi90: 'midi', Mini70: 'mini' };
-    const joinOr = (list) => list.join(' or ');
 
     const isClayMetaEmpty = (meta) => !meta || CLAY_META_FIELDS.every(f => f.multi
         ? !(meta[f.key] || []).length
@@ -187,17 +186,22 @@
     const effectiveClayMeta = (meta) => (isClayMetaEmpty(meta) ? { ...meta, ...CLAY_META_DEFAULTS } : meta);
 
     // Natural-language description of one clay, e.g.
-    // "Crosser going left to right and away, starting low and rising. Orange standard clay showing its full belly."
+    // "Crosser quartering away left to right, starting low and rising. Orange standard clay showing its full belly."
     function clayMetaDescription(meta) {
         if (isClayMetaEmpty(meta)) return '';
+        // One choice from each direction group (older rounds may hold both; first wins).
         const dirs = meta.direction || [];
-        const lateral = dirs.filter(d => d === 'LR' || d === 'RL').map(d => CLAY_DIRECTION_TEXT[d]);
-        const depth = dirs.filter(d => d === 'Away' || d === 'Towards').map(d => CLAY_DIRECTION_TEXT[d]);
-        const dirGroups = [lateral, depth].filter(g => g.length).map(joinOr);
+        const lateral = ['LR', 'RL'].find(d => dirs.includes(d));
+        const depth = ['Away', 'Towards'].find(d => dirs.includes(d));
         let dirText = '';
-        if (dirGroups.length) {
-            const comingTowards = !lateral.length && depth.length === 1 && dirs.includes('Towards');
-            dirText = `${comingTowards ? 'coming' : 'going'} ${dirGroups.join(' and ')}`;
+        if (lateral && depth) {
+            // Across and away/towards = quartering ("Crosser quartering away left to right").
+            const lead = meta.presentation === 'Quartering' ? '' : 'quartering ';
+            dirText = `${lead}${depth.toLowerCase()} ${CLAY_DIRECTION_TEXT[lateral]}`;
+        } else if (lateral) {
+            dirText = `going ${CLAY_DIRECTION_TEXT[lateral]}`;
+        } else if (depth) {
+            dirText = depth === 'Away' ? 'going away' : 'coming towards you';
         }
 
         const moveParts = [];
@@ -238,12 +242,12 @@
             .filter(Boolean);
     }
 
-    const CLAY_CHIP = 'flex-1 min-w-[4.25rem] h-9 px-2 rounded-lg border text-xs font-semibold';
+    const CLAY_CHIP = 'flex-1 basis-0 min-w-0 h-10 px-0.5 rounded-lg border text-[11px] min-[375px]:text-xs font-semibold whitespace-nowrap overflow-hidden text-ellipsis';
     const clayChipClass = (on) => `${CLAY_CHIP} ${on
         ? 'bg-orange-500 border-orange-500 text-white'
         : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-100'}`;
     const clayOptionText = (key, opt) => (key === 'direction'
-        ? { LR: 'Left → right', RL: 'Right → left', Away: 'Away', Towards: 'Towards' }[opt] || opt
+        ? { LR: 'L → R', RL: 'R → L', Away: 'Away', Towards: 'Towards' }[opt] || opt
         : opt);
     const clayOptionOn = (meta, field, opt) => (field.multi
         ? (meta[field.key] || []).includes(opt)
@@ -252,16 +256,17 @@
     function clayMetaPanelHtml(targetIdx, meta) {
         const shown = effectiveClayMeta(meta);
         return CLAY_META_FIELDS.map(field => {
-            const rows = field.rows || [CLAY_META_OPTIONS[field.key]];
+            const chip = (opt) => {
+                const on = clayOptionOn(shown, field, opt);
+                return `<button type="button" data-meta-key="${field.key}" data-meta-value="${escapeHtml(opt)}" aria-pressed="${on}"
+                    onclick="toggleClayMeta(${targetIdx}, '${field.key}', '${escapeHtml(opt)}')" class="${clayChipClass(on)}">${escapeHtml(clayOptionText(field.key, opt))}</button>`;
+            };
+            const body = field.groups
+                ? `<div class="flex gap-2">${field.groups.map(g => `<div class="flex-1 min-w-0 flex gap-1 p-1 rounded-xl bg-slate-100 border border-slate-200">${g.map(chip).join('')}</div>`).join('')}</div>`
+                : (field.rows || [CLAY_META_OPTIONS[field.key]]).map(row => `<div class="flex gap-1">${row.map(chip).join('')}</div>`).join('');
             return `<div class="space-y-1" role="group" aria-label="${field.label}">
-                <div class="${LABEL}">${field.label}${field.multi ? ' <span class="font-normal text-slate-500">(choose any)</span>' : ''}</div>
-                ${rows.map(row => `<div class="flex gap-1">
-                    ${row.map(opt => {
-                        const on = clayOptionOn(shown, field, opt);
-                        return `<button type="button" data-meta-key="${field.key}" data-meta-value="${escapeHtml(opt)}" aria-pressed="${on}"
-                            onclick="toggleClayMeta(${targetIdx}, '${field.key}', '${escapeHtml(opt)}')" class="${clayChipClass(on)}">${escapeHtml(clayOptionText(field.key, opt))}</button>`;
-                    }).join('')}
-                </div>`).join('')}
+                <div class="${LABEL}">${field.label}${field.groups ? ' <span class="font-normal text-slate-500">(one of each, both = quartering)</span>' : ''}</div>
+                ${body}
             </div>`;
         }).join('');
     }
@@ -274,16 +279,17 @@
             const label = clayMetaLabel(stand, idx);
             const text = clayMetaDescription(meta);
             return `<details data-clay-meta-control data-clay-idx="${idx}" class="relative">
-                <summary class="list-none cursor-pointer rounded-lg border border-slate-500 bg-slate-700 px-2 py-2 text-xs font-bold text-white truncate" title="${escapeHtml(text)}">
-                    <span class="text-orange-400">${label}</span>
-                    <span data-clay-meta-summary="${idx}" class="font-semibold ml-1 ${text ? 'text-slate-100' : 'text-slate-300 italic'}">${escapeHtml(text || 'Tap to describe')}</span>
+                <summary class="list-none cursor-pointer rounded-lg border border-slate-500 bg-slate-700 px-2 py-2 text-xs font-bold text-white flex items-start gap-1.5 leading-snug h-full" title="${escapeHtml(text)}">
+                    <span class="text-orange-400 flex-shrink-0">${label}</span>
+                    <span data-clay-meta-summary="${idx}" class="min-w-0 break-words font-semibold ${text ? 'text-slate-100' : 'text-slate-300 italic'}">${escapeHtml(text || 'Tap to describe')}</span>
                 </summary>
-                <div class="absolute right-0 z-30 mt-1 w-[min(34rem,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto rounded-xl border border-slate-300 bg-white shadow-xl">
-                    <div class="flex items-center justify-between gap-2 px-3 py-2 bg-slate-100 border-b border-slate-300 rounded-t-xl">
+                <div class="fixed inset-0 z-[60] bg-slate-900/60" onclick="closeClayMeta()" aria-hidden="true"></div>
+                <div role="dialog" aria-modal="true" aria-label="${ROUND_LABEL} ${stand.id} ${label} presentation" class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[61] w-[min(34rem,calc(100vw-1rem))] max-h-[85vh] overflow-y-auto rounded-xl border-4 border-orange-500 ring-4 ring-white/80 bg-white shadow-2xl">
+                    <div class="sticky top-0 z-10 flex items-center justify-between gap-2 px-3 py-2 bg-slate-100 border-b border-slate-300">
                         <span class="${SECTION_HEAD}">${ROUND_LABEL} ${stand.id} · <span class="text-orange-600">${label}</span></span>
                         <button type="button" onclick="closeClayMeta()" class="${BTN_SMALL} bg-slate-900 text-white border-slate-900">Done</button>
                     </div>
-                    <div class="p-3 space-y-2.5">${clayMetaPanelHtml(idx, meta)}</div>
+                    <div class="p-2 min-[375px]:p-3 space-y-2.5">${clayMetaPanelHtml(idx, meta)}</div>
                     <div data-clay-meta-preview="${idx}" class="px-3 pb-3 text-sm text-slate-700 ${text ? '' : 'hidden'}"><span class="font-semibold text-slate-900">Description:</span> <span data-clay-meta-preview-text>${escapeHtml(text)}</span></div>
                 </div>
             </details>`;
@@ -306,7 +312,7 @@
         const summaryEl = control.querySelector(`[data-clay-meta-summary="${targetIdx}"]`);
         if (summaryEl) {
             summaryEl.textContent = text || 'Tap to describe';
-            summaryEl.className = `font-semibold ml-1 ${text ? 'text-slate-100' : 'text-slate-300 italic'}`;
+            summaryEl.className = `min-w-0 break-words font-semibold ${text ? 'text-slate-100' : 'text-slate-300 italic'}`;
             summaryEl.parentElement.title = text;
         }
         const preview = control.querySelector(`[data-clay-meta-preview="${targetIdx}"]`);
@@ -861,7 +867,10 @@
         if (fresh) Object.assign(meta, CLAY_META_DEFAULTS);
         if (key === 'direction') {
             const set = new Set(meta.direction || []);
-            set.has(opt) ? set.delete(opt) : set.add(opt);
+            const group = CLAY_META_FIELDS.find(f => f.key === 'direction').groups.find(g => g.includes(opt)) || [opt];
+            const wasOn = set.has(opt);
+            group.forEach(v => set.delete(v));
+            if (!wasOn) set.add(opt);
             meta.direction = CLAY_META_OPTIONS.direction.filter(v => set.has(v));
         } else if (fresh) {
             meta[key] = opt;
