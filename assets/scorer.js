@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-13 (regular shooters)';
+    const SCORER_BUILD = 'scorer 2026-11-13 (regulars alphabetical)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -805,6 +805,12 @@
         try { localStorage.setItem(REGULARS_KEY, JSON.stringify({ items, updatedAt: Date.now() })); } catch (e) {}
         document.dispatchEvent(new CustomEvent('clayscorer:regulars-written'));
     }
+    // Alphabetical by name (case-insensitive); unnamed entries (just added) go last.
+    const byRegularName = (a, b) => {
+        const an = String(a.name || '').trim(), bn = String(b.name || '').trim();
+        if (!an || !bn) return an ? -1 : (bn ? 1 : 0);
+        return an.localeCompare(bn, undefined, { sensitivity: 'base' });
+    };
     const sameName = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
     const regularFields = (s) => ({ name: String(s.name || '').trim(), cpsa: s.cpsa || '', class: s.class || 'U', gun: s.gun || '', cartridges: s.cartridges || '' });
     const shooterHasScores = (id) => Object.values(state.hits[id] || {}).some(arr => (arr || []).some(h => h !== null && h !== undefined))
@@ -849,7 +855,7 @@
 
     // Manage regulars: a centred window listing every saved shooter with editable fields.
     function regularsDialogHtml() {
-        const items = readRegulars();
+        const items = readRegulars().slice().sort(byRegularName);
         const field = (r, key, ph, max) => `<input type="text" value="${escapeHtml(r[key] || '')}" maxlength="${max}" placeholder="${ph}" aria-label="${ph}" onchange="updateRegular('${r.id}', '${key}', this.value)" class="bg-white border border-slate-400 rounded-md px-2 py-1.5 text-sm w-full min-w-0">`;
         return `<div class="fixed inset-0 z-[60] bg-slate-900/60" onclick="closeRegulars()" aria-hidden="true"></div>
             <div role="dialog" aria-modal="true" aria-label="Regular shooters" class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[61] w-[min(34rem,calc(100vw-1rem))] max-h-[85vh] overflow-y-auto rounded-xl border-4 border-orange-500 ring-4 ring-white/80 bg-white shadow-2xl">
@@ -2355,7 +2361,7 @@
         // "Add a regular shooter" picker
         const picker = document.getElementById('regular-picker');
         if (picker) {
-            const regs = readRegulars().filter(x => String(x.name || '').trim()).slice().sort((a, b) => a.name.localeCompare(b.name));
+            const regs = readRegulars().filter(x => String(x.name || '').trim()).sort(byRegularName);
             picker.innerHTML = regs.length
                 ? `<select onchange="if (this.value) { addRegularToSquad(this.value); this.value = ''; }" aria-label="Add a regular shooter" class="${FIELD} !h-10 !text-slate-700">
                         <option value="">+ Add a regular shooter…</option>
