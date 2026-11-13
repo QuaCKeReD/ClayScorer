@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-13 (clay distance + collapsible presentation)';
+    const SCORER_BUILD = 'scorer 2026-11-13 (distance value only)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -56,7 +56,6 @@
         { label: 'Far', options: ['20-30', '30+'] }
     ];
     const clayDistanceText = (v) => `${v.replace('-', '–')} m`;
-    const clayDistanceRange = (v) => (CLAY_DISTANCE_GROUPS.find(g => g.options.includes(v))?.label || '').toLowerCase();
     // Presentation choices are laid out over two rows in the clay dialog.
     const CLAY_PRESENTATION_ROWS = [
         ['Crosser', 'Teal', 'Crow', 'Driven', 'Looper'],
@@ -222,7 +221,7 @@
         if (meta.travelling) moveParts.push(CLAY_TRAVEL_TEXT[meta.travelling] || meta.travelling.toLowerCase());
         const moveText = moveParts.join(' and ');
 
-        const distText = meta.distance ? `at ${clayDistanceRange(meta.distance)} range (${clayDistanceText(meta.distance)})` : '';
+        const distText = meta.distance ? `at ${clayDistanceText(meta.distance)}` : '';
         let flight = [meta.presentation, dirText, distText].filter(Boolean).join(' ');
         flight = [flight, moveText].filter(Boolean).join(', ');
 
