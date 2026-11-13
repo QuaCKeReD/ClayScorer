@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-13 (quartering wording restored)';
+    const SCORER_BUILD = 'scorer 2026-11-13 (no assumed face amount)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -216,7 +216,11 @@
         const part = meta.clayVisibility === 'Part';
         let faceText = '';
         if (face === 'edge') faceText = part ? 'partly edge-on' : 'edge-on';
-        else if (face) faceText = part ? `showing part of its ${face}` : `showing its full ${face}`;
+        else if (face) {
+            // No amount chosen: say nothing about how much is showing.
+            faceText = part ? `showing part of its ${face}`
+                : (meta.clayVisibility === 'Full' ? `showing its full ${face}` : `showing its ${face}`);
+        }
         else if (meta.clayVisibility) faceText = part ? ', partly visible' : ', fully visible';
         const clayWords = [(meta.colour || '').toLowerCase(), CLAY_SIZE_TEXT[meta.claySize] || ''].filter(Boolean);
         const clayText = (clayWords.length || faceText)
