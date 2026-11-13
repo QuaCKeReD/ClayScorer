@@ -23,7 +23,7 @@ ClayScorer Pro — a static, offline-capable Progressive Web App for scoring CPS
   - **Any user-visible change** (new/changed feature, control, label, default, behaviour): update `docs/USER_GUIDE.md` in the same change, and regenerate its screenshots (`docs/tools/generate-docs.sh guide`) if the UI they show changed. If a new feature deserves a screenshot, add it to `docs/tools/generate-guide-screenshots.js`.
   - **Any output change** (PDF print view, scorecard/presentations images, `generateExportGrid`, `exportPresentationsHtml`, clay descriptions, `#capture-*` / print CSS): regenerate `docs/example-outputs.pdf` (`docs/tools/generate-docs.sh examples`).
   - `docs/tools/generate-docs.sh` with no argument does both. Needs Docker only (~3–4 min); look at the results before committing.
-- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v32`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names. `scorer.js` also logs a `SCORER_BUILD` banner on load — bumping that string when you ship changes gives you a quick DevTools signal that the page is running the new code (not a stale SW-cached copy).
+- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v33`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names. `scorer.js` also logs a `SCORER_BUILD` banner on load — bumping that string when you ship changes gives you a quick DevTools signal that the page is running the new code (not a stale SW-cached copy).
 - The SW pre-caches same-origin files with `cache.addAll`. If you add new app shell assets, put them in `LOCAL_ASSETS`.
 
 ## Architecture
@@ -153,6 +153,7 @@ Every export shares the same filename stem — `YYYYMMDD_${D.id}[_ground-slug][_
 - `sporting.html`, `sportrap.html`, `compak.html`, `skeet.html` — thin per-discipline shells that set `window.DISCIPLINE` and load the shared engine.
 - `assets/scorer.js` — shared scoring engine (state, mount, render, exports). All global `window.*` handlers used by inline `onclick`s are defined here.
 - `assets/scorer.css` — shared styles including print media, capture container, pair-stack, first-up glow, and discipline tiles.
+- `assets/icons.js` — original SVG icons (`clay`, `sporting`, `sportrap`, `compak`, `skeet`), loaded on every page before the app scripts. `ClayIcons.svg(name, cls)` returns markup (the scorer header uses `D.id`); elements with `data-clay-icon="name"` are filled on load (home/account headers, home tiles). Favicons are built from the same clay: `favicon.ico` (16/32/48 PNG-in-ICO), `assets/clay-icon.svg`, `assets/clay-180.png` (apple-touch), `assets/clay-192.png` / `clay-512.png` (manifest).
 - `assets/presentation.js` — the Presentation slide deck (see above). Loaded by each discipline page after `server-sync.js`.
 - `assets/server-sync.js` — sign-in panel (`#cloud-sync-panel`) and round sync. The scorer exposes a narrow `window.ClayScorerCloud` bridge (`getDiscipline`, `getCurrentState`, `getHistory`, `replaceHistory`, `refreshCurrentRoundFromHistory`, `saveCurrent`; sync adds `isSignedIn`); keep server-specific code out of the core scorer.
 - `users.html`, `assets/users.js` — account & user management page.

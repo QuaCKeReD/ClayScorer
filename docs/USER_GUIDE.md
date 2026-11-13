@@ -48,7 +48,7 @@ If a discipline has a round in progress, its tile shows **Continue: …** with t
 
 | Button | What it does |
 |---|---|
-| Target logo | Back to the discipline list |
+| Orange logo | Back to the discipline list. Each discipline has its own icon: a crossing clay (Sporting), a clay rising from a trap (Sportrap), a clay over five stands (Compak), high and low houses (Skeet) |
 | **History** (box icon + count) | Saved rounds, Import CSV, New round — see [Round history](#7-round-history) |
 | **Cloud** | Sign in and sync — see [Signing in and syncing](#9-signing-in-and-syncing) |
 | **Export** (orange) | Print/PDF, Show scorecard, Share image, CSV — see [Exporting and sharing](#8-exporting-and-sharing) |

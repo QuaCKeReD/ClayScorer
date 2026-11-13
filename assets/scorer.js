@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-13 (change shooter to regular)';
+    const SCORER_BUILD = 'scorer 2026-11-13 (clay icons)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -1831,9 +1831,7 @@
             <div class="max-w-5xl mx-auto p-3 flex justify-between items-center gap-2 relative">
                 <div class="flex items-center gap-2 min-w-0">
                     <a href="index.html" aria-label="All disciplines" title="All disciplines" class="w-9 h-9 flex-shrink-0 flex items-center justify-center bg-orange-500 rounded-lg shadow-sm">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6">
-                            <circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle>
-                        </svg>
+                        ${window.ClayIcons ? `<span class="w-7 h-7 text-white">${ClayIcons.svg(D.id, 'w-7 h-7')}</span>` : ''}
                     </a>
                     <div class="min-w-0">
                         <div class="text-[11px] text-orange-400 font-black uppercase tracking-widest leading-none">${D.code}</div>

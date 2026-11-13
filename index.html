@@ -8,19 +8,18 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0f172a">
     <link rel="manifest" href="manifest.json">
-    <link rel="icon" href="favicon.ico" sizes="32x32">
-    <link rel="icon" type="image/png" href="assets/target.png">
-    <link rel="apple-touch-icon" href="assets/target.png">
+    <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
+    <link rel="icon" type="image/svg+xml" href="assets/clay-icon.svg">
+    <link rel="apple-touch-icon" href="assets/clay-180.png">
     <link rel="stylesheet" href="assets/scorer.css">
     <script src="assets/vendor/tailwindcss-3.4.17.js"></script>
+    <script src="assets/icons.js"></script>
 </head>
 <body class="bg-slate-300 text-slate-900 font-sans min-h-screen">
     <header class="bg-slate-900 text-white shadow-md">
         <div class="max-w-3xl mx-auto p-4 flex items-center gap-3">
             <div class="w-10 h-10 flex items-center justify-center bg-orange-500 rounded-lg shadow-sm">
-                <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-7 h-7">
-                    <circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle>
-                </svg>
+                <span data-clay-icon="clay" data-clay-icon-class="w-7 h-7" class="w-7 h-7 text-white"></span>
             </div>
             <div>
                 <h1 class="text-xl font-black tracking-tight uppercase italic leading-none">ClayScorer Pro</h1>
@@ -34,25 +33,25 @@
             <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">Choose a discipline</h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <a href="sporting.html" class="discipline-tile" data-storage-key="clayscorer_esp">
-                    <div class="text-xs font-black text-orange-600 uppercase tracking-widest">ESP</div>
+                    <div class="flex items-center gap-2"><span data-clay-icon="sporting" data-clay-icon-class="w-6 h-6" class="w-9 h-9 flex items-center justify-center bg-orange-500 text-white rounded-lg"></span><span class="text-xs font-black text-orange-600 uppercase tracking-widest">ESP</span></div>
                     <div class="text-lg font-black uppercase italic mt-1">English Sporting</div>
                     <p class="text-sm text-slate-700 mt-1.5">Choose the number of stands and pairs per stand, with an optional +1 single clay on each stand.</p>
                     <p class="tile-resume hidden mt-2 text-xs font-semibold text-orange-800 bg-orange-50 border border-orange-200 rounded-lg px-2 py-1"></p>
                 </a>
                 <a href="sportrap.html" class="discipline-tile" data-storage-key="clayscorer_str">
-                    <div class="text-xs font-black text-orange-600 uppercase tracking-widest">STR</div>
+                    <div class="flex items-center gap-2"><span data-clay-icon="sportrap" data-clay-icon-class="w-6 h-6" class="w-9 h-9 flex items-center justify-center bg-orange-500 text-white rounded-lg"></span><span class="text-xs font-black text-orange-600 uppercase tracking-widest">STR</span></div>
                     <div class="text-lg font-black uppercase italic mt-1">Sportrap</div>
                     <p class="text-sm text-slate-700 mt-1.5">5 stands · 5 targets per stand · 25 total.</p>
                     <p class="tile-resume hidden mt-2 text-xs font-semibold text-orange-800 bg-orange-50 border border-orange-200 rounded-lg px-2 py-1"></p>
                 </a>
                 <a href="compak.html" class="discipline-tile" data-storage-key="clayscorer_csp">
-                    <div class="text-xs font-black text-orange-600 uppercase tracking-widest">CSP</div>
+                    <div class="flex items-center gap-2"><span data-clay-icon="compak" data-clay-icon-class="w-6 h-6" class="w-9 h-9 flex items-center justify-center bg-orange-500 text-white rounded-lg"></span><span class="text-xs font-black text-orange-600 uppercase tracking-widest">CSP</span></div>
                     <div class="text-lg font-black uppercase italic mt-1">Compak Sporting</div>
                     <p class="text-sm text-slate-700 mt-1.5">5 stands · 5 targets per stand · 25 total.</p>
                     <p class="tile-resume hidden mt-2 text-xs font-semibold text-orange-800 bg-orange-50 border border-orange-200 rounded-lg px-2 py-1"></p>
                 </a>
                 <a href="skeet.html" class="discipline-tile" data-storage-key="clayscorer_esk">
-                    <div class="text-xs font-black text-orange-600 uppercase tracking-widest">ESK</div>
+                    <div class="flex items-center gap-2"><span data-clay-icon="skeet" data-clay-icon-class="w-6 h-6" class="w-9 h-9 flex items-center justify-center bg-orange-500 text-white rounded-lg"></span><span class="text-xs font-black text-orange-600 uppercase tracking-widest">ESK</span></div>
                     <div class="text-lg font-black uppercase italic mt-1">English Skeet</div>
                     <p class="text-sm text-slate-700 mt-1.5">7 stations · standard CPSA sequence (H / L / H+L / L+H) plus the option target.</p>
                     <p class="tile-resume hidden mt-2 text-xs font-semibold text-orange-800 bg-orange-50 border border-orange-200 rounded-lg px-2 py-1"></p>

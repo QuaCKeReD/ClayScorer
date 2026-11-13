@@ -1,4 +1,4 @@
-const CACHE_NAME = 'clayscorer-v32';
+const CACHE_NAME = 'clayscorer-v33';
 
 // Same-origin assets: `cache.addAll` is all-or-nothing, but these are local files
 // we control, so a hard-fail here is the right behaviour.
@@ -23,8 +23,11 @@ const LOCAL_ASSETS = [
   './assets/vendor/tailwindcss-3.4.17.js',
   './assets/vendor/lucide-0.468.0.min.js',
   './assets/vendor/html2canvas-1.4.1.min.js',
-  './assets/target.png',
-  './assets/target.ico',
+  './assets/icons.js',
+  './assets/clay-icon.svg',
+  './assets/clay-180.png',
+  './assets/clay-192.png',
+  './assets/clay-512.png',
   './favicon.ico',
 ];
 
