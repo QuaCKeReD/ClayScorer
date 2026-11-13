@@ -19,7 +19,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-13 (legibility + layout review)';
+    const SCORER_BUILD = 'scorer 2026-11-13 (clay presentation dialog)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -36,15 +36,40 @@
     const STAND_ROTATION_DEFAULT_VERSION = 1;
     const SPORTRAP_STAND_FORMAT_DEFAULT_VERSION = 1;
     const CLAY_META_OPTIONS = {
-        presentation: ['Crosser', 'Teal', 'Crow', 'Driven', 'Looper', 'Batue', 'Rabbit'],
+        presentation: ['Crosser', 'Teal', 'Crow', 'Driven', 'Looper', 'Battue', 'Rabbit', 'Rabbue', 'Quartering'],
         direction: ['LR', 'RL', 'Away', 'Towards'],
         starting: ['Low', 'Mid', 'High'],
-        travelling: ['Up', 'Down', 'Level'],
+        travelling: ['Up', 'Level', 'Down'],
         claySize: ['Std110', 'Midi90', 'Mini70'],
         clayFace: ['Edge', 'Belly', 'Top'],
         clayVisibility: ['Full', 'Part'],
         colour: ['Orange', 'Black', 'Pink', 'Green']
     };
+    // Presentation choices are laid out over two rows in the clay dialog.
+    const CLAY_PRESENTATION_ROWS = [
+        ['Crosser', 'Teal', 'Crow', 'Driven', 'Looper'],
+        ['Battue', 'Rabbit', 'Rabbue', 'Quartering']
+    ];
+    // Pre-selected in the dialog for a clay nobody has described yet, and stored on its first edit.
+    const CLAY_META_DEFAULTS = {
+        starting: 'Low',
+        travelling: 'Level',
+        claySize: 'Std110',
+        clayVisibility: 'Full',
+        colour: 'Orange'
+    };
+    const CLAY_META_FIELDS = [
+        { key: 'presentation', label: 'Presentation', rows: CLAY_PRESENTATION_ROWS },
+        { key: 'direction', label: 'Direction', multi: true },
+        { key: 'starting', label: 'Starting' },
+        { key: 'travelling', label: 'Travelling' },
+        { key: 'claySize', label: 'Clay size' },
+        { key: 'clayFace', label: 'Clay face' },
+        { key: 'clayVisibility', label: 'Clay face amount' },
+        { key: 'colour', label: 'Colour' }
+    ];
+    // Older rounds stored the misspelt 'Batue'.
+    const LEGACY_PRESENTATION = { Batue: 'Battue' };
 
     // Shared class strings so sizing/contrast for field use (sunlight, gloves) is tuned in one place.
     const LABEL = 'block text-xs font-semibold text-slate-800';
@@ -135,7 +160,7 @@
         return Array.from({ length: total }, (_, idx) => {
             const item = current[idx] || {};
             return {
-                presentation: item.presentation || '',
+                presentation: LEGACY_PRESENTATION[item.presentation] || item.presentation || '',
                 direction: Array.isArray(item.direction) ? item.direction.filter(v => CLAY_META_OPTIONS.direction.includes(v)) : [],
                 starting: item.starting || '',
                 travelling: item.travelling || '',
@@ -147,59 +172,95 @@
         });
     }
 
-    function clayMetaSummary(meta, idx) {
-        if (!meta) return '';
-        const parts = [
-            meta.presentation,
-            ...(meta.direction || []),
-            meta.starting,
-            meta.travelling,
-            meta.claySize,
-            meta.clayFace,
-            meta.clayVisibility,
-            meta.colour
-        ].filter(Boolean);
-        return parts.length ? `C${idx + 1}: ${parts.join(' ')}` : '';
+    const CLAY_DIRECTION_TEXT = { LR: 'left to right', RL: 'right to left', Away: 'away', Towards: 'towards you' };
+    const CLAY_TRAVEL_TEXT = { Up: 'rising', Level: 'staying level', Down: 'dropping' };
+    const CLAY_SIZE_TEXT = { Std110: 'standard', Midi90: 'midi', Mini70: 'mini' };
+    const joinOr = (list) => list.join(' or ');
+
+    const isClayMetaEmpty = (meta) => !meta || CLAY_META_FIELDS.every(f => f.multi
+        ? !(meta[f.key] || []).length
+        : !meta[f.key]);
+    // What the dialog shows as selected: an untouched clay shows the defaults.
+    const effectiveClayMeta = (meta) => (isClayMetaEmpty(meta) ? { ...meta, ...CLAY_META_DEFAULTS } : meta);
+
+    // Natural-language description of one clay, e.g.
+    // "Crosser going left to right and away, starting low and rising. Orange standard clay showing its full belly."
+    function clayMetaDescription(meta) {
+        if (isClayMetaEmpty(meta)) return '';
+        const dirs = meta.direction || [];
+        const lateral = dirs.filter(d => d === 'LR' || d === 'RL').map(d => CLAY_DIRECTION_TEXT[d]);
+        const depth = dirs.filter(d => d === 'Away' || d === 'Towards').map(d => CLAY_DIRECTION_TEXT[d]);
+        const dirGroups = [lateral, depth].filter(g => g.length).map(joinOr);
+        let dirText = '';
+        if (dirGroups.length) {
+            const comingTowards = !lateral.length && depth.length === 1 && dirs.includes('Towards');
+            dirText = `${comingTowards ? 'coming' : 'going'} ${dirGroups.join(' and ')}`;
+        }
+
+        const moveParts = [];
+        if (meta.starting) moveParts.push(`starting ${meta.starting.toLowerCase()}`);
+        if (meta.travelling) moveParts.push(CLAY_TRAVEL_TEXT[meta.travelling] || meta.travelling.toLowerCase());
+        const moveText = moveParts.join(' and ');
+
+        let flight = [meta.presentation, dirText].filter(Boolean).join(' ');
+        flight = [flight, moveText].filter(Boolean).join(', ');
+
+        const face = (meta.clayFace || '').toLowerCase();
+        const part = meta.clayVisibility === 'Part';
+        let faceText = '';
+        if (face === 'edge') faceText = part ? 'partly edge-on' : 'edge-on';
+        else if (face) faceText = part ? `showing part of its ${face}` : `showing its full ${face}`;
+        else if (meta.clayVisibility) faceText = part ? ', partly visible' : ', fully visible';
+        const clayWords = [(meta.colour || '').toLowerCase(), CLAY_SIZE_TEXT[meta.claySize] || ''].filter(Boolean);
+        const clayText = (clayWords.length || faceText)
+            ? `${clayWords.join(' ')} clay${faceText.startsWith(',') ? faceText : (faceText ? ` ${faceText}` : '')}`.trim()
+            : '';
+
+        const sentence = (t) => (t ? `${t.charAt(0).toUpperCase()}${t.slice(1)}.` : '');
+        return [sentence(flight), sentence(clayText)].filter(Boolean).join(' ');
     }
 
-    function clayMetaShortLabel(meta, fallback) {
-        const parts = [
-            meta.presentation,
-            (meta.direction || []).join('/'),
-            meta.starting,
-            meta.travelling,
-            meta.claySize,
-            meta.clayFace,
-            meta.clayVisibility,
-            meta.colour
-        ].filter(Boolean);
-        return parts.length ? parts.join(' ') : fallback;
+    function clayMetaLabel(stand, idx) {
+        const total = presentationCountForStand(stand);
+        return (!D.fixedStands && stand.extraClay && idx === total - 1) ? 'Extra' : presentationLabel(idx);
     }
 
-    function standPresentationText(stand) {
-        const clayText = (stand.clayMeta || []).map(clayMetaSummary).filter(Boolean).join(' | ');
-        return clayText;
+    // One description line per described clay, prefixed with its label ("Clay 1: …", "A: …").
+    function standPresentationLines(stand) {
+        return (stand.clayMeta || [])
+            .map((meta, idx) => {
+                const text = clayMetaDescription(meta);
+                return text ? `${clayMetaLabel(stand, idx)}: ${text}` : '';
+            })
+            .filter(Boolean);
     }
 
-    function clayMetaOptionRow(targetIdx, key, label, options, value, multi = false) {
-        const selected = multi ? (Array.isArray(value) ? value : []) : [];
-        return `<div class="space-y-1">
-            <div class="text-[11px] font-bold uppercase tracking-wider text-slate-500">${label}</div>
-            <div data-meta-row class="flex flex-wrap gap-1">
-                ${options.map(opt => {
-                    const checked = multi ? selected.includes(opt) : value === opt;
-                    const inputType = multi ? 'checkbox' : 'radio';
-                    const name = multi ? '' : `name="clay-${targetIdx}-${key}"`;
-                    const handler = multi
-                        ? `updateClayMeta(${targetIdx}, '${key}', Array.from(this.closest('[data-meta-row]').querySelectorAll('input:checked')).map(input => input.value).join(','))`
-                        : `updateClayMeta(${targetIdx}, '${key}', this.checked ? this.value : '')`;
-                    return `<label class="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700">
-                        <input type="${inputType}" ${name} value="${escapeHtml(opt)}" ${checked ? 'checked' : ''} onchange="${handler}">
-                        ${escapeHtml(opt)}
-                    </label>`;
-                }).join('')}
-            </div>
-        </div>`;
+    const CLAY_CHIP = 'flex-1 min-w-[4.25rem] h-9 px-2 rounded-lg border text-xs font-semibold';
+    const clayChipClass = (on) => `${CLAY_CHIP} ${on
+        ? 'bg-orange-500 border-orange-500 text-white'
+        : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-100'}`;
+    const clayOptionText = (key, opt) => (key === 'direction'
+        ? { LR: 'Left → right', RL: 'Right → left', Away: 'Away', Towards: 'Towards' }[opt] || opt
+        : opt);
+    const clayOptionOn = (meta, field, opt) => (field.multi
+        ? (meta[field.key] || []).includes(opt)
+        : meta[field.key] === opt);
+
+    function clayMetaPanelHtml(targetIdx, meta) {
+        const shown = effectiveClayMeta(meta);
+        return CLAY_META_FIELDS.map(field => {
+            const rows = field.rows || [CLAY_META_OPTIONS[field.key]];
+            return `<div class="space-y-1" role="group" aria-label="${field.label}">
+                <div class="${LABEL}">${field.label}${field.multi ? ' <span class="font-normal text-slate-500">(choose any)</span>' : ''}</div>
+                ${rows.map(row => `<div class="flex gap-1">
+                    ${row.map(opt => {
+                        const on = clayOptionOn(shown, field, opt);
+                        return `<button type="button" data-meta-key="${field.key}" data-meta-value="${escapeHtml(opt)}" aria-pressed="${on}"
+                            onclick="toggleClayMeta(${targetIdx}, '${field.key}', '${escapeHtml(opt)}')" class="${clayChipClass(on)}">${escapeHtml(clayOptionText(field.key, opt))}</button>`;
+                    }).join('')}
+                </div>`).join('')}
+            </div>`;
+        }).join('');
     }
 
     function renderClayMetaControls(stand) {
@@ -207,25 +268,49 @@
         const total = presentationCountForStand(stand);
         stand.clayMeta = normalizeClayMeta(stand.clayMeta, total);
         return stand.clayMeta.map((meta, idx) => {
-            const isSportingExtra = !D.fixedStands && stand.extraClay && idx === total - 1;
-            const label = isSportingExtra ? 'Extra' : presentationLabel(idx);
-            return `<details data-clay-meta-control class="relative">
-                <summary class="list-none cursor-pointer rounded-lg border border-slate-500 bg-slate-700 px-2 py-2 text-xs font-bold text-white truncate">
+            const label = clayMetaLabel(stand, idx);
+            const text = clayMetaDescription(meta);
+            return `<details data-clay-meta-control data-clay-idx="${idx}" class="relative">
+                <summary class="list-none cursor-pointer rounded-lg border border-slate-500 bg-slate-700 px-2 py-2 text-xs font-bold text-white truncate" title="${escapeHtml(text)}">
                     <span class="text-orange-400">${label}</span>
-                    <span data-clay-meta-summary="${idx}" class="font-semibold text-slate-100 ml-1">${escapeHtml(clayMetaShortLabel(meta, 'Set presentation'))}</span>
+                    <span data-clay-meta-summary="${idx}" class="font-semibold ml-1 ${text ? 'text-slate-100' : 'text-slate-300 italic'}">${escapeHtml(text || 'Tap to describe')}</span>
                 </summary>
-                <div class="absolute right-0 z-30 mt-1 w-[min(34rem,calc(100vw-2rem))] rounded-xl border border-slate-200 bg-white p-2 shadow-xl space-y-2">
-                    ${clayMetaOptionRow(idx, 'presentation', 'Presentation', CLAY_META_OPTIONS.presentation, meta.presentation)}
-                    ${clayMetaOptionRow(idx, 'direction', 'Direction', CLAY_META_OPTIONS.direction, meta.direction, true)}
-                    ${clayMetaOptionRow(idx, 'starting', 'Starting', CLAY_META_OPTIONS.starting, meta.starting)}
-                    ${clayMetaOptionRow(idx, 'travelling', 'Travelling', CLAY_META_OPTIONS.travelling, meta.travelling)}
-                    ${clayMetaOptionRow(idx, 'claySize', 'Clay Size', CLAY_META_OPTIONS.claySize, meta.claySize)}
-                    ${clayMetaOptionRow(idx, 'clayFace', 'Clay Face', CLAY_META_OPTIONS.clayFace, meta.clayFace)}
-                    ${clayMetaOptionRow(idx, 'clayVisibility', 'Clay Face Amount', CLAY_META_OPTIONS.clayVisibility, meta.clayVisibility)}
-                    ${clayMetaOptionRow(idx, 'colour', 'Colour', CLAY_META_OPTIONS.colour, meta.colour)}
+                <div class="absolute right-0 z-30 mt-1 w-[min(34rem,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto rounded-xl border border-slate-300 bg-white shadow-xl">
+                    <div class="flex items-center justify-between gap-2 px-3 py-2 bg-slate-100 border-b border-slate-300 rounded-t-xl">
+                        <span class="${SECTION_HEAD}">${ROUND_LABEL} ${stand.id} · <span class="text-orange-600">${label}</span></span>
+                        <button type="button" onclick="closeClayMeta()" class="${BTN_SMALL} bg-slate-900 text-white border-slate-900">Done</button>
+                    </div>
+                    <div class="p-3 space-y-2.5">${clayMetaPanelHtml(idx, meta)}</div>
+                    <div data-clay-meta-preview="${idx}" class="px-3 pb-3 text-sm text-slate-700 ${text ? '' : 'hidden'}"><span class="font-semibold text-slate-900">Description:</span> <span data-clay-meta-preview-text>${escapeHtml(text)}</span></div>
                 </div>
             </details>`;
         }).join('');
+    }
+
+    // Updates the open dialog in place (no innerHTML swap, so the outside-click handler
+    // still sees the tapped button inside the dialog).
+    function refreshClayMetaControl(targetIdx, meta) {
+        const control = document.querySelector(`[data-clay-meta-control][data-clay-idx="${targetIdx}"]`);
+        if (!control) return;
+        const shown = effectiveClayMeta(meta);
+        control.querySelectorAll('[data-meta-key]').forEach(btn => {
+            const field = CLAY_META_FIELDS.find(f => f.key === btn.dataset.metaKey);
+            const on = clayOptionOn(shown, field, btn.dataset.metaValue);
+            btn.setAttribute('aria-pressed', String(on));
+            btn.className = clayChipClass(on);
+        });
+        const text = clayMetaDescription(meta);
+        const summaryEl = control.querySelector(`[data-clay-meta-summary="${targetIdx}"]`);
+        if (summaryEl) {
+            summaryEl.textContent = text || 'Tap to describe';
+            summaryEl.className = `font-semibold ml-1 ${text ? 'text-slate-100' : 'text-slate-300 italic'}`;
+            summaryEl.parentElement.title = text;
+        }
+        const preview = control.querySelector(`[data-clay-meta-preview="${targetIdx}"]`);
+        if (preview) {
+            preview.classList.toggle('hidden', !text);
+            preview.querySelector('[data-clay-meta-preview-text]').textContent = text;
+        }
     }
 
     function normalizeShotPresentationMap(values, totalShots, presentationCount) {
@@ -758,19 +843,32 @@
         save();
     };
 
-    window.updateClayMeta = (targetIdx, key, value) => {
+    // Tap an option in the clay dialog. Single-choice fields toggle (tap again to clear);
+    // Direction is multi-choice. The first edit of an untouched clay stores the defaults
+    // the dialog was showing, then applies the tap as a plain selection.
+    window.toggleClayMeta = (targetIdx, key, opt) => {
         if (state.isLocked || !HAS_STAND_DESCRIPTIONS) return;
         const st = state.stands[state.activeIdx];
         if (!st) return;
         st.clayMeta = normalizeClayMeta(st.clayMeta, presentationCountForStand(st));
-        if (!st.clayMeta[targetIdx]) return;
-        st.clayMeta[targetIdx][key] = key === 'direction'
-            ? String(value || '').split(',').filter(Boolean)
-            : value;
-        const summaryEl = document.querySelector(`[data-clay-meta-summary="${targetIdx}"]`);
-        if (summaryEl) summaryEl.textContent = clayMetaShortLabel(st.clayMeta[targetIdx], 'Set presentation');
+        const meta = st.clayMeta[targetIdx];
+        if (!meta) return;
+        const fresh = isClayMetaEmpty(meta);
+        if (fresh) Object.assign(meta, CLAY_META_DEFAULTS);
+        if (key === 'direction') {
+            const set = new Set(meta.direction || []);
+            set.has(opt) ? set.delete(opt) : set.add(opt);
+            meta.direction = CLAY_META_OPTIONS.direction.filter(v => set.has(v));
+        } else if (fresh) {
+            meta[key] = opt;
+        } else {
+            meta[key] = meta[key] === opt ? '' : opt;
+        }
+        refreshClayMetaControl(targetIdx, meta);
         save();
     };
+
+    window.closeClayMeta = () => closeClayMetaControls();
 
     window.updateShotPresentation = (shId, stId, shotIdx, value) => {
         if (state.isLocked || !HAS_PRESENTATION_MAP) return;
@@ -937,7 +1035,7 @@
         if (HAS_STAND_DESCRIPTIONS && state.stands.some(s => (s.description || '').trim())) {
             csv += `Descriptions,${state.stands.map(s => q(s.description || '')).join(',')}\n`;
         }
-        if (HAS_STAND_DESCRIPTIONS && state.stands.some(s => (s.clayMeta || []).some(meta => clayMetaSummary(meta, 0)))) {
+        if (HAS_STAND_DESCRIPTIONS && state.stands.some(s => (s.clayMeta || []).some(meta => !isClayMetaEmpty(meta)))) {
             csv += `Clay Metadata,${state.stands.map(s => q(JSON.stringify(normalizeClayMeta(s.clayMeta, presentationCountForStand(s))))).join(',')}\n`;
         }
         csv += `\n`;
@@ -1262,9 +1360,10 @@
         state.stands.forEach(st => {
             const total = standTargets(st);
             const pairCount = Math.ceil(total / 2);
-            const descTxt = standPresentationText(st);
+            const descLines = standPresentationLines(st);
+            const descTxt = descLines.length > 0;
             const descHtml = descTxt
-                ? `<div style="font-size:${isShare ? '9pt' : '7pt'}; font-style:italic; font-weight:normal; line-height:1.1; padding:2px 4px 0; white-space:normal; word-break:break-word;">${escapeHtml(descTxt)}</div>`
+                ? `<div style="font-size:${isShare ? '9pt' : '7pt'}; font-style:italic; font-weight:normal; line-height:1.15; padding:2px 4px 0; white-space:normal; word-break:break-word; text-align:left;">${descLines.map(escapeHtml).join('<br>')}</div>`
                 : '';
             const heightStyle = descTxt ? '' : `height:${headH};`;
             h += `<th colspan="${pairCount}" style="vertical-align:middle; ${heightStyle} ${standHeaderBorder}"><div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:2px 0;"><div style="font-weight:900;">${abbr} ${st.id}${st.extraClay ? '+1' : ''}</div>${descHtml}</div></th>`;
