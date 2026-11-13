@@ -362,6 +362,7 @@ const TYPES = {
     '.png': 'image/png',
     '.ico': 'image/x-icon',
     '.svg': 'image/svg+xml',
+    '.woff2': 'font/woff2',
     '.webmanifest': 'application/manifest+json'
 };
 // Never serve server code, data, archives or docs, even when APP_DIR is the repo root.

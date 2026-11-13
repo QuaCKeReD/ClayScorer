@@ -12,8 +12,8 @@ const ADMIN_PASS = process.env.ADMIN_PASSWORD || 'examples-not-used';
 fs.mkdirSync(OUT, { recursive: true });
 
 const SQUAD = [
-  { name: 'J. Carter', cpsa: '104233', class: 'AA' },
-  { name: 'S. Patel', cpsa: '118902', class: 'A' },
+  { name: 'J. Carter', cpsa: '104233', class: 'AA', gun: 'Over-and-under 12g', cartridges: '28 g No. 7½' },
+  { name: 'S. Patel', cpsa: '118902', class: 'A', gun: 'Sporter 30"' },
   { name: 'R. Hughes', cpsa: '097751', class: 'B' },
 ];
 
@@ -35,7 +35,7 @@ const SQUAD = [
     commitField('ground', ground); commitField('event', event); commitField('date', date);
     const st = () => JSON.parse(localStorage.getItem(window.DISCIPLINE.storageKey));
     while (st().shooters.length < SQUAD.length) addShooter();
-    SQUAD.forEach((s, i) => { updateShooter(i, 'name', s.name); updateShooter(i, 'cpsa', s.cpsa); updateShooter(i, 'class', s.class); });
+    SQUAD.forEach((s, i) => { updateShooter(i, 'name', s.name); updateShooter(i, 'cpsa', s.cpsa); updateShooter(i, 'class', s.class); updateShooter(i, 'gun', s.gun || ''); updateShooter(i, 'cartridges', s.cartridges || ''); });
   }, { ground, event, date, SQUAD });
   const scoreStand = (standId, patterns) => p.evaluate(({ standId, patterns }) => {
     const sh = JSON.parse(localStorage.getItem(window.DISCIPLINE.storageKey)).shooters;
@@ -81,7 +81,7 @@ const SQUAD = [
   // 5. History (needs a couple of named rounds)
   await p.evaluate(() => { newRound(); });
   await p.waitForTimeout(300);
-  await fillRound('Another Ground', 'Winter League', '2026-10-25');
+  await fillRound('Hillside Ground', 'Winter League', '2026-10-25');
   await scoreStand(1, ['HHMHHH', 'HHHHMM', 'MHHHHH']);
   await p.evaluate(() => window.scrollTo(0, 0));
   await p.locator('#history-menu-btn').click();
@@ -95,6 +95,33 @@ const SQUAD = [
   await p.waitForSelector('#scorecard-viewer-body img', { timeout: 20000 });
   await shot('scorecard-viewer');
   await p.evaluate(() => closeScorecard());
+
+  // 6b. Presentation: fill in the rest of the round, then the title picker and the slideshow
+  await p.evaluate(() => {
+    let seed = 99; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    const rates = [0.85, 0.72, 0.6];
+    const s = JSON.parse(localStorage.getItem(window.DISCIPLINE.storageKey));
+    s.stands.forEach(st => s.shooters.forEach((sh, k) => {
+      const total = st.targets + (st.extraClay ? 1 : 0);
+      for (let i = 0; i < total; i++) {
+        const cur = s.hits?.[sh.id]?.[st.id]?.[i];
+        if (cur !== true && cur !== false) toggleHit(sh.id, st.id, i, rnd() < rates[k % rates.length]);
+      }
+    }));
+    window.scrollTo(0, 0);
+  });
+  await p.locator('#export-menu-btn').click();
+  await p.locator('button:has-text("Presentation")').click();
+  await shot('presentation-picker');
+  await p.locator('#deck-picker button[data-act="view"]').click();
+  await p.setViewportSize({ width: 844, height: 390 });
+  await p.waitForTimeout(400);
+  await shot('presentation-viewer');
+  // Slide 4 = stand by stand (no milestones slide: every stand here has 6 or fewer clays)
+  for (let i = 0; i < 3; i++) await p.locator('#deck-viewer button[data-act="next"]').click();
+  await shot('presentation-slide');
+  await p.locator('#deck-viewer button[data-act="close"]').click();
+  await p.setViewportSize(devices['iPhone 13'].viewport);
 
   // 7. Locked round
   await p.evaluate(() => { toggleLock(); });

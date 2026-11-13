@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-13 (no double-tap zoom)';
+    const SCORER_BUILD = 'scorer 2026-11-13 (presentation deck)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -802,8 +802,12 @@
         render(); save();
     };
 
+    // Optional per-shooter gear, shown on the Presentation deck. Stored only when set so
+    // rounds saved before these fields existed keep their shape (sync compares content).
+    const GEAR_FIELDS = ['gun', 'cartridges'];
     window.updateShooter = (idx, field, value) => {
-        state.shooters[idx][field] = value;
+        if (GEAR_FIELDS.includes(field) && !String(value || '').trim()) delete state.shooters[idx][field];
+        else state.shooters[idx][field] = GEAR_FIELDS.includes(field) ? String(value).trim() : value;
         save();
         if (field === 'name') render();
     };
@@ -1727,6 +1731,10 @@
                                 <i data-lucide="eye" class="w-4 h-4 text-slate-500"></i>
                                 Show scorecard
                             </button>
+                            <button onclick="closeHeaderMenus(); window.ClayScorerPresentation ? ClayScorerPresentation.open() : notify('Presentation is still loading — try again in a moment.');" class="${MENU_ITEM}">
+                                <i data-lucide="presentation" class="w-4 h-4 text-slate-500"></i>
+                                Presentation
+                            </button>
                             <button onclick="closeHeaderMenus(); shareAsImage();" class="${MENU_ITEM}">
                                 <i data-lucide="image" class="w-4 h-4 text-slate-500"></i>
                                 Share scorecard image
@@ -2199,7 +2207,11 @@
                 <input type="text" value="${escapeHtml(s.name)}" maxlength="20" placeholder="Name" aria-label="Shooter ${i + 1} name" onchange="updateShooter(${i}, 'name', this.value)" class="bg-white border border-slate-400 rounded-md px-2 py-1.5 text-sm font-semibold w-full min-w-0">
                 <input type="text" value="${escapeHtml(s.cpsa)}" maxlength="8" placeholder="CPSA no." aria-label="Shooter ${i + 1} CPSA number" onchange="updateShooter(${i}, 'cpsa', this.value)" class="bg-white border border-slate-400 rounded-md px-2 py-1.5 text-sm w-full min-w-0">
                 <select onchange="updateShooter(${i}, 'class', this.value)" aria-label="Shooter ${i + 1} class" class="bg-white border border-slate-400 rounded-md px-1 py-1.5 text-sm font-semibold w-full">${CLASSES.map(c => `<option ${s.class === c ? 'selected' : ''}>${c}</option>`).join('')}</select>
-                <button onclick="removeShooter(${s.id})" ${state.shooters.length <= 1 ? 'disabled' : ''} class="text-red-500 flex justify-center items-center h-8 disabled:opacity-20" aria-label="Remove ${escapeHtml(s.name)}" title="Remove shooter"><i data-lucide="x" class="w-5 h-5"></i></button>`;
+                <button onclick="removeShooter(${s.id})" ${state.shooters.length <= 1 ? 'disabled' : ''} class="text-red-500 flex justify-center items-center h-8 disabled:opacity-20" aria-label="Remove ${escapeHtml(s.name)}" title="Remove shooter"><i data-lucide="x" class="w-5 h-5"></i></button>
+                <div class="flex gap-2 min-w-0" style="grid-column: 2 / 5;">
+                    <input type="text" value="${escapeHtml(s.gun || '')}" maxlength="40" placeholder="Gun (optional)" aria-label="Shooter ${i + 1} gun" onchange="updateShooter(${i}, 'gun', this.value)" class="bg-white border border-slate-300 rounded-md px-2 py-1.5 text-sm w-full min-w-0">
+                    <input type="text" value="${escapeHtml(s.cartridges || '')}" maxlength="40" placeholder="Cartridges (optional)" aria-label="Shooter ${i + 1} cartridges" onchange="updateShooter(${i}, 'cartridges', this.value)" class="bg-white border border-slate-300 rounded-md px-2 py-1.5 text-sm w-full min-w-0">
+                </div>`;
             list.appendChild(div);
         });
 
@@ -2439,6 +2451,58 @@
         replaceHistory,
         loadRound: (key) => window.loadRound(key),
         refreshCurrentRoundFromHistory
+    };
+
+    // Read-only snapshot of the current round for assets/presentation.js (the slide deck).
+    // Targets are listed in card order with how they were thrown, per shooter, because on
+    // Sportrap/Compak each shooter's round follows the format of the stand they started on.
+    window.ClayScorerDeck = {
+        getData() {
+            const kindOf = (stand, formatMap, group) => {
+                if (group.length === 2) {
+                    if (HAS_PRESENTATION_MAP) return formatMap[group[0]] === 'sim' ? 'sim pair' : 'report pair';
+                    return stand.labels ? 'double' : 'pair';
+                }
+                if (!D.fixedStands && stand.extraClay && group[0] === standTargets(stand) - 1) return '+1 single';
+                return 'single';
+            };
+            const shooters = state.shooters.map(sh => {
+                const stands = state.stands.map(st => {
+                    const setupStand = HAS_PRESENTATION_MAP ? (state.stands.find(x => x.id === getShooterRoundStand(sh.id, st.id)) || st) : st;
+                    const formatMap = HAS_PRESENTATION_MAP ? getStandFormatMap(setupStand) : [];
+                    const total = standTargets(st);
+                    const hits = Array.from({ length: total }, (_, i) => {
+                        const v = state.hits[sh.id]?.[st.id]?.[i];
+                        return v === true || v === false ? v : null;
+                    });
+                    const groups = shotGroups(st, formatMap).map(g => ({ idx: g, kind: kindOf(st, formatMap, g) }));
+                    return { standId: st.id, hits, groups };
+                });
+                const opt = state.optionHits?.[sh.id];
+                return {
+                    id: sh.id, name: sh.name || 'Shooter', cpsa: sh.cpsa || '', cls: sh.class || '',
+                    gun: sh.gun || '', cartridges: sh.cartridges || '',
+                    stands,
+                    option: OPTION && opt && (opt.hit === true || opt.hit === false) ? { standId: opt.standId, hit: opt.hit } : null
+                };
+            });
+            return {
+                discipline: { id: D.id, name: D.name, code: D.code },
+                standLabel: ROUND_LABEL,
+                optionLabel: OPTION ? (OPTION.label || 'OPT') : null,
+                ground: state.ground || '', event: state.event || '', date: state.date || '',
+                stands: state.stands.map(st => ({ id: st.id, targets: standTargets(st), extraClay: !!st.extraClay })),
+                shooters,
+                deckTitle: state.deckTitle || '',
+                filenameStem: filenameStem()
+            };
+        },
+        setDeckTitle(title) {
+            const t = String(title || '').trim();
+            if (t) state.deckTitle = t; else delete state.deckTitle;
+            save();
+        },
+        notify: (m, tone) => notify(m, tone)
     };
 
     document.addEventListener('DOMContentLoaded', () => {

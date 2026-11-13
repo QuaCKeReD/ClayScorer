@@ -67,6 +67,7 @@ Open **Round setup** at the top of the page.
 - **Shooting ground**, **Date** and **Event name.** Fill in a ground or an event name to keep the round in History. Rounds with neither are not saved to History.
 - **Number of stands** (English Sporting only), from 1 to 20. Sportrap, Compak and Skeet show their fixed format instead.
 - **Squad:** tap **+ Add shooter**, up to 10 shooters. Each has a **Name**, an optional **CPSA no.** and a **Class** (AAA, AA, A, B, C, U). Tap the red **×** to remove a shooter. If they have scores, you're asked to confirm first. A round always keeps at least one shooter.
+- **Gun** and **Cartridges** (optional, under each shooter): shown on the [Presentation](#presentation) squad slide. Leave them blank if you don't want them there.
 - **+ New round** starts a fresh round. The current one stays in History.
 
 Everything saves automatically; there's no Save button.
@@ -223,6 +224,7 @@ Tap the orange **Export** button:
 - **Print / save as PDF.** Opens the print dialog with a printable scorecard: ground, discipline, date, event, every shooter's hits and misses, totals, notes and a signature line. If any clays are described, the presentations follow on a separate page. To get a PDF file, choose *Save as PDF* in the print dialog.
 - **Show scorecard.** Shows the scorecard image inside the app, plus a presentations image if any clays are described. Tap an image to zoom in and scroll; tap **Share** to send it, or **Close** to go back.
 - **Share scorecard image.** Creates the same image(s) and opens your phone's share sheet (Messages, WhatsApp, email…). On a computer the images download instead.
+- **Presentation.** A slide deck about the round, with stats, charts, awards and some friendly roasting (see [Presentation](#presentation) below).
 - **Download CSV.** A spreadsheet-friendly file with the round details, per-stand totals and every shot. It can be imported again later (see [Round history](#7-round-history)).
 
 How the scorecards look:
@@ -235,6 +237,45 @@ How the scorecards look:
 See [example-outputs.pdf](example-outputs.pdf) for full examples of every discipline.
 
 <img src="guide/scorecard-viewer.png" width="300" alt="Show scorecard viewer">
+
+### Presentation
+
+**Export › Presentation** turns the current round into a 16:9 slide deck. It works for every discipline, and it's built from the round's scores, so score some targets first.
+
+<img src="guide/presentation-picker.png" width="300" alt="Choosing a presentation title">
+
+1. **Pick a title.** The app suggests three, made from the date, the ground and how the shoot went (e.g. *20261103 The Wergs Wobble*), or you can type your own. The title you choose is remembered with the round.
+2. **View slides** opens a full-screen slideshow. Swipe, or use **Prev** / **Next**, to move between slides; on a computer the arrow keys work too. **Notes** shows the speaker notes for each slide, with the raw numbers behind it. The slides are easier to read with the phone turned sideways.
+3. **Save as PDF**, here or from the slideshow, prints the deck one slide per page. Choose *Save as PDF* in the print dialog.
+
+<img src="guide/presentation-viewer.png" width="600" alt="Presentation slideshow on a phone held sideways">
+
+**The slides**
+
+| Slide | What it shows |
+|---|---|
+| Cover | The title and a one-line gag |
+| The squad | Each shooter's clays, gun and cartridges (if filled in) and a roast line, plus squad totals |
+| Podium | Top three by hit rate |
+| Milestones | Hits after the first 6 / 8 / 10 / 12 clays of **every** stand, and who led at each point. Only on stands longer than that, so usually English Sporting only |
+| Stand by stand | Every shooter's hits and % per stand, plus the squad, colour-banded: green 80%+, blue 60–79%, amber 40–59%, red-orange under 40%. The % is always shown, so you don't need to rely on colour |
+| Hit rate per stand | Line chart per shooter, with the disaster stand shaded |
+| Running total | Cumulative hits, with lead changes marked |
+| Barrel by barrel | 1st and 2nd barrel hit rates, **doubles** (both hit) and **blanks** (both missed). Pairs only: Sporting pairs, Sportrap/Compak on-report and sim pairs, Skeet doubles. Singles and the +1 clay aren't counted, and the slide is left out if there are no pairs |
+| Streaks and slumps | Longest run of hits and of misses, in card order across stands, with where each started and ended |
+| Stand stories | Best stand, worst stand, and the biggest gap between two shooters on one stand |
+| Awards | Comic awards for the bests and the worsts, each with the stat behind it |
+| Score check | Totals counted three ways to show they agree, and any clays not shot yet |
+| Final scores | Ranking and a closing gag |
+
+- **Each shooter keeps one colour and marker shape** on every slide.
+- **Everyone is compared by hit rate**, so a shooter with fewer clays isn't penalised.
+- **Unscored clays are left out** of every rate rather than counted as misses.
+- **The jokes come only from the numbers.** Nothing about weather or excuses is invented.
+
+<img src="guide/presentation-slide.png" width="600" alt="Stand-by-stand slide">
+
+See the end of [example-outputs.pdf](example-outputs.pdf) for a full example deck.
 
 ---
 

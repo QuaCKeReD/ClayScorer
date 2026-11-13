@@ -13,10 +13,10 @@ const GENERATED = new Date().toLocaleDateString('en-GB');
 
 // Fictitious sample data, deterministic so the document is reproducible.
 const SHOOTERS = [
-  { name: 'J. Carter', cpsa: '104233', class: 'AA', rate: 0.88 },
-  { name: 'S. Patel', cpsa: '118902', class: 'A', rate: 0.78 },
+  { name: 'J. Carter', cpsa: '104233', class: 'AA', rate: 0.88, gun: 'Over-and-under 12g', cartridges: '28 g No. 7½' },
+  { name: 'S. Patel', cpsa: '118902', class: 'A', rate: 0.78, gun: 'Sporter 30"', cartridges: '24 g No. 8' },
   { name: 'R. Hughes', cpsa: '097751', class: 'B', rate: 0.66 },
-  { name: 'M. Evans', cpsa: '121468', class: 'C', rate: 0.55 },
+  { name: 'M. Evans', cpsa: '121468', class: 'C', rate: 0.55, gun: 'Semi-auto 20g' },
 ];
 const DISCIPLINES = [
   { id: 'sporting', name: 'English Sporting', code: 'ESP', event: 'Autumn Sporting 50',
@@ -56,7 +56,7 @@ const META_POOL = [
       commitField('ground', 'Example Shooting Ground'); commitField('event', d.event); commitField('date', '2026-11-08');
       // Squad
       while (st().shooters.length < SHOOTERS.length) addShooter();
-      SHOOTERS.forEach((s, i) => { updateShooter(i, 'name', s.name); updateShooter(i, 'cpsa', s.cpsa); updateShooter(i, 'class', s.class); });
+      SHOOTERS.forEach((s, i) => { updateShooter(i, 'name', s.name); updateShooter(i, 'cpsa', s.cpsa); updateShooter(i, 'class', s.class); updateShooter(i, 'gun', s.gun || ''); updateShooter(i, 'cartridges', s.cartridges || ''); });
       // ESP layout
       if (d.setup) {
         updateStandCount(d.setup.standTargets.length);
@@ -120,7 +120,22 @@ const META_POOL = [
     await p.waitForTimeout(3000);
     p.off('download', handler);
     pngs.sort((a, b) => a.length - b.length);
-    results.push({ ...d, summary, pngs });
+    // Presentation deck (Export › Presentation) — included for English Sporting only.
+    let deckTitle = '';
+    if (d.id === 'sporting') {
+      deckTitle = await p.evaluate(async () => {
+        window.print = () => {};
+        const m = ClayScorerPresentation._model();
+        const t = ClayScorerPresentation.titleSuggestions(m)[0];
+        await ClayScorerPresentation._print(m, t);
+        return t;
+      });
+      await p.emulateMedia({ media: 'print' });
+      await p.pdf({ path: `${OUT}/${d.id}-deck.pdf`, preferCSSPageSize: true, printBackground: true });
+      await p.emulateMedia({ media: 'screen' });
+      await p.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+    }
+    results.push({ ...d, summary, pngs, deckTitle });
     console.log(d.code, JSON.stringify(summary), pngs.map(f => f.split('/').pop()));
   }
 
@@ -154,6 +169,7 @@ const META_POOL = [
     <ul>
       <li><strong>Scorecard image</strong> — what <em>Export › Share scorecard image</em> sends and <em>Export › Show scorecard</em> displays in the app. A second image lists the clay presentations when any are described.</li>
       <li><strong>Print / save as PDF</strong> — the scorecard page, followed by a separate presentations page when any clays are described.</li>
+      <li><strong>Presentation</strong> — <em>Export › Presentation</em>: a 16:9 slide deck with stats, charts, awards and data-driven roasts, viewed in the app or saved as PDF. One example (English Sporting) is at the end.</li>
     </ul>
     <table class="toc"><tr><th>Discipline</th><th>Layout</th><th>Shooters</th><th>Clays described</th><th>Outputs shown</th></tr>${rows}</table>
     <div class="legend"><span><span class="sw" style="background:#4ade80"></span>Hit</span><span><span class="sw" style="background:#f87171"></span>Miss</span><span class="muted small">Scores are shown by colour only. Shooters are sorted by total.</span></div>
@@ -167,6 +183,16 @@ const META_POOL = [
       <div class="muted small">Example Shooting Ground · ${r.event} · ${r.summary.stands} ${r.id === 'sporting' ? 'stands' : r.id === 'skeet' ? 'stations' : 'rounds'}, ${r.summary.targets} targets · ${SHOOTERS.length} shooters. The print / PDF output (${r.printPages} page${r.printPages > 1 ? 's' : ''}) follows.</div>
       <div class="bar"></div>${imgs}`, path);
     parts.push(path, `${OUT}/${r.id}-print.pdf`);
+  }
+
+  const deck = results.find(r => r.id === 'sporting' && r.deckTitle);
+  if (deck) {
+    const path = `${OUT}/90-deck-intro.pdf`;
+    await toPdf(`<div class="code">ESP</div><h2>Presentation example — English Sporting</h2>
+      <div class="muted small">Export › Presentation on the same English Sporting round, saved as PDF. Title chosen from the app's suggestions: <strong>${deck.deckTitle}</strong>. Slides are 16:9; in the app they're shown as a swipeable slideshow with speaker notes.</div>
+      <div class="bar"></div>
+      <p>Every number on the slides is recomputed from the scored clays; the jokes are templates driven by those numbers. Milestones, barrel and pair slides only appear where the discipline's layout makes them meaningful.</p>`, path);
+    parts.push(path, `${OUT}/sporting-deck.pdf`);
   }
 
   const merged = await PDFDocument.create();

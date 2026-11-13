@@ -15,6 +15,7 @@ ClayScorer Pro — a static, offline-capable Progressive Web App for scoring CPS
   - Tailwind (`assets/vendor/tailwindcss-3.4.17.js`) — utility CSS
   - Lucide (`assets/vendor/lucide-0.468.0.min.js`) — icons, initialised via `lucide.createIcons()` after every `render()`
   - html2canvas (`assets/vendor/html2canvas-1.4.1.min.js`) — used only by `shareAsImage()`
+  - Fonts (`assets/vendor/fonts/*.woff2`, OFL licences alongside) — Oswald 600/700 + DM Sans 400/700, used only by the Presentation deck. The server's static `TYPES` map includes `.woff2`.
 - **Server sync** (`assets/server-sync.js`, loaded by each discipline page) is offline-first: rounds always save to `localStorage`; when a user is signed in, round history mirrors to the server. It listens for the scorer's `clayscorer:history-written` event (fired by `writeHistory()`), debounces, and diffs history against `${storageKey}:synced` (`{ roundKey: updatedAt }` last agreed with the server) to push upserts and deletes — so renames, deletes and delete-all need no extra hooks. It pulls on open, sign-in, `online`, and when the page becomes visible again. Conflicts resolve by newest `_updatedAt`; server deletes are tombstones (`rounds.deleted = 1`). Because of this, `syncHistory()` only re-stamps `_updatedAt` when round content actually changed, and `makeDefaultState()` returns an already-normalised state — don't break either or reopening a round will look like an edit and override other devices.
 - **Server API** (`server/server.js`): `/api/login`, `/api/logout`, `/api/me`, `/api/me/password`, `/api/rounds/:discipline[/:roundKey]` (GET list incl. tombstones, PUT upsert-if-newer, DELETE tombstone), `/api/users[/:id]` (admin). Mutating requests must send `X-ClayScorer: 1` (CSRF guard). Sessions are random tokens stored as SHA-256 in `sessions`, sent as an HttpOnly `cs_session` cookie. Passwords are scrypt. The first admin comes from `ADMIN_USERNAME`/`ADMIN_PASSWORD` when the users table is empty. Static serving blocks `server/`, `data/`, `_archive/`, dotfiles and unknown extensions.
 - `users.html` + `assets/users.js` — account page (change own password) and admin user management (add, edit username/display name/role/password, delete; server enforces last-admin and no-self-delete).
@@ -22,7 +23,7 @@ ClayScorer Pro — a static, offline-capable Progressive Web App for scoring CPS
   - **Any user-visible change** (new/changed feature, control, label, default, behaviour): update `docs/USER_GUIDE.md` in the same change, and regenerate its screenshots (`docs/tools/generate-docs.sh guide`) if the UI they show changed. If a new feature deserves a screenshot, add it to `docs/tools/generate-guide-screenshots.js`.
   - **Any output change** (PDF print view, scorecard/presentations images, `generateExportGrid`, `exportPresentationsHtml`, clay descriptions, `#capture-*` / print CSS): regenerate `docs/example-outputs.pdf` (`docs/tools/generate-docs.sh examples`).
   - `docs/tools/generate-docs.sh` with no argument does both. Needs Docker only (~3–4 min); look at the results before committing.
-- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v28`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names. `scorer.js` also logs a `SCORER_BUILD` banner on load — bumping that string when you ship changes gives you a quick DevTools signal that the page is running the new code (not a stale SW-cached copy).
+- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v29`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names. `scorer.js` also logs a `SCORER_BUILD` banner on load — bumping that string when you ship changes gives you a quick DevTools signal that the page is running the new code (not a stale SW-cached copy).
 - The SW pre-caches same-origin files with `cache.addAll`. If you add new app shell assets, put them in `LOCAL_ASSETS`.
 
 ## Architecture
@@ -59,7 +60,8 @@ One `state` object per page — populated from `localStorage[D.storageKey]` on l
 ```
 state = {
   ground, date, event, notes,
-  shooters: [{ id, name, cpsa, class }],
+  shooters: [{ id, name, cpsa, class, gun?, cartridges? }],   // gear only stored when set
+  deckTitle?,          // last Presentation title chosen (only stored once chosen)
   stands:   [{ id, targets, extraClay, description, labels? }],
   hits:     { [shooterId]: { [standId]: [true|false|null, ...] } },
   activeIdx,
@@ -120,6 +122,10 @@ Non-blocking outcomes (import errors/results) use `notify(message, tone)` → `#
 - **Escape user text**: shooter names, ground, event go through `escapeHtml()` whenever interpolated into HTML (including `value="…"`).
 - **Target labels** (`stand.labels`) — only ESK sets these currently; the engine renders them as a caption row beneath each pair. Any discipline can opt in.
 
+### Presentation deck (`assets/presentation.js`)
+
+Export › Presentation. `scorer.js` exposes a read-only `window.ClayScorerDeck.getData()` (per-shooter, per-stand hits in card order with each group's kind — pair / report pair / sim pair / double / single / +1 single — following each shooter's own stand format on STR/CSP, plus the ESK option) and `setDeckTitle()`. `presentation.js` does everything else: `analyse()` computes all stats from that data (per-stand, cumulative, barrels/doubles/blanks from 2-target groups only, streaks in card order with the option at the end of its station, "first k of every stand" milestones only for k shorter than the longest stand, stand stories, awards); `titleSuggestions()` builds 3 `YYYYMMDD <venue> <outcome>` titles; `buildSlides()` renders 1920×1080 HTML slides with SVG charts and data-driven humour (never invented facts) plus speaker notes. Text on slides is ≥24px; colour is never the only signal (percentages always shown, marker shapes per shooter). UI: a title picker (`#deck-picker`), a scaled slideshow (`#deck-viewer`, swipe/arrows/Notes/PDF) and printing via `body.print-deck` + `#deck-print` with `@page deck` (16:9, one slide per page). The engine's print CSS styles `table`/`th`/`td`, so the deck uses CSS-grid divs, not tables. Shooters' optional **Gun** / **Cartridges** fields (squad rows in Round setup) only appear on the deck.
+
 ### Export paths
 
 Export flows share `generateExportGrid(tid)`, which uses `standTargets()` for column counts (so extra clays get their own pair column, headed e.g. `STA 3+1`). A `<colgroup>` keeps the name column narrow (11%) and splits the remaining width evenly between stands, whatever their pair count. Cells are colour only (green hit, red miss) — no `/` / `O` marks — and multi-word shooter names are split one word per line (`nameLines`):
@@ -143,6 +149,7 @@ Every export shares the same filename stem — `YYYYMMDD_${D.id}[_ground-slug][_
 - `sporting.html`, `sportrap.html`, `compak.html`, `skeet.html` — thin per-discipline shells that set `window.DISCIPLINE` and load the shared engine.
 - `assets/scorer.js` — shared scoring engine (state, mount, render, exports). All global `window.*` handlers used by inline `onclick`s are defined here.
 - `assets/scorer.css` — shared styles including print media, capture container, pair-stack, first-up glow, and discipline tiles.
+- `assets/presentation.js` — the Presentation slide deck (see above). Loaded by each discipline page after `server-sync.js`.
 - `assets/server-sync.js` — sign-in panel (`#cloud-sync-panel`) and round sync. The scorer exposes a narrow `window.ClayScorerCloud` bridge (`getDiscipline`, `getCurrentState`, `getHistory`, `replaceHistory`, `refreshCurrentRoundFromHistory`, `saveCurrent`; sync adds `isSignedIn`); keep server-specific code out of the core scorer.
 - `users.html`, `assets/users.js` — account & user management page.
 - `migrate.html`, `assets/firebase-migrate.js`, `assets/firebase-config.js` — one-off import of a user's rounds from the old Firebase sync (Firestore `clayScorerUsers/{uid}/rounds`) into their server account. Removable once everyone has migrated (also drop `migrate.html` from the `Dockerfile` COPY line).
