@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-13 (edge clears face amount)';
+    const SCORER_BUILD = 'scorer 2026-11-13 (quartering wording restored)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -186,20 +186,23 @@
     const effectiveClayMeta = (meta) => (isClayMetaEmpty(meta) ? { ...meta, ...CLAY_META_DEFAULTS } : meta);
 
     // Natural-language description of one clay, e.g.
-    // "Crosser going left to right and quartering away, starting low and rising. Orange standard clay showing its full belly."
+    // "Crosser quartering away left to right, starting low and rising. Orange standard clay showing its full belly."
     function clayMetaDescription(meta) {
         if (isClayMetaEmpty(meta)) return '';
         // One choice from each direction group (older rounds may hold both; first wins).
         const dirs = meta.direction || [];
         const lateral = ['LR', 'RL'].find(d => dirs.includes(d));
         const depth = ['Away', 'Towards'].find(d => dirs.includes(d));
-        // With a side-to-side direction too, away/towards reads as quartering
-        // ("Crosser going left to right and quartering away").
-        const lateralText = lateral ? `going ${CLAY_DIRECTION_TEXT[lateral]}` : '';
-        const depthText = !depth ? ''
-            : lateral ? `quartering ${depth.toLowerCase()}`
-            : (depth === 'Away' ? 'going away' : 'coming towards you');
-        const dirText = [lateralText, depthText].filter(Boolean).join(' and ');
+        let dirText = '';
+        if (lateral && depth) {
+            // Across and away/towards = quartering ("Crosser quartering away left to right").
+            const lead = meta.presentation === 'Quartering' ? '' : 'quartering ';
+            dirText = `${lead}${depth.toLowerCase()} ${CLAY_DIRECTION_TEXT[lateral]}`;
+        } else if (lateral) {
+            dirText = `going ${CLAY_DIRECTION_TEXT[lateral]}`;
+        } else if (depth) {
+            dirText = depth === 'Away' ? 'going away' : 'coming towards you';
+        }
 
         const moveParts = [];
         if (meta.starting) moveParts.push(`starting ${meta.starting.toLowerCase()}`);
