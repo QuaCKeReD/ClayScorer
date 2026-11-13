@@ -5,7 +5,7 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const { PDFDocument } = require('pdf-lib');
-// Run via docs/tools/generate-examples.sh, which starts a throwaway app container and a
+// Run via docs/tools/generate-docs.sh, which starts a throwaway app container and a
 // Playwright container on a private Docker network and passes these in.
 const B = process.env.BASE_URL || 'http://cstest-app:8080';
 const OUT = process.env.OUT_DIR || '/out/doc';
