@@ -23,7 +23,7 @@ ClayScorer Pro — a static, offline-capable Progressive Web App for scoring CPS
   - **Any user-visible change** (new/changed feature, control, label, default, behaviour): update `docs/USER_GUIDE.md` in the same change, and regenerate its screenshots (`docs/tools/generate-docs.sh guide`) if the UI they show changed. If a new feature deserves a screenshot, add it to `docs/tools/generate-guide-screenshots.js`.
   - **Any output change** (PDF print view, scorecard/presentations images, `generateExportGrid`, `exportPresentationsHtml`, clay descriptions, `#capture-*` / print CSS): regenerate `docs/example-outputs.pdf` (`docs/tools/generate-docs.sh examples`).
   - `docs/tools/generate-docs.sh` with no argument does both. Needs Docker only (~3–4 min); look at the results before committing.
-- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v31`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names. `scorer.js` also logs a `SCORER_BUILD` banner on load — bumping that string when you ship changes gives you a quick DevTools signal that the page is running the new code (not a stale SW-cached copy).
+- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v32`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names. `scorer.js` also logs a `SCORER_BUILD` banner on load — bumping that string when you ship changes gives you a quick DevTools signal that the page is running the new code (not a stale SW-cached copy).
 - The SW pre-caches same-origin files with `cache.addAll`. If you add new app shell assets, put them in `LOCAL_ASSETS`.
 
 ## Architecture
@@ -124,7 +124,7 @@ Non-blocking outcomes (import errors/results) use `notify(message, tone)` → `#
 
 ### Regular shooters
 
-A saved list of people (name, CPSA no., class, gun, cartridges) at `localStorage['clayscorer:regulars']` = `{ items, updatedAt }`, shared by every discipline page. Squad rows have a ☆ (`saveShooterAsRegular`, matched by case-insensitive name; filled = identical, half = differs), a `#regular-picker` select above the squad (`addRegularToSquad` fills an untouched "Shooter N" placeholder first), and a **Regulars** manager window (`openRegulars`). Writes fire `clayscorer:regulars-written`; `server-sync.js` syncs the whole list per user (newest `updatedAt` wins, `clayscorer:regulars:synced` remembers the last agreed version) via the `getRegularsStore` / `replaceRegulars` bridge.
+A saved list of people (name, CPSA no., class, gun, cartridges) at `localStorage['clayscorer:regulars']` = `{ items, updatedAt }`, shared by every discipline page. Squad rows have a ☆ (`saveShooterAsRegular`, matched by case-insensitive name; filled = identical, half = differs), a `#regular-picker` select above the squad (`addRegularToSquad` fills an untouched "Shooter N" placeholder first), a per-row "change to a regular" select (`setShooterToRegular` — swaps the details but keeps the shooter `id`, so hits/option/stand assignments stay), and a **Regulars** manager window (`openRegulars`). Writes fire `clayscorer:regulars-written`; `server-sync.js` syncs the whole list per user (newest `updatedAt` wins, `clayscorer:regulars:synced` remembers the last agreed version) via the `getRegularsStore` / `replaceRegulars` bridge.
 
 ### Presentation deck (`assets/presentation.js`)
 

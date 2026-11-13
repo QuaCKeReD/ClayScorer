@@ -89,7 +89,7 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; m
 
 .squad-grid-item {
     display: grid;
-    grid-template-columns: 20px minmax(0, 1fr) 84px 60px 32px;
+    grid-template-columns: 26px minmax(0, 1fr) 84px 60px 32px;
     align-items: center;
     gap: 6px;
 }

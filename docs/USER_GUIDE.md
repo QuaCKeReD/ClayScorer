@@ -78,6 +78,7 @@ Save the people you shoot with regularly so you don't have to type their details
 
 - **Save a shooter:** tap the ☆ on their row in the squad. A filled gold star means they're saved. A half star means their details in this round differ from the saved ones; tap it to update the saved copy.
 - **Add a regular to a round:** pick them from **+ Add a regular shooter…** above the squad. Their name, CPSA no., class, gun and cartridges are filled in. They take the place of an untouched placeholder shooter ("Shooter 1" with no details or scores) if there is one; otherwise they're added as a new shooter. Anyone already in the squad is greyed out in the list.
+- **Turn an existing shooter into a regular:** tap the person-with-tick icon at the start of their second line and pick a regular. Their name, CPSA no., class, gun and cartridges change to the regular's, and **all their scores stay with them**. This is handy when someone was scored as "Shooter 2" or under a nickname.
 - **Edit or delete regulars:** tap **Regulars**. Changes there don't alter rounds you've already set up. Regulars are listed alphabetically there and in the dropdown.
 - **Shared across disciplines:** the same list appears on all four discipline pages. When you're signed in it's also saved to your account and appears on your other devices. If you edit the list on two devices before they sync, the most recent edit wins.
 

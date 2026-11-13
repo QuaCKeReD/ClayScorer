@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-13 (regulars alphabetical)';
+    const SCORER_BUILD = 'scorer 2026-11-13 (change shooter to regular)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -846,11 +846,28 @@
             sh = { id: Date.now(), name: '', cpsa: '', class: 'U' };
             state.shooters.push(sh);
         }
+        applyRegular(sh, reg);
+        render(); save();
+    };
+
+    function applyRegular(sh, reg) {
         const f = regularFields(reg);
         sh.name = f.name; sh.cpsa = f.cpsa; sh.class = f.class;
         if (f.gun) sh.gun = f.gun; else delete sh.gun;
         if (f.cartridges) sh.cartridges = f.cartridges; else delete sh.cartridges;
+    }
+
+    // Turn an existing squad row into a regular shooter. The shooter keeps their id, so their
+    // scores, option target and stand assignments stay with them; only the details change.
+    window.setShooterToRegular = (idx, regId) => {
+        const sh = state.shooters[idx];
+        const reg = readRegulars().find(x => x.id === regId);
+        if (!sh || !reg) return;
+        if (state.shooters.some((s, i) => i !== idx && sameName(s.name, reg.name))) { notify(`${reg.name} is already in the squad.`); render(); return; }
+        const was = sh.name;
+        applyRegular(sh, reg);
         render(); save();
+        if (!sameName(was, reg.name)) notify(`${was || 'Shooter'} is now ${reg.name}${shooterHasScores(sh.id) ? ' — scores kept' : ''}.`, 'success');
     };
 
     // Manage regulars: a centred window listing every saved shooter with editable fields.
@@ -2346,6 +2363,20 @@
                 <input type="text" value="${escapeHtml(s.cpsa)}" maxlength="8" placeholder="CPSA no." aria-label="Shooter ${i + 1} CPSA number" onchange="updateShooter(${i}, 'cpsa', this.value)" class="bg-white border border-slate-400 rounded-md px-2 py-1.5 text-sm w-full min-w-0">
                 <select onchange="updateShooter(${i}, 'class', this.value)" aria-label="Shooter ${i + 1} class" class="bg-white border border-slate-400 rounded-md px-1 py-1.5 text-sm font-semibold w-full">${CLASSES.map(c => `<option ${s.class === c ? 'selected' : ''}>${c}</option>`).join('')}</select>
                 <button onclick="removeShooter(${s.id})" ${state.shooters.length <= 1 ? 'disabled' : ''} class="text-red-500 flex justify-center items-center h-8 disabled:opacity-20" aria-label="Remove ${escapeHtml(s.name)}" title="Remove shooter"><i data-lucide="x" class="w-5 h-5"></i></button>
+                ${(() => {
+                    const regs = readRegulars().filter(x => String(x.name || '').trim()).sort(byRegularName);
+                    if (!regs.length) return '<span></span>';
+                    return `<label class="relative flex justify-center items-center h-8 text-slate-500" title="Change to a regular shooter (keeps scores)">
+                        <i data-lucide="user-check" class="w-5 h-5"></i>
+                        <select onchange="if (this.value) setShooterToRegular(${i}, this.value)" aria-label="Change shooter ${i + 1} to a regular shooter, keeping their scores" class="absolute inset-0 w-full h-full opacity-0">
+                            <option value="">Change to a regular…</option>
+                            ${regs.map(x => {
+                                const elsewhere = state.shooters.some((o, j) => j !== i && sameName(o.name, x.name));
+                                return `<option value="${escapeHtml(x.id)}" ${elsewhere ? 'disabled' : ''}>${escapeHtml(x.name)}${elsewhere ? ' — in squad' : ''}</option>`;
+                            }).join('')}
+                        </select>
+                    </label>`;
+                })()}
                 <div class="flex gap-2 min-w-0" style="grid-column: 2 / 5;">
                     <input type="text" value="${escapeHtml(s.gun || '')}" maxlength="40" placeholder="Gun (optional)" aria-label="Shooter ${i + 1} gun" onchange="updateShooter(${i}, 'gun', this.value)" class="bg-white border border-slate-300 rounded-md px-2 py-1.5 text-sm w-full min-w-0">
                     <input type="text" value="${escapeHtml(s.cartridges || '')}" maxlength="40" placeholder="Cartridges (optional)" aria-label="Shooter ${i + 1} cartridges" onchange="updateShooter(${i}, 'cartridges', this.value)" class="bg-white border border-slate-300 rounded-md px-2 py-1.5 text-sm w-full min-w-0">
