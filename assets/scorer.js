@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-13 (last pair alert)';
+    const SCORER_BUILD = 'scorer 2026-11-13 (tag order)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -2351,8 +2351,8 @@
             row.innerHTML = `<div class="flex justify-between items-center gap-2 px-1">
                 <div class="flex items-center gap-1.5 min-w-0 flex-wrap">
                     <span class="text-sm font-black uppercase truncate max-w-[160px] tracking-tight">${escapeHtml(s.name)}</span>
-                    ${shootingTag}
                     ${i === 0 && ROTATE ? '<span class="border border-slate-300 text-slate-600 text-[11px] px-1.5 py-0.5 rounded-full font-semibold leading-none">First up</span>' : ''}
+                    ${shootingTag}
                     ${shooterStandSelect}
                 </div>
                 <div class="text-xl font-black italic text-slate-900 flex-shrink-0">${count}<span class="text-slate-600 text-xs not-italic font-bold ml-0.5">/${possible}</span></div>
