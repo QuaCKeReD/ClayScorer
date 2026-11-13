@@ -59,6 +59,13 @@ const SQUAD = [
   await scrollTo('#scoring-controls', 130);
   await shot('scoring');
 
+  // 3b. "Last pair" alert: stand 2 with the first-up shooter on their final pair
+  await p.evaluate(() => nav(1));
+  await scoreStand(2, ['', 'HHMH']);   // order rotates: S. Patel is first up on stand 2
+  await scrollTo('#scoring-area', 150);
+  await el('#scoring-area > div', 'last-pair');
+  await p.evaluate(() => nav(-1));
+
   // 4. Clay presentation section + dialog
   await p.evaluate(() => {
     document.getElementById('clay-meta-panel').open = true;

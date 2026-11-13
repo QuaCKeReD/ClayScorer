@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-13 (multi-line export names)';
+    const SCORER_BUILD = 'scorer 2026-11-13 (last pair alert)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -2303,6 +2303,16 @@
             const formatCaption = { single: 'Single', report: 'On report', sim: 'Sim pair' };
             let pairNo = 0;
             const groups = shotGroups(st, standFormatMap);
+            // Alert the shooter who's up when only one group (pair or single) is left on this
+            // stand; the option target counts as a group of its own while it's due here.
+            const unshot = (idx) => hits[idx] === null || hits[idx] === undefined;
+            const groupsLeft = groups.filter(g => g.some(unshot));
+            if (optionOnThisStand && (optionHit === null || optionHit === undefined)) groupsLeft.push([null]);
+            const lastGroupLeft = isShooting && groupsLeft.length === 1;
+            const shootingTag = !isShooting ? ''
+                : lastGroupLeft
+                    ? `<span class="bg-red-600 text-white text-[11px] px-1.5 py-0.5 rounded-full font-black leading-none ring-2 ring-red-200">${groupsLeft[0].length === 2 ? 'Last pair' : 'Last target'}</span>`
+                    : '<span class="bg-orange-500 text-white text-[11px] px-1.5 py-0.5 rounded-full font-bold leading-none">Shooting</span>';
             const gridHtml = groups.map(shotIdxs => {
                 const isExtra = st.extraClay && shotIdxs.includes(total - 1);
                 if (shotIdxs.length === 2) pairNo++;
@@ -2341,7 +2351,7 @@
             row.innerHTML = `<div class="flex justify-between items-center gap-2 px-1">
                 <div class="flex items-center gap-1.5 min-w-0 flex-wrap">
                     <span class="text-sm font-black uppercase truncate max-w-[160px] tracking-tight">${escapeHtml(s.name)}</span>
-                    ${isShooting ? '<span class="bg-orange-500 text-white text-[11px] px-1.5 py-0.5 rounded-full font-bold leading-none">Shooting</span>' : ''}
+                    ${shootingTag}
                     ${i === 0 && ROTATE ? '<span class="border border-slate-300 text-slate-600 text-[11px] px-1.5 py-0.5 rounded-full font-semibold leading-none">First up</span>' : ''}
                     ${shooterStandSelect}
                 </div>

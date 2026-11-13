@@ -87,6 +87,10 @@ Once the first target is scored, Round setup folds away to give the scoring more
 
 **Who's shooting.** An orange **Shooting** tag and outline mark the first shooter who hasn't finished the stand. On English Sporting the shooting order rotates each stand; the **First up** tag shows who leads, and they're listed first.
 
+**Last pair alert.** When the shooter who's up has only one pair left on the stand, their tag turns red and reads **Last pair**. If what's left is a single target, such as a +1 extra clay or the Skeet option target, it reads **Last target**.
+
+<img src="guide/last-pair.png" width="300" alt="Last pair alert on the shooter's name row">
+
 **Scrolling scores on phones.** On English Sporting and Compak, each shooter's row scrolls sideways on a phone, with about three pairs in view. A soft fade at the edge means there's more to see. The row remembers where you scrolled, opens on the shooter's next unshot pair when you change stand, and slides on to the next pair when you finish one. Sportrap and Skeet rows wrap onto a second line instead when they don't fit.
 
 ---
