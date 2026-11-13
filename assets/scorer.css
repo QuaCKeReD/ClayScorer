@@ -32,7 +32,7 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; m
     .sig-line { border-top: 1pt solid black; width: 200pt; text-align: center; padding-top: 4pt; font-size: 8pt; }
 }
 
-#capture-container {
+#capture-container, #capture-presentations {
     position: absolute; left: -9999px; top: 0; width: 1200px; background: white; padding: 40px; color: black; font-family: "Courier New", Courier, monospace;
 }
 #capture-container table { width: 100%; border-collapse: collapse; border: 2pt solid black; table-layout: fixed; }
