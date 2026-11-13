@@ -1,4 +1,4 @@
-const CACHE_NAME = 'clayscorer-v24';
+const CACHE_NAME = 'clayscorer-v25';
 
 // Same-origin assets: `cache.addAll` is all-or-nothing, but these are local files
 // we control, so a hard-fail here is the right behaviour.

@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-13 (export grid widths, colour only)';
+    const SCORER_BUILD = 'scorer 2026-11-13 (multi-line export names)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -1445,9 +1445,11 @@
         });
         grid.innerHTML = h + '</tr>';
 
+        // Multi-word names go one word per line so the narrow name column stays readable.
+        const nameLines = (name) => String(name || '').trim().split(/\s+/).map(escapeHtml).join('<br>');
         const sorted = state.shooters.map(s => ({ ...s, t: getShooterTotal(s.id) })).sort((a, b) => b.t - a.t);
         sorted.forEach(s => {
-            let r1 = `<tr><td style="text-align:left; padding:0 4px; vertical-align:middle; white-space:normal; word-break:break-word; border-right:${blockBorder} !important; ${shooterBorder} ${shooterBottomBorder}" rowspan="2"><strong>${escapeHtml(s.name)}</strong></td>`;
+            let r1 = `<tr><td style="text-align:left; padding:2px 4px; vertical-align:middle; white-space:normal; word-break:break-word; line-height:1.15; border-right:${blockBorder} !important; ${shooterBorder} ${shooterBottomBorder}" rowspan="2"><strong>${nameLines(s.name)}</strong></td>`;
             let r2 = `<tr>`;
             state.stands.forEach(st => {
                 const total = standTargets(st);
