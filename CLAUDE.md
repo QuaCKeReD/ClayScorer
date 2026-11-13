@@ -136,6 +136,7 @@ Every export shares the same filename stem — `YYYYMMDD_${D.id}[_ground-slug][_
 - `assets/scorer.css` — shared styles including print media, capture container, pair-stack, first-up glow, and discipline tiles.
 - `assets/server-sync.js` — sign-in panel (`#cloud-sync-panel`) and round sync. The scorer exposes a narrow `window.ClayScorerCloud` bridge (`getDiscipline`, `getCurrentState`, `getHistory`, `replaceHistory`, `refreshCurrentRoundFromHistory`, `saveCurrent`; sync adds `isSignedIn`); keep server-specific code out of the core scorer.
 - `users.html`, `assets/users.js` — account & user management page.
+- `migrate.html`, `assets/firebase-migrate.js`, `assets/firebase-config.js` — one-off import of a user's rounds from the old Firebase sync (Firestore `clayScorerUsers/{uid}/rounds`) into their server account. Removable once everyone has migrated (also drop `migrate.html` from the `Dockerfile` COPY line).
 - `server/server.js` — Node HTTP server: static files + JSON API + SQLite (`DATA_DIR/clayscorer.db`).
 - `Dockerfile`, `docker-compose.yml`, `.env.example`, `.dockerignore` — container build and stack; `./data` is bind-mounted to `/data`. `SELF_HOSTING.md` has deployment notes.
 - `service_worker.js` — service worker: cache-first for the listed assets, network fallback for everything else. On activate, deletes any cache whose name isn't the current `CACHE_NAME`.
