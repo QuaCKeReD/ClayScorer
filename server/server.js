@@ -23,6 +23,8 @@ const PORT = Number(process.env.PORT || 8080);
 const APP_DIR = path.resolve(process.env.APP_DIR || path.join(HERE, '..'));
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(HERE, '..', 'data'));
 const COOKIE_SECURE = process.env.COOKIE_SECURE === 'true';
+// Behind a reverse proxy (Caddy) every request comes from the proxy, so use X-Forwarded-For.
+const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
 const SESSION_DAYS = Number(process.env.SESSION_DAYS || 30);
 const COOKIE = 'cs_session';
 const MAX_BODY = 2 * 1024 * 1024;
@@ -103,6 +105,8 @@ async function verifyPassword(password, stored) {
     const actual = await scrypt(password, Buffer.from(saltB64, 'base64'), expected.length);
     return timingSafeEqual(expected, actual);
 }
+
+const clientIp = (req) => (TRUST_PROXY && req.headers['x-forwarded-for']?.split(',')[0].trim()) || req.socket.remoteAddress;
 
 const sha256 = (s) => createHash('sha256').update(s).digest('hex');
 
@@ -210,7 +214,7 @@ async function handleApi(req, res, url) {
 
     if (pathname === '/api/login' && method === 'POST') {
         const { username, password } = await readJson(req);
-        const failKey = `${req.socket.remoteAddress}|${String(username).toLowerCase()}`;
+        const failKey = `${clientIp(req)}|${String(username).toLowerCase()}`;
         if (tooManyFailures(failKey)) throw new HttpError(429, 'Too many attempts. Try again in 15 minutes.');
         const user = typeof username === 'string' ? q.userByName.get(username) : null;
         const ok = user && typeof password === 'string' && await verifyPassword(password, user.password_hash);

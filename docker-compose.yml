@@ -22,6 +22,8 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       SESSION_DAYS: ${SESSION_DAYS:-30}
+      # true when a reverse proxy (e.g. Caddy) is in front: client IP comes from X-Forwarded-For.
+      TRUST_PROXY: ${TRUST_PROXY:-false}
     volumes:
       # SQLite database (clayscorer.db + WAL files). Back up this folder.
       - ./data:/data
