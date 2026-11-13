@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-13 (tag order)';
+    const SCORER_BUILD = 'scorer 2026-11-13 (no double-tap zoom)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;

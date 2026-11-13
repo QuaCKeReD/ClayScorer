@@ -40,6 +40,8 @@ If a discipline has a round in progress, its tile shows **Continue: …** with t
 - **iPhone / iPad (Safari):** tap **Share**, then **Add to Home Screen**.
 - **Android (Chrome):** tap the **⋮** menu, then **Add to Home screen** or **Install app**.
 
+**Zooming.** Double-tapping doesn't zoom the page, so quick repeated taps on the score buttons stay put. Use two fingers to pinch-zoom if you need a closer look.
+
 **It works without signal.** Once the app has been opened while online, it keeps working offline. Scores are saved on the device as you tap, and an **Offline** tag appears in the header while there's no connection.
 
 **The header**, on every discipline page:

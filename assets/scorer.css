@@ -1,3 +1,7 @@
+/* No double-tap-to-zoom (fast repeated H/M taps were zooming the page); pinch-zoom still works.
+   Shared by every page, so it applies app-wide. */
+html, body { touch-action: manipulation; }
+
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
