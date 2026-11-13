@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-13 (show scorecard viewer)';
+    const SCORER_BUILD = 'scorer 2026-11-13 (export grid widths, colour only)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -1413,16 +1413,29 @@
             ? `<div style="position:relative; width:100%; height:90px;"><div style="position:absolute; left:0; right:0; top:50%; transform:translateY(-58%); text-align:center; ${markStyle} line-height:1;"><div>${mark}</div><div style="font-size:7pt; font-weight:normal; margin-top:2px;">${stand}</div></div></div>`
             : `<div class="cell-center" style="flex-direction:column; ${optionMarkStyle}"><span>${mark}</span><span style="font-size:7pt; font-weight:normal;">${stand}</span></div>`;
 
-        let h = `<tr style="background:#f0f0f0"><th style="width:200px; vertical-align:middle; border-right:${blockBorder} !important; ${headerBottomBorder}" rowspan="2"><div class="cell-center">NAME</div></th>`;
+        // Column widths: a narrow name column, fixed option/total columns, and the rest split
+        // evenly between stands (each stand's pair columns share that stand's slice), so a
+        // 2-pair stand is as wide as a 6-pair one. table-layout:fixed honours the colgroup.
+        const NAME_PCT = 11, OPT_PCT = OPTION ? 5 : 0, TOTAL_PCT = 5;
+        const standPct = (100 - NAME_PCT - OPT_PCT - TOTAL_PCT) / Math.max(1, state.stands.length);
+        let cols = `<colgroup><col style="width:${NAME_PCT}%">`;
+        state.stands.forEach(st => {
+            const pairCount = Math.ceil(standTargets(st) / 2);
+            for (let p = 0; p < pairCount; p++) cols += `<col style="width:${(standPct / pairCount).toFixed(4)}%">`;
+        });
+        if (OPTION) cols += `<col style="width:${OPT_PCT}%">`;
+        cols += `<col style="width:${TOTAL_PCT}%"></colgroup>`;
+
+        let h = `${cols}<tr style="background:#f0f0f0"><th style="vertical-align:middle; border-right:${blockBorder} !important; ${headerBottomBorder}" rowspan="2"><div class="cell-center">NAME</div></th>`;
         state.stands.forEach(st => {
             const total = standTargets(st);
             const pairCount = Math.ceil(total / 2);
             h += `<th colspan="${pairCount}" style="vertical-align:middle; height:${headH}; ${standHeaderBorder}"><div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:2px 0;"><div style="font-weight:900;">${abbr} ${st.id}${st.extraClay ? '+1' : ''}</div></div></th>`;
         });
         if (OPTION) {
-            h += `<th style="width:70px; vertical-align:middle; border-left:${blockBorder} !important; border-right:${blockBorder} !important; ${headerBottomBorder}" rowspan="2"><div class="cell-center">${escapeHtml(OPTION.label || 'OPT')}</div></th>`;
+            h += `<th style="vertical-align:middle; border-left:${blockBorder} !important; border-right:${blockBorder} !important; ${headerBottomBorder}" rowspan="2"><div class="cell-center">${escapeHtml(OPTION.label || 'OPT')}</div></th>`;
         }
-        h += `<th style="width:60px; vertical-align:middle; border-left:${blockBorder} !important; ${headerBottomBorder}" rowspan="2"><div class="cell-center">TOTAL</div></th></tr><tr>`;
+        h += `<th style="vertical-align:middle; border-left:${blockBorder} !important; ${headerBottomBorder}" rowspan="2"><div class="cell-center">TOTAL</div></th></tr><tr>`;
         state.stands.forEach(st => {
             const total = standTargets(st);
             const pairCount = Math.ceil(total / 2);
@@ -1434,7 +1447,7 @@
 
         const sorted = state.shooters.map(s => ({ ...s, t: getShooterTotal(s.id) })).sort((a, b) => b.t - a.t);
         sorted.forEach(s => {
-            let r1 = `<tr><td style="text-align:left; padding-left:10px; vertical-align:middle; white-space:normal; border-right:${blockBorder} !important; ${shooterBorder} ${shooterBottomBorder}" rowspan="2"><strong>${s.name}</strong></td>`;
+            let r1 = `<tr><td style="text-align:left; padding:0 4px; vertical-align:middle; white-space:normal; word-break:break-word; border-right:${blockBorder} !important; ${shooterBorder} ${shooterBottomBorder}" rowspan="2"><strong>${escapeHtml(s.name)}</strong></td>`;
             let r2 = `<tr>`;
             state.stands.forEach(st => {
                 const total = standTargets(st);
@@ -1444,8 +1457,9 @@
                     const edgeStyle = standEdgeBorder(i / 2, pairCount);
                     const d = (idx) => {
                         if (idx >= total) return { m: '', bg: 'transparent' };
-                        if (hits[idx] === true) return { m: '/', bg: hitBg };
-                        if (hits[idx] === false) return { m: 'O', bg: missBg };
+                        // Colour only: green = hit, red = miss.
+                        if (hits[idx] === true) return { m: '', bg: hitBg };
+                        if (hits[idx] === false) return { m: '', bg: missBg };
                         return { m: '', bg: 'transparent' };
                     };
                     const b1 = d(i), b2 = d(i + 1);
@@ -1455,7 +1469,7 @@
             });
             if (OPTION) {
                 const opt = state.optionHits?.[s.id];
-                const optMark = opt?.hit === true ? '/' : opt?.hit === false ? 'O' : '';
+                const optMark = '';
                 const optBg = opt?.hit === true ? hitBg : opt?.hit === false ? missBg : 'transparent';
                 const optStand = opt?.standId ? `${abbr} ${opt.standId}` : '';
                 r1 += `<td style="background:${optBg}; vertical-align:middle; border-left:${blockBorder} !important; border-right:${blockBorder} !important; ${shooterBorder} ${shooterBottomBorder}" rowspan="2">${optionCell(optMark, optStand)}</td>`;
