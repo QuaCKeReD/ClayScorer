@@ -1,0 +1,27 @@
+# ClayScorer self-hosted stack. See SELF_HOSTING.md.
+#
+#   cp .env.example .env      # set ADMIN_PASSWORD (and PUID/PGID on Linux)
+#   mkdir -p data
+#   docker compose up -d --build
+#
+# The app is then on http://<host>:8080. iPhones only allow offline use and Home Screen
+# install over HTTPS, so put a TLS reverse proxy (Caddy, Traefik, Nginx Proxy Manager,
+# Tailscale Serve…) in front of it and set COOKIE_SECURE=true.
+services:
+  clayscorer:
+    build: .
+    image: clayscorer:latest
+    container_name: clayscorer
+    restart: unless-stopped
+    user: "${PUID:-1000}:${PGID:-1000}"
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+    environment:
+      # Only used to create the first admin when the database has no users.
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      SESSION_DAYS: ${SESSION_DAYS:-30}
+    volumes:
+      # SQLite database (clayscorer.db + WAL files). Back up this folder.
+      - ./data:/data

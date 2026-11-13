@@ -1,4 +1,4 @@
-const CACHE_NAME = 'clayscorer-v10';
+const CACHE_NAME = 'clayscorer-v11';
 
 // Same-origin assets: `cache.addAll` is all-or-nothing, but these are local files
 // we control, so a hard-fail here is the right behaviour.
@@ -9,12 +9,12 @@ const LOCAL_ASSETS = [
   './sportrap.html',
   './compak.html',
   './skeet.html',
+  './users.html',
   './manifest.json',
   './assets/scorer.css',
   './assets/scorer.js',
-  './assets/firebase-config.js',
-  './assets/firebase-sync-loader.js',
-  './assets/firebase-sync.js',
+  './assets/server-sync.js',
+  './assets/users.js',
   './assets/vendor/tailwindcss-3.4.17.js',
   './assets/vendor/lucide-0.468.0.min.js',
   './assets/vendor/html2canvas-1.4.1.min.js',
@@ -52,8 +52,8 @@ self.addEventListener('fetch', (event) => {
   // Firestore) must always hit the network — serving them from cache breaks auth and sync.
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
-  // Firebase Hosting serves the sign-in helper under /__/ on this origin; never cache it.
-  if (url.pathname.startsWith('/__/')) return;
+  // The self-hosted API is always live data; never serve it from cache.
+  if (url.pathname.startsWith('/api/')) return;
   event.respondWith((async () => {
     const cached = await caches.match(req);
     if (cached) return cached;

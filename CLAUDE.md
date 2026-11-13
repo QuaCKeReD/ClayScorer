@@ -4,18 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-ClayScorer Pro — a static, offline-capable Progressive Web App for scoring CPSA clay pigeon shooting rounds across four disciplines: English Sporting (ESP), Sportrap (STR), Compak Sporting (CSP), and English Skeet (ESK). No build system, no package manager, no tests. Deployed as static files (edit → commit → serve).
+ClayScorer Pro — a static, offline-capable Progressive Web App for scoring CPSA clay pigeon shooting rounds across four disciplines: English Sporting (ESP), Sportrap (STR), Compak Sporting (CSP), and English Skeet (ESK). No build system, no package manager, no tests. Deployed as a Docker Compose stack: one dependency-free Node server (`server/server.js`) serves the static app and stores signed-in users' rounds in SQLite. See `SELF_HOSTING.md`.
 
 ## Running / developing
 
-- Open `index.html` directly in a browser, or serve the directory (`python3 -m http.server`) for service-worker + PWA install testing (SW requires http://localhost, not `file://`).
+- Open `index.html` directly in a browser, or serve the directory (`python3 -m http.server`) for service-worker + PWA install testing (SW requires http://localhost, not `file://`). With a plain static server the app runs local-only (sync panel says server sync isn't available).
+- Full stack locally: `PORT=8080 DATA_DIR=./data ADMIN_USERNAME=admin ADMIN_PASSWORD=… node server/server.js` (Node 24+, uses built-in `node:sqlite`), or `docker compose up -d --build`.
 - No install / build / lint / test commands exist. There is no CI.
 - Third-party browser libs are vendored under `assets/vendor/` so the app shell is deterministic and installable offline after first load:
   - Tailwind (`assets/vendor/tailwindcss-3.4.17.js`) — utility CSS
   - Lucide (`assets/vendor/lucide-0.468.0.min.js`) — icons, initialised via `lucide.createIcons()` after every `render()`
   - html2canvas (`assets/vendor/html2canvas-1.4.1.min.js`) — used only by `shareAsImage()`
-- Firebase cloud sync is optional and disabled by default. `assets/firebase-sync-loader.js` only loads `assets/firebase-sync.js` on `http(s)` origins, and `assets/firebase-config.js` must be filled in with a Firebase Web config plus `FIREBASE_ENABLED = true`. Setup notes and Firestore rules live in `FIREBASE_SETUP.md`.
-- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v10`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names. `scorer.js` also logs a `SCORER_BUILD` banner on load — bumping that string when you ship changes gives you a quick DevTools signal that the page is running the new code (not a stale SW-cached copy).
+- **Server sync** (`assets/server-sync.js`, loaded by each discipline page) is offline-first: rounds always save to `localStorage`; when a user is signed in, round history mirrors to the server. It listens for the scorer's `clayscorer:history-written` event (fired by `writeHistory()`), debounces, and diffs history against `${storageKey}:synced` (`{ roundKey: updatedAt }` last agreed with the server) to push upserts and deletes — so renames, deletes and delete-all need no extra hooks. It pulls on open, sign-in, `online`, and when the page becomes visible again. Conflicts resolve by newest `_updatedAt`; server deletes are tombstones (`rounds.deleted = 1`). Because of this, `syncHistory()` only re-stamps `_updatedAt` when round content actually changed, and `makeDefaultState()` returns an already-normalised state — don't break either or reopening a round will look like an edit and override other devices.
+- **Server API** (`server/server.js`): `/api/login`, `/api/logout`, `/api/me`, `/api/me/password`, `/api/rounds/:discipline[/:roundKey]` (GET list incl. tombstones, PUT upsert-if-newer, DELETE tombstone), `/api/users[/:id]` (admin). Mutating requests must send `X-ClayScorer: 1` (CSRF guard). Sessions are random tokens stored as SHA-256 in `sessions`, sent as an HttpOnly `cs_session` cookie. Passwords are scrypt. The first admin comes from `ADMIN_USERNAME`/`ADMIN_PASSWORD` when the users table is empty. Static serving blocks `server/`, `data/`, `_archive/`, dotfiles and unknown extensions.
+- `users.html` + `assets/users.js` — account page (change own password) and admin user management (add, edit username/display name/role/password, delete; server enforces last-admin and no-self-delete).
+- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v11`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names. `scorer.js` also logs a `SCORER_BUILD` banner on load — bumping that string when you ship changes gives you a quick DevTools signal that the page is running the new code (not a stale SW-cached copy).
 - The SW pre-caches same-origin files with `cache.addAll`. If you add new app shell assets, put them in `LOCAL_ASSETS`.
 
 ## Architecture
@@ -98,7 +101,7 @@ On DOMContentLoaded, after `load()`, we call `save()` if the restored state is n
 
 Page layout (top to bottom): header (history / cloud / export / lock), collapsible **Round setup** `<details id="setup-panel">` (fields, squad, and for STR/CSP the Stand setup), sticky stand nav (`top: var(--header-h)`, kept in sync by a `ResizeObserver` on the header; each button shows a partial/done marker from `standProgress()`), option-target status (ESK), STR/CSP Presentations panel, lock banner, scoring card, leaderboard + legend, notes, and a fixed bottom Prev/Next bar. `render()` auto-collapses setup (and the Presentations panel) the first time any target is recorded and re-opens it for a fresh round, tracked by `lastAnyShot`; otherwise the user's own open/close choice is left alone. Locking shows `#lock-banner`, dims only the scoring area, and disables Prev/Next.
 
-Non-blocking outcomes (import errors/results, Firebase delete failures) use `notify(message, tone)` → `#toast`; `confirm()` is kept for destructive actions (delete round/history, remove a shooter who has scores, overwrite on import).
+Non-blocking outcomes (import errors/results) use `notify(message, tone)` → `#toast`; `confirm()` is kept for destructive actions (delete round/history, remove a shooter who has scores, overwrite on import).
 
 ### Scoring UI conventions
 
@@ -131,7 +134,10 @@ Every export shares the same filename stem — `YYYYMMDD_${D.id}[_ground-slug][_
 - `sporting.html`, `sportrap.html`, `compak.html`, `skeet.html` — thin per-discipline shells that set `window.DISCIPLINE` and load the shared engine.
 - `assets/scorer.js` — shared scoring engine (state, mount, render, exports). All global `window.*` handlers used by inline `onclick`s are defined here.
 - `assets/scorer.css` — shared styles including print media, capture container, pair-stack, first-up glow, and discipline tiles.
-- `assets/firebase-sync-loader.js` / `assets/firebase-sync.js` / `assets/firebase-config.js` — optional Firebase Auth + Firestore sync layer. The scorer exposes a narrow `window.ClayScorerCloud` bridge for reading/writing round history; keep Firebase-specific code out of the core scorer where possible.
+- `assets/server-sync.js` — sign-in panel (`#cloud-sync-panel`) and round sync. The scorer exposes a narrow `window.ClayScorerCloud` bridge (`getDiscipline`, `getCurrentState`, `getHistory`, `replaceHistory`, `refreshCurrentRoundFromHistory`, `saveCurrent`; sync adds `isSignedIn`); keep server-specific code out of the core scorer.
+- `users.html`, `assets/users.js` — account & user management page.
+- `server/server.js` — Node HTTP server: static files + JSON API + SQLite (`DATA_DIR/clayscorer.db`).
+- `Dockerfile`, `docker-compose.yml`, `.env.example`, `.dockerignore` — container build and stack; `./data` is bind-mounted to `/data`. `SELF_HOSTING.md` has deployment notes.
 - `service_worker.js` — service worker: cache-first for the listed assets, network fallback for everything else. On activate, deletes any cache whose name isn't the current `CACHE_NAME`.
 - `manifest.json` — PWA install metadata. `start_url` is the landing page.
 - `_archive/indexv1.html`, `_archive/indexv2.html`, `_archive/indexv3.html` — historical snapshots of the original sporting-only single-file app. Not linked from anywhere; ignore unless the user explicitly refers to them.
@@ -142,5 +148,6 @@ Every export shares the same filename stem — `YYYYMMDD_${D.id}[_ground-slug][_
 2. Set `window.DISCIPLINE` with a unique `id`, `code`, and `storageKey` (mirroring an existing one will overwrite its data).
 3. Add a tile to `index.html`.
 4. Add the page path to the `LOCAL_ASSETS` list in `service_worker.js` and bump `CACHE_NAME`.
+5. Add the page to the `COPY` line in `Dockerfile`, and the discipline `id` to `DISCIPLINES` in `server/server.js` (the API rejects unknown disciplines).
 
 If the new discipline needs behaviour the shared engine doesn't yet support (e.g. a new scoring shape), extend `assets/scorer.js` gated by a new config flag rather than forking the engine.

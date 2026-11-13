@@ -1,0 +1,9 @@
+.git
+.claude
+data
+_archive
+node_modules
+.env
+*.md
+docker-compose.yml
+Dockerfile

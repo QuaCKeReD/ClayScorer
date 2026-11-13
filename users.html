@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClayScorer – Account &amp; users</title>
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="favicon.ico" sizes="32x32">
+    <link rel="icon" type="image/png" href="assets/target.png">
+    <link rel="apple-touch-icon" href="assets/target.png">
+    <link rel="stylesheet" href="assets/scorer.css">
+    <script src="assets/vendor/tailwindcss-3.4.17.js"></script>
+</head>
+<body class="bg-slate-300 text-slate-900 font-sans min-h-screen">
+    <header class="bg-slate-900 text-white shadow-md">
+        <div class="max-w-3xl mx-auto p-3 flex items-center gap-3">
+            <a href="index.html" aria-label="All disciplines" title="All disciplines" class="w-9 h-9 flex-shrink-0 flex items-center justify-center bg-orange-500 rounded-lg shadow-sm">
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6">
+                    <circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle>
+                </svg>
+            </a>
+            <div>
+                <div class="text-[11px] text-orange-400 font-black uppercase tracking-widest leading-none">ClayScorer</div>
+                <h1 class="text-base font-bold tracking-tight uppercase italic leading-none mt-0.5">Account &amp; users</h1>
+            </div>
+        </div>
+    </header>
+
+    <main id="users-root" class="max-w-3xl mx-auto p-3 space-y-3">
+        <p class="text-sm text-slate-700">Loading…</p>
+    </main>
+
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+    <script src="assets/users.js"></script>
+</body>
+</html>

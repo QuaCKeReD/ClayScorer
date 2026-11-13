@@ -76,7 +76,14 @@
     const roundKey = (s) => `${(s.ground || '').trim().toLowerCase()}|${s.date || ''}|${(s.event || '').trim().toLowerCase()}`;
     const isNamedRound = (s) => !!((s.ground || '').trim() || (s.event || '').trim());
     const readHistory = () => { try { return JSON.parse(localStorage.getItem(KEY_HISTORY) || '{}'); } catch (e) { return {}; } };
-    const writeHistory = (h) => { try { localStorage.setItem(KEY_HISTORY, JSON.stringify(h)); } catch (e) {} };
+    // Every history write is announced so the server sync (assets/server-sync.js) can push
+    // changes, renames and deletes; it diffs against what it last synced.
+    const writeHistory = (h) => {
+        try { localStorage.setItem(KEY_HISTORY, JSON.stringify(h)); } catch (e) {}
+        document.dispatchEvent(new CustomEvent('clayscorer:history-written'));
+    };
+    // Deletes reach the server too when signed in; the sync module sets this flag.
+    const syncNote = () => (window.ClayScorerCloud?.isSignedIn?.() ? ' (and from the server)' : '');
 
     // yyyymmdd from an ISO date string like "2026-07-06" -> "260706".
     const yyyymmdd = (iso) => (!iso || iso.length < 10) ? '' : iso.slice(0, 4) + iso.slice(5, 7) + iso.slice(8, 10);
@@ -354,11 +361,18 @@
             : Array.from({ length: D.defaults.standCount }, (_, i) => ({
                 id: i + 1, targets: D.defaults.targetsPerStand, extraClay: false, description: '', clayMeta: normalizeClayMeta([], 2)
             }));
-        return {
+        const fresh = {
             ground: '', date: new Date().toISOString().split('T')[0], event: '', notes: '',
             shooters: [{ id: Date.now(), name: 'Shooter 1', cpsa: '', class: 'U' }],
             stands, hits: {}, optionHits: {}, activeIdx: 0, isLocked: false
         };
+        // Normalise now (normalizeState works on the global `state`) so a fresh round already has
+        // the shape it will have after a reload; otherwise the first reload looks like an edit.
+        const current = state;
+        state = fresh;
+        normalizeState();
+        state = current;
+        return fresh;
     }
 
     function normalizeStands(stands) {
@@ -529,8 +543,14 @@
             dirty = true;
         }
         if (named) {
-            store[newKey] = { ...state, _roundKey: newKey, _updatedAt: Date.now() };
-            dirty = true;
+            // Only re-stamp _updatedAt when the round actually changed: sync resolves conflicts
+            // by newest _updatedAt, so a save that merely re-opens a round mustn't look like an edit.
+            const { _updatedAt: _prevStamp, ...prevContent } = store[newKey] || {};
+            const { _updatedAt: _stateStamp, ...nextContent } = { ...state, _roundKey: newKey };
+            if (!store[newKey] || JSON.stringify(prevContent) !== JSON.stringify(nextContent)) {
+                store[newKey] = { ...nextContent, _updatedAt: Date.now() };
+                dirty = true;
+            }
         }
         if (dirty) writeHistory(store);
         state._roundKey = named ? newKey : null;
@@ -827,28 +847,6 @@
         return t;
     }
 
-    async function deleteRemoteRoundIfAvailable(key) {
-        const deleteRemoteRound = window.ClayScorerCloud?.deleteRemoteRound;
-        if (!key || typeof deleteRemoteRound !== 'function') return;
-        try {
-            await deleteRemoteRound(key);
-        } catch (err) {
-            console.warn('[ClayScorer] Firebase round delete failed', err);
-            notify('Deleted locally, but the Firebase delete failed. Try cloud sync again when you are online.', 'error');
-        }
-    }
-
-    async function deleteRemoteHistoryIfAvailable() {
-        const deleteRemoteHistory = window.ClayScorerCloud?.deleteRemoteHistory;
-        if (typeof deleteRemoteHistory !== 'function') return;
-        try {
-            await deleteRemoteHistory();
-        } catch (err) {
-            console.warn('[ClayScorer] Firebase history delete failed', err);
-            notify('Deleted local history, but the Firebase history delete failed. Try cloud sync again when you are online.', 'error');
-        }
-    }
-
     window.deleteCurrentRound = async () => {
         const key = state._roundKey || (isNamedRound(state) ? roundKey(state) : null);
         const store = readHistory();
@@ -858,14 +856,13 @@
             || getUKDate((storedRound || state).date);
         const hasStoredRound = key && !!storedRound;
         const message = hasStoredRound
-            ? `Delete "${label}" from current round, history, and Firebase if synced?`
+            ? `Delete "${label}" from the current round and history${syncNote()}?`
             : `Delete the current ${D.name} round from this device?`;
         if (!confirm(message)) return;
 
         if (hasStoredRound) {
             delete store[key];
             writeHistory(store);
-            await deleteRemoteRoundIfAvailable(key);
         }
         localStorage.removeItem(KEY_CURRENT);
         state = makeDefaultState();
@@ -875,7 +872,7 @@
     };
 
     window.deleteHistory = async () => {
-        if (!confirm(`Delete all saved ${D.name} round history and the current round from this device and Firebase if synced?`)) return;
+        if (!confirm(`Delete all saved ${D.name} round history and the current round from this device${syncNote()}?`)) return;
         writeHistory({});
         localStorage.removeItem(KEY_HISTORY);
         localStorage.removeItem(KEY_CURRENT);
@@ -883,7 +880,6 @@
         history = null;
         saveStateOnly();
         render();
-        await deleteRemoteHistoryIfAvailable();
     };
 
     window.newRound = () => {
@@ -915,10 +911,9 @@
         if (!store[key]) return;
         const round = store[key];
         const label = (round.ground || '').trim() || (round.event || '').trim() || getUKDate(round.date);
-        if (!confirm(`Delete round "${label}" from history?`)) return;
+        if (!confirm(`Delete round "${label}" from history${syncNote()}?`)) return;
         delete store[key];
         writeHistory(store);
-        await deleteRemoteRoundIfAvailable(key);
         if (state._roundKey === key) {
             state = makeDefaultState();
             history = null;
