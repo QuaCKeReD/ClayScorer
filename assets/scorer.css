@@ -59,6 +59,28 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; m
     flex: 1; min-width: 0;
 }
 
+/* Phones: score rows scroll sideways with about three pairs in view (gap-1 = 4px, so three
+   pairs + two gaps fill the row; a single is half a pair). Rows that fit simply stretch.
+   Disciplines opt out with scrollScoreRows: false (ESK, STR). */
+.score-strip { position: relative; }
+@media (max-width: 639px) {
+    .score-strip {
+        flex-wrap: nowrap !important;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scroll-snap-type: x proximity;
+        -webkit-overflow-scrolling: touch;
+    }
+    .score-strip > .pair-stack {
+        flex: var(--shots) 0 calc((100% - 8px) / 6 * var(--shots)) !important;
+        min-width: 0 !important;
+        scroll-snap-align: start;
+    }
+    .score-strip.fade-right { -webkit-mask-image: linear-gradient(to right, #000 94%, transparent); mask-image: linear-gradient(to right, #000 94%, transparent); }
+    .score-strip.fade-left { -webkit-mask-image: linear-gradient(to left, #000 94%, transparent); mask-image: linear-gradient(to left, #000 94%, transparent); }
+    .score-strip.fade-left.fade-right { -webkit-mask-image: linear-gradient(to right, transparent, #000 12%, #000 94%, transparent); mask-image: linear-gradient(to right, transparent, #000 12%, #000 94%, transparent); }
+}
+
 .pair-stack.pair-extra { background: #ffffff; border-color: #f97316; border-style: dashed; }
 
 .squad-grid-item {

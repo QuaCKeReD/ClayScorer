@@ -8,6 +8,8 @@
  *     defaults: { standCount, targetsPerStand },  // only when standCount editable
  *     targetOptions: [4, 6, 8, 10],               // only when targetsPerStand editable
  *     enableStandDescriptions: false,             // optional, defaults to true
+ *     scrollScoreRows: false,                     // optional, defaults to true: on phones the H/M
+ *                                                 // stacks scroll sideways, ~3 pairs in view
  *     fixedStands: [{ id, targets, labels? }],    // null for variable ESP
  *     optionTarget: { label, fallbackStandId }     // optional floating target
  *   }
@@ -19,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-13 (clay presentation dialog)';
+    const SCORER_BUILD = 'scorer 2026-11-13 (scrolling score rows)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -29,6 +31,7 @@
     const MAX_SHOOTERS = D.maxShooters || 6;
     const CLASSES = ['AAA', 'AA', 'A', 'B', 'C', 'U'];
     const HAS_STAND_DESCRIPTIONS = D.enableStandDescriptions !== false;
+    const SCROLL_SCORE_ROWS = D.scrollScoreRows !== false;
     const HAS_PRESENTATION_MAP = D.id === 'compak' || D.id === 'sportrap';
     const ROTATE = !HAS_PRESENTATION_MAP && D.showFirstUpRotation !== false;
     const ROUND_LABEL = HAS_PRESENTATION_MAP ? 'Round' : D.standLabel;
@@ -777,6 +780,7 @@
         const arr = ensureHitsArray(shId, stand);
         const curr = arr[idx];
         arr[idx] = (curr === val) ? null : val;
+        lastTap = { shId, stId, idx };
         reconcileOptionHit(shId);
         if (arr[idx] !== null && navigator.vibrate) {
             val ? navigator.vibrate(50) : navigator.vibrate([40, 40, 40]);
@@ -1864,6 +1868,56 @@
     // Setup auto-collapses once the first target is recorded and re-opens for a fresh round;
     // in between, the user's own open/close choice is left alone.
     let lastAnyShot = null;
+    // Phone score strips (SCROLL_SCORE_ROWS): keep each shooter's sideways scroll across
+    // re-renders, and nudge the next group into view when a tap completes the current one.
+    let lastTap = null;
+    let lastStripStandId = null;
+
+    function updateStripFade(strip) {
+        const max = strip.scrollWidth - strip.clientWidth;
+        strip.classList.toggle('fade-left', strip.scrollLeft > 2);
+        strip.classList.toggle('fade-right', max > 2 && strip.scrollLeft < max - 2);
+    }
+
+    // Scroll needed (from `left`) to show `el` fully inside `strip`.
+    function stripLeftToShow(strip, el, left) {
+        const start = el.offsetLeft;
+        const end = start + el.offsetWidth;
+        if (start < left) return start;
+        if (end > left + strip.clientWidth) return end - strip.clientWidth;
+        return left;
+    }
+
+    function positionScoreStrips(sArea, st, prevStripScroll) {
+        const sameStand = lastStripStandId === st.id;
+        const tap = lastTap;
+        lastTap = null;
+        lastStripStandId = st.id;
+        sArea.querySelectorAll('[data-score-strip]').forEach(strip => {
+            const shId = Number(strip.dataset.scoreStrip);
+            if (strip.scrollWidth <= strip.clientWidth + 1) { updateStripFade(strip); return; }
+            const groups = Array.from(strip.children);
+            let left;
+            if (sameStand && prevStripScroll[shId] !== undefined) {
+                left = prevStripScroll[shId];
+            } else {
+                // New stand (or first render): open on this shooter's first unfinished group.
+                const next = groups.find(g => !g.hasAttribute('data-done'));
+                left = next ? stripLeftToShow(strip, next, 0) : strip.scrollWidth;
+            }
+            strip.scrollLeft = left;
+            if (tap && tap.shId === shId && tap.stId === st.id) {
+                const tapped = groups.find(g => Number(g.dataset.first) <= tap.idx && tap.idx <= Number(g.dataset.last));
+                const next = tapped?.hasAttribute('data-done') ? tapped.nextElementSibling : null;
+                if (next) {
+                    const target = stripLeftToShow(strip, next, strip.scrollLeft);
+                    if (target !== strip.scrollLeft) strip.scrollTo({ left: target, behavior: 'smooth' });
+                }
+            }
+            updateStripFade(strip);
+            strip.addEventListener('scroll', () => updateStripFade(strip), { passive: true });
+        });
+    }
 
     function render() {
         if (!state.stands.length) return;
@@ -2009,7 +2063,12 @@
         // Scoring rows. Sporting rotates first-up; Compak/Sportrap keep shooter order fixed.
         const n = state.shooters.length;
         const leadIdx = ROTATE ? (state.activeIdx % n) : 0;
-        const sArea = document.getElementById('scoring-area'); sArea.innerHTML = '';
+        const sArea = document.getElementById('scoring-area');
+        const prevStripScroll = {};
+        if (lastStripStandId === st.id) {
+            sArea.querySelectorAll('[data-score-strip]').forEach(el => { prevStripScroll[el.dataset.scoreStrip] = el.scrollLeft; });
+        }
+        sArea.innerHTML = '';
         const visibleShooters = Array.from({ length: n }, (_, i) => state.shooters[(i + leadIdx) % n]);
         // "Shooting" = first shooter in order who hasn't finished this stand; none once everyone's done.
         const activeShooterId = visibleShooters.find(sh => !shooterStandStats(sh.id, st).completed)?.id ?? null;
@@ -2054,7 +2113,8 @@
                     return `<div class="flex-1 min-w-0 h-6 rounded-md bg-slate-100 border border-slate-200 px-1 text-[11px] font-bold text-slate-700 flex items-center justify-center">${value ? presentationLabel(value - 1) : '–'}</div>`;
                 }).join('');
                 const labels = shotIdxs.map(idx => st.labels?.[idx] ?? '');
-                return `<div class="${isExtra ? 'pair-stack pair-extra' : 'pair-stack'}" style="flex:${shotIdxs.length} 1 0; min-width:${shotIdxs.length * 40 + 8}px;">
+                const groupDone = shotIdxs.every(idx => hits[idx] !== null && hits[idx] !== undefined);
+                return `<div class="${isExtra ? 'pair-stack pair-extra' : 'pair-stack'}" data-shots="${shotIdxs.length}" data-first="${shotIdxs[0]}" data-last="${shotIdxs[shotIdxs.length - 1]}" ${groupDone ? 'data-done' : ''} style="flex:${shotIdxs.length} 1 0; min-width:${shotIdxs.length * 40 + 8}px; --shots:${shotIdxs.length};">
                     ${caption ? `<div class="text-[11px] font-bold text-slate-700 text-center leading-none pt-0.5">${caption}</div>` : ''}
                     <div class="flex gap-1">${shotIdxs.map(idx => scoreBtn(idx, true)).join('')}</div>
                     <div class="flex gap-1">${shotIdxs.map(idx => scoreBtn(idx, false)).join('')}</div>
@@ -2065,7 +2125,7 @@
             const optionHtml = optionOnThisStand ? (() => {
                 const optLabel = OPTION.label || 'OPT';
                 const optBtn = (val) => `<button onclick="toggleOptionHit(${s.id},${st.id},${val})" aria-pressed="${optionHit === val}" aria-label="${escapeHtml(s.name)}, option target, ${val ? 'hit' : 'miss'}" class="${scoreBtnClass(optionHit === val, val)}">${val ? 'H' : 'M'}</button>`;
-                return `<div class="pair-stack pair-extra" style="flex:1 1 0; min-width:48px;">
+                return `<div class="pair-stack pair-extra" data-shots="1" ${optionHit !== null ? 'data-done' : ''} style="flex:1 1 0; min-width:48px; --shots:1;">
                     <div class="flex gap-1">${optBtn(true)}</div>
                     <div class="flex gap-1">${optBtn(false)}</div>
                     <div class="flex gap-1 text-xs font-bold text-orange-700 text-center"><div class="flex-1">${escapeHtml(optLabel)}</div></div>
@@ -2081,9 +2141,10 @@
                 </div>
                 <div class="text-xl font-black italic text-slate-900 flex-shrink-0">${count}<span class="text-slate-600 text-xs not-italic font-bold ml-0.5">/${possible}</span></div>
             </div>
-            <div class="flex flex-wrap gap-1 w-full">${gridHtml}${optionHtml}</div>`;
+            <div ${SCROLL_SCORE_ROWS ? `data-score-strip="${s.id}" class="score-strip scrollbar-hide flex flex-wrap gap-1 w-full"` : 'class="flex flex-wrap gap-1 w-full"'}>${gridHtml}${optionHtml}</div>`;
             sArea.appendChild(row);
         }
+        if (SCROLL_SCORE_ROWS) positionScoreStrips(sArea, st, prevStripScroll);
 
         // Leaderboard
         const lbHeader = document.getElementById('lb-header');
