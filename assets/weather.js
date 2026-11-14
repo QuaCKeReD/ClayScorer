@@ -2,7 +2,10 @@
  *
  * Weather entries are stored with the round as state.weather = { place?, entries: [...] }
  * (only once something is added, so older rounds keep their shape for sync). Each entry is
- * { id, time 'HH:MM', conditions, tempC, windMph, windDir, gustMph, source 'auto'|'manual' }
+ * { id, time 'HH:MM', place?: { name, lat, lon }, conditions, tempC, windMph, windDir, gustMph,
+ *   source 'auto'|'manual' }. Each entry keeps its own place; state.weather.place is only the
+ *   last place used (the default for the next entry, and the fallback for entries saved
+ *   before per-entry places existed)
  * (entries saved before mph were in windKmh / gustKmh; norm() converts them on read).
  *
  * "Get weather" uses Open-Meteo (free, no key, CORS-enabled): the forecast API for recent and
@@ -47,10 +50,11 @@
     }
 
     // "10:30 · Partly cloudy · 12 °C · wind 11 mph SW, gusts 19 mph"
-    function describe(entry) {
+    function describe(entry, placeName = '') {
         const e = norm(entry);
         const parts = [];
         if (e.time) parts.push(e.time);
+        if (placeName) parts.push(placeName);
         if (e.conditions) parts.push(e.conditions);
         if (Number.isFinite(e.tempC)) parts.push(`${e.tempC} °C`);
         let wind = '';
@@ -60,12 +64,20 @@
         if (wind) parts.push(wind);
         return parts.join(' · ');
     }
+    const placeOf = (e, w) => e.place || w?.place || null;
+    // The one place every entry shares (name), or '' when they differ or none is known.
+    function commonPlace(w, list) {
+        const names = [...new Set(list.map(e => placeOf(e, w)?.name || ''))];
+        return names.length === 1 ? names[0] : '';
+    }
     const sortedEntries = (w) => (w?.entries || []).slice().sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')));
     // One line for print/CSV/presentation, e.g. "Wergs — 10:30 · Sunny · 12 °C … | 14:00 · …"
     function summary(w) {
         const list = sortedEntries(w);
         if (!list.length) return '';
-        return `${w.place?.name ? `${w.place.name} — ` : ''}${list.map(describe).join(' | ')}`;
+        const common = commonPlace(w, list);
+        if (common) return `${common} — ${list.map(e => describe(e)).join(' | ')}`;
+        return list.map(e => describe(e, placeOf(e, w)?.name || '')).join(' | ');
     }
 
     // ---------------------------------------------------------------- Open-Meteo
@@ -145,12 +157,14 @@
 
     function sectionHtml(w) {
         const list = sortedEntries(w);
+        // One shared place goes in the heading; different places are shown on each entry.
+        const common = list.length ? commonPlace(w, list) : '';
         return `<div class="flex items-center justify-between gap-2 mb-1.5">
-                <div class="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1">Weather${w?.place?.name ? ` <span class="normal-case font-semibold text-slate-500 truncate">· ${esc(w.place.name)}</span>` : ''}</div>
+                <div class="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1">Weather${common ? ` <span class="normal-case font-semibold text-slate-500 truncate">· ${esc(common)}</span>` : ''}</div>
                 <button type="button" onclick="ClayWeather.open()" class="text-xs font-bold px-3 py-1.5 rounded-lg border bg-slate-900 text-white border-slate-900 flex-shrink-0">+ Add weather</button>
             </div>
             ${list.length ? `<ul class="space-y-1.5 mb-3">${list.map(e => `<li class="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-2 text-sm text-slate-800">
-                    <span class="flex-1 min-w-0">${esc(describe(e))}</span>
+                    <span class="flex-1 min-w-0">${esc(describe(e, common ? '' : (placeOf(e, w)?.name || '')))}</span>
                     <button type="button" onclick="ClayWeather.open('${esc(e.id)}')" class="text-xs font-bold px-2 py-1 rounded-md border border-slate-300 bg-white text-slate-700 flex-shrink-0" aria-label="Edit weather at ${esc(e.time || '')}">Edit</button>
                 </li>`).join('')}</ul>`
                 : `<p class="text-xs text-slate-600 mb-3">No weather yet. Add it from your location, a place search, or by hand.</p>`}`;
@@ -170,7 +184,7 @@
         const round_ = h.round();
         const existing = entryId ? (w.entries || []).find(e => e.id === entryId) : null;
         draft = existing
-            ? { ...norm(existing), place: w.place || null }
+            ? { ...norm(existing), place: placeOf(existing, w) }
             : { time: round_.date === todayIso() || !round_.date ? nowHHMM() : '10:00', conditions: '', tempC: null, windMph: null, windDir: '', gustMph: null, source: 'manual', place: w.place || null };
         let el = document.getElementById('weather-dialog');
         if (!el) { el = document.createElement('div'); el.id = 'weather-dialog'; el.className = 'no-print'; document.body.appendChild(el); }
@@ -322,11 +336,17 @@
                 tempC: draft.tempC ?? null, windMph: draft.windMph ?? null, windDir: draft.windDir || '', gustMph: draft.gustMph ?? null,
                 source: draft.source || 'manual'
             };
+            if (draft.place) entry.place = { name: draft.place.name, lat: draft.place.lat, lon: draft.place.lon };
             if (!entry.conditions && entry.tempC === null && entry.windMph === null && !entry.windDir) return status('Enter some weather, or press Get weather.', 'error');
             const w = host().get() || {};
-            const entries = (w.entries || []).filter(x => x.id !== entry.id).concat(entry);
+            // Entries from before per-entry places keep the place they were shown with.
+            const entries = (w.entries || []).filter(x => x.id !== entry.id)
+                .map(x => (x.place || !w.place ? x : { ...x, place: w.place }))
+                .concat(entry);
             const next = { entries };
-            if (draft.place) next.place = { name: draft.place.name, lat: draft.place.lat, lon: draft.place.lon };
+            // Remember the last place used as the default for the next entry.
+            if (entry.place) next.place = entry.place;
+            else if (w.place) next.place = w.place;
             host().set(next);
             return close();
         }

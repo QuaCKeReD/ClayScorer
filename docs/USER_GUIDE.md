@@ -205,6 +205,8 @@ The description builds itself as you go and is shown at the bottom of the window
 
 Temperatures are in °C and wind in mph; *wind from* is the direction the wind blows from. Tap **Edit** on an entry to change or delete it.
 
+**Each entry keeps its own location.** If every entry is from the same place, the place is shown once next to **Weather**. If they're from different places, each entry shows its own, e.g. *09:00 · My location · Sunny …* and *14:00 · Bisley, Surrey · Showers …*. A new entry starts with the last location you used, and editing an entry starts from that entry's location.
+
 <img src="guide/weather-section.png" width="300" alt="Weather in the round notes">
 
 - **Your location** is only sent to Open-Meteo to look up the weather. It works only when the app is opened over `https://`; otherwise use **Search**.
