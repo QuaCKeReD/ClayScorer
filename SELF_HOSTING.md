@@ -66,6 +66,13 @@ Point the proxy at `http://<docker-host>:8080` (or your `HTTP_PORT`). Caddy forw
   enable it if clients can't bypass the proxy and reach port 8080 directly (firewall it to the
   proxy), otherwise they could forge that header.
 
+## Weather
+
+Round notes › Weather looks up weather from [Open-Meteo](https://open-meteo.com) directly from the
+user's browser (no key, nothing for the server to configure). **Use my location** only works when
+the app is served over https (or localhost); over plain http, users can still search for a place
+or type the weather in.
+
 ## Moving existing rounds
 
 **From the old Firebase cloud sync:** sign in to this server (Account & users), then open

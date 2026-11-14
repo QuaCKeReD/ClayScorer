@@ -190,7 +190,26 @@ The description builds itself as you go and is shown at the bottom of the window
 - ❗ marks the hardest completed stand: the one the squad scored worst on, on average.
 - The shaded row is the stand you're on.
 
-**Round notes.** A free-text box for weather, conditions or anything else. Notes are saved with the round and printed on the PDF.
+**Round notes.** At the bottom of the page: a **Weather** section, then a free-text **Notes** box. Both are saved with the round and printed on the PDF.
+
+**Weather.** Tap **+ Add weather** to record the conditions at a time of day. Add several entries if they changed, e.g. start and end of the round.
+
+<img src="guide/weather-dialog.png" width="300" alt="Adding weather">
+
+1. **Location** (only needed for *Get weather*):
+   - **📍 Use my location** uses your phone's or computer's location. Your browser asks for permission the first time.
+   - **Search** looks up a place by name. It starts with the ground's name; pick the right one from the list.
+2. **Time.** It defaults to now for today's round.
+3. **Get weather** fills in the conditions, temperature, wind speed, wind direction and gusts for that place and time, from [Open-Meteo](https://open-meteo.com). It works for today, recent and past rounds, and up to about two weeks ahead.
+4. Check or change anything, or skip *Get weather* and fill the fields in yourself. Then tap **Save**.
+
+Temperatures are in °C and wind in km/h; *wind from* is the direction the wind blows from. Tap **Edit** on an entry to change or delete it.
+
+<img src="guide/weather-section.png" width="300" alt="Weather in the round notes">
+
+- **Your location** is only sent to Open-Meteo to look up the weather. It works only when the app is opened over `https://`; otherwise use **Search**.
+- **Offline**, *Get weather* can't reach the service. Enter the weather by hand instead.
+- **Where the weather appears:** on the PDF, in the CSV export (and comes back on import), and on the Presentation cover.
 
 <img src="guide/locked.png" width="300" alt="A locked round">
 

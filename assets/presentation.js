@@ -296,8 +296,9 @@
         add('dk-cover', `
             <div class="dk-kicker">${esc(D.discipline.code)} · ${meta}</div>
             <h1 class="dk-title">${esc(title)}</h1>
-            <div class="dk-gag">${esc(coverGag(m))}</div>`,
-            `Squad: ${m.shooters.length} shooters, ${m.squad.shot} clays shot, ${m.squad.hits} hits (${fmtPct(m.squad.rate)}), ${m.squad.misses} misses.`);
+            <div class="dk-gag">${esc(coverGag(m))}</div>
+            ${D.weather ? `<div class="dk-weather">Conditions: ${esc(D.weather)}</div>` : ''}`,
+            `Squad: ${m.shooters.length} shooters, ${m.squad.shot} clays shot, ${m.squad.hits} hits (${fmtPct(m.squad.rate)}), ${m.squad.misses} misses.${D.weather ? `\nWeather: ${D.weather}` : ''}`);
 
         // 2. Squad
         const showCpsa = m.shooters.some(s => s.cpsa), showGun = m.shooters.some(s => s.gun), showCart = m.shooters.some(s => s.cartridges);
@@ -590,6 +591,7 @@
         .dk-kicker { font-family: 'Oswald', sans-serif; font-weight: 600; font-size: 32px; letter-spacing: 3px; text-transform: uppercase; color: #fb923c; }
         .dk-title { font-family: 'Oswald', 'Arial Narrow', sans-serif; font-weight: 700; font-size: 132px; line-height: 1.02; margin: 18px 0 28px; color: #fff7ed; text-transform: uppercase; }
         .dk-gag { font-size: 40px; color: #86efac; max-width: 1500px; }
+        .dk-weather { margin-top: 28px; font-size: 28px; color: #d6c7b8; max-width: 1600px; }
         .dk-grid { display: grid; align-items: stretch; font-size: 26px; }
         .dk-grid > div { padding: 12px 14px; border-bottom: 2px solid #3a2a20; display: flex; align-items: center; flex-wrap: wrap; column-gap: 12px; }
         .dk-grid > div.dk-stack { flex-direction: column; justify-content: center; }

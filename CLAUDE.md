@@ -23,7 +23,7 @@ ClayScorer Pro — a static, offline-capable Progressive Web App for scoring CPS
   - **Any user-visible change** (new/changed feature, control, label, default, behaviour): update `docs/USER_GUIDE.md` in the same change, and regenerate its screenshots (`docs/tools/generate-docs.sh guide`) if the UI they show changed. If a new feature deserves a screenshot, add it to `docs/tools/generate-guide-screenshots.js`.
   - **Any output change** (PDF print view, scorecard/presentations images, `generateExportGrid`, `exportPresentationsHtml`, clay descriptions, `#capture-*` / print CSS): regenerate `docs/example-outputs.pdf` (`docs/tools/generate-docs.sh examples`).
   - `docs/tools/generate-docs.sh` with no argument does both. Needs Docker only (~3–4 min); look at the results before committing.
-- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v35`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names. `scorer.js` also logs a `SCORER_BUILD` banner on load — bumping that string when you ship changes gives you a quick DevTools signal that the page is running the new code (not a stale SW-cached copy).
+- **When you change what's cached, bump `CACHE_NAME` in `service_worker.js`** (currently `clayscorer-v36`) so installed PWAs pick up the new bundle instead of serving stale cache. The `activate` handler deletes old cache names. `scorer.js` also logs a `SCORER_BUILD` banner on load — bumping that string when you ship changes gives you a quick DevTools signal that the page is running the new code (not a stale SW-cached copy).
 - The SW pre-caches same-origin files with `cache.addAll`. If you add new app shell assets, put them in `LOCAL_ASSETS`.
 
 ## Architecture
@@ -62,6 +62,7 @@ state = {
   ground, date, event, notes,
   shooters: [{ id, name, cpsa, class, gun?, cartridges? }],   // gear only stored when set
   deckTitle?,          // last Presentation title chosen (only stored once chosen)
+  weather?,            // { place?: { name, lat, lon }, entries: [{ id, time 'HH:MM', conditions, tempC, windKmh, windDir, gustKmh, source }] } — only stored once added
   stands:   [{ id, targets, extraClay, description, labels? }],
   hits:     { [shooterId]: { [standId]: [true|false|null, ...] } },
   activeIdx,
@@ -158,6 +159,7 @@ Every export shares the same filename stem (Show PDF › Share adds `.pdf`, the 
 - `assets/scorer.js` — shared scoring engine (state, mount, render, exports). All global `window.*` handlers used by inline `onclick`s are defined here.
 - `assets/scorer.css` — shared styles including print media, capture container, pair-stack, first-up glow, and discipline tiles.
 - `assets/icons.js` — original SVG icons (`clay`, `sporting`, `sportrap`, `compak`, `skeet`), loaded on every page before the app scripts. `ClayIcons.svg(name, cls)` returns markup (the scorer header uses `D.id`); elements with `data-clay-icon="name"` are filled on load (home/account headers, home tiles). Favicons/app icons are a separate design — an orange clay seen from above (fluted rim, ridge rings, domed centre) on the navy tile — with `assets/clay-icon.svg` as the master: `favicon.ico` (16/32/48 PNG-in-ICO), `assets/clay-icon.svg`, `assets/clay-180.png` (apple-touch), `assets/clay-192.png` / `clay-512.png` (manifest).
+- `assets/weather.js` — Round notes › Weather: the `#weather-section` list (rendered by `render()` via `ClayWeather.sectionHtml`) and the add/edit dialog. Location from `navigator.geolocation` (needs a secure context — https or localhost) or Open-Meteo's geocoding search (defaults to the ground name); "Get weather" calls Open-Meteo (live `current` within ±45 min of now today, hourly forecast API for recent/upcoming dates, archive API for >85 days ago; °C, km/h, WMO codes → conditions, `is_day` for Sunny vs Clear). Reads/writes the round only via `window.ClayScorerWeatherHost` (`get`/`set`/`round`). `ClayWeather.summary()` feeds the PDF `WEATHER:` row (`#p-weather-row`), the CSV `Weather` header line (JSON, re-imported by `parseCSV`) and the Presentation cover.
 - `assets/presentation.js` — the Presentation slide deck (see above). Loaded by each discipline page after `server-sync.js`.
 - `assets/server-sync.js` — sign-in panel (`#cloud-sync-panel`) and round sync. The scorer exposes a narrow `window.ClayScorerCloud` bridge (`getDiscipline`, `getCurrentState`, `getHistory`, `replaceHistory`, `refreshCurrentRoundFromHistory`, `saveCurrent`; sync adds `isSignedIn`); keep server-specific code out of the core scorer.
 - `users.html`, `assets/users.js` — account & user management page.

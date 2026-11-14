@@ -103,6 +103,10 @@ const META_POOL = [
         });
       }
       updateField('notes', 'Example round generated to illustrate the PDF and image outputs. Names and ground are fictitious.');
+      // Weather entries (typed, so the example doesn't depend on a live weather service)
+      ClayScorerWeatherHost.set({ place: { name: 'Example Shooting Ground', lat: 52.6, lon: -2.2 }, entries: [
+        { id: 'w1', time: '09:45', conditions: 'Overcast', tempC: 8, windKmh: 12, windDir: 'SW', gustKmh: 22, source: 'manual' },
+        { id: 'w2', time: '13:30', conditions: 'Showers', tempC: 10, windKmh: 19, windDir: 'W', gustKmh: 35, source: 'manual' }] });
       const fin = st();
       return { stands: fin.stands.length, targets: fin.stands.reduce((a, s) => a + s.targets + (s.extraClay ? 1 : 0), 0), described };
     }, { d, SHOOTERS, META_POOL });
