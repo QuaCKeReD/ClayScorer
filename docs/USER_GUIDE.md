@@ -203,7 +203,7 @@ The description builds itself as you go and is shown at the bottom of the window
 3. **Get weather** fills in the conditions, temperature, wind speed, wind direction and gusts for that place and time, from [Open-Meteo](https://open-meteo.com). It works for today, recent and past rounds, and up to about two weeks ahead.
 4. Check or change anything, or skip *Get weather* and fill the fields in yourself. Then tap **Save**.
 
-Temperatures are in °C and wind in km/h; *wind from* is the direction the wind blows from. Tap **Edit** on an entry to change or delete it.
+Temperatures are in °C and wind in mph; *wind from* is the direction the wind blows from. Tap **Edit** on an entry to change or delete it.
 
 <img src="guide/weather-section.png" width="300" alt="Weather in the round notes">
 

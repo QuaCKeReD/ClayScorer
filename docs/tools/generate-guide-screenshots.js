@@ -137,12 +137,12 @@ const SQUAD = [
   await p.setViewportSize(devices['iPhone 13'].viewport);
 
   // 6c. Weather: a typed entry (no network needed), then the notes section
-  await p.evaluate(() => ClayScorerWeatherHost.set({ entries: [{ id: 'w1', time: '10:15', conditions: 'Partly cloudy', tempC: 11, windKmh: 14, windDir: 'SW', gustKmh: 26, source: 'manual' }], place: { name: 'Example, England, GB', lat: 52.6, lon: -2.2 } }));
+  await p.evaluate(() => ClayScorerWeatherHost.set({ entries: [{ id: 'w1', time: '10:15', conditions: 'Partly cloudy', tempC: 11, windMph: 9, windDir: 'SW', gustMph: 16, source: 'manual' }], place: { name: 'Example, England, GB', lat: 52.6, lon: -2.2 } }));
   await scrollTo('#weather-section', 160);
   await p.locator('#weather-section button:has-text("+ Add weather")').click();
   await p.locator('#weather-dialog [data-wx-f="time"]').fill('14:30');
   await p.locator('#weather-dialog [data-wx-f="conditions"]').selectOption('Showers');
-  for (const [f, v] of [['tempC', '9'], ['windKmh', '22'], ['gustKmh', '38']]) { await p.locator(`#weather-dialog [data-wx-f="${f}"]`).fill(v); await p.locator(`#weather-dialog [data-wx-f="${f}"]`).dispatchEvent('change'); }
+  for (const [f, v] of [['tempC', '9'], ['windMph', '14'], ['gustMph', '24']]) { await p.locator(`#weather-dialog [data-wx-f="${f}"]`).fill(v); await p.locator(`#weather-dialog [data-wx-f="${f}"]`).dispatchEvent('change'); }
   await p.locator('#weather-dialog [data-wx-f="windDir"]').selectOption('W');
   await shot('weather-dialog');
   await p.locator('#weather-dialog [data-wx="save"]').click();

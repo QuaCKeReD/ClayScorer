@@ -2,12 +2,13 @@
  *
  * Weather entries are stored with the round as state.weather = { place?, entries: [...] }
  * (only once something is added, so older rounds keep their shape for sync). Each entry is
- * { id, time 'HH:MM', conditions, tempC, windKmh, windDir, gustKmh, source 'auto'|'manual' }.
+ * { id, time 'HH:MM', conditions, tempC, windMph, windDir, gustMph, source 'auto'|'manual' }
+ * (entries saved before mph were in windKmh / gustKmh; norm() converts them on read).
  *
  * "Get weather" uses Open-Meteo (free, no key, CORS-enabled): the forecast API for recent and
  * upcoming dates, the archive API for older ones, and its geocoding API to search for a place
  * by name. Location comes from the device (navigator.geolocation) or a place search. Units are
- * metric: °C and km/h. Talks to the scorer only through window.ClayScorerWeatherHost.
+ * °C for temperature and mph for wind. Talks to the scorer only through window.ClayScorerWeatherHost.
  */
 (function () {
     'use strict';
@@ -35,17 +36,27 @@
     }
     const compass = (deg) => (Number.isFinite(deg) ? COMPASS[Math.round((((deg % 360) + 360) % 360) / 22.5) % 16] : '');
     const round = (v) => (Number.isFinite(v) ? Math.round(v) : null);
+    // Older entries stored wind in km/h; present everything in mph.
+    const KMH_PER_MPH = 1.609344;
+    function norm(e) {
+        const out = { ...e };
+        if (!Number.isFinite(out.windMph) && Number.isFinite(e.windKmh)) out.windMph = Math.round(e.windKmh / KMH_PER_MPH);
+        if (!Number.isFinite(out.gustMph) && Number.isFinite(e.gustKmh)) out.gustMph = Math.round(e.gustKmh / KMH_PER_MPH);
+        delete out.windKmh; delete out.gustKmh;
+        return out;
+    }
 
-    // "10:30 · Partly cloudy · 12 °C · wind 18 km/h SW, gusts 30 km/h"
-    function describe(e) {
+    // "10:30 · Partly cloudy · 12 °C · wind 11 mph SW, gusts 19 mph"
+    function describe(entry) {
+        const e = norm(entry);
         const parts = [];
         if (e.time) parts.push(e.time);
         if (e.conditions) parts.push(e.conditions);
         if (Number.isFinite(e.tempC)) parts.push(`${e.tempC} °C`);
         let wind = '';
-        if (Number.isFinite(e.windKmh)) wind = `wind ${e.windKmh} km/h${e.windDir ? ` ${e.windDir}` : ''}`;
+        if (Number.isFinite(e.windMph)) wind = `wind ${e.windMph} mph${e.windDir ? ` ${e.windDir}` : ''}`;
         else if (e.windDir) wind = `wind from ${e.windDir}`;
-        if (Number.isFinite(e.gustKmh)) wind += `${wind ? ', ' : 'wind '}gusts ${e.gustKmh} km/h`;
+        if (Number.isFinite(e.gustMph)) wind += `${wind ? ', ' : 'wind '}gusts ${e.gustMph} mph`;
         if (wind) parts.push(wind);
         return parts.join(' · ');
     }
@@ -89,14 +100,14 @@
         const [th, tm] = String(time || '').split(':').map(Number);
         const now = new Date();
         if (age === 0 && Number.isFinite(th) && Math.abs((th * 60 + (tm || 0)) - (now.getHours() * 60 + now.getMinutes())) <= 45) {
-            const cur = (await getJson(`https://api.open-meteo.com/v1/forecast?latitude=${place.lat.toFixed(4)}&longitude=${place.lon.toFixed(4)}&current=${vars}&timezone=auto&wind_speed_unit=kmh`)).current;
+            const cur = (await getJson(`https://api.open-meteo.com/v1/forecast?latitude=${place.lat.toFixed(4)}&longitude=${place.lon.toFixed(4)}&current=${vars}&timezone=auto&wind_speed_unit=mph`)).current;
             if (cur) return {
-                conditions: conditionsFromCode(cur.weather_code, cur.is_day), tempC: round(cur.temperature_2m), windKmh: round(cur.wind_speed_10m),
-                windDir: compass(cur.wind_direction_10m), gustKmh: round(cur.wind_gusts_10m), hour: String(cur.time || '').slice(11, 16) || 'now'
+                conditions: conditionsFromCode(cur.weather_code, cur.is_day), tempC: round(cur.temperature_2m), windMph: round(cur.wind_speed_10m),
+                windDir: compass(cur.wind_direction_10m), gustMph: round(cur.wind_gusts_10m), hour: String(cur.time || '').slice(11, 16) || 'now'
             };
         }
         const base = age > 85 ? 'https://archive-api.open-meteo.com/v1/archive' : 'https://api.open-meteo.com/v1/forecast';
-        const data = await getJson(`${base}?latitude=${place.lat.toFixed(4)}&longitude=${place.lon.toFixed(4)}&hourly=${vars}&start_date=${day}&end_date=${day}&timezone=auto&wind_speed_unit=kmh`);
+        const data = await getJson(`${base}?latitude=${place.lat.toFixed(4)}&longitude=${place.lon.toFixed(4)}&hourly=${vars}&start_date=${day}&end_date=${day}&timezone=auto&wind_speed_unit=mph`);
         const h = data.hourly;
         if (!h || !h.time || !h.time.length) throw new Error('No weather found for that date.');
         const [hh, mm] = String(time || '12:00').split(':').map(Number);
@@ -109,9 +120,9 @@
         return {
             conditions: conditionsFromCode(code, h.is_day?.[idx]),
             tempC: temp,
-            windKmh: round(h.wind_speed_10m?.[idx]),
+            windMph: round(h.wind_speed_10m?.[idx]),
             windDir: compass(h.wind_direction_10m?.[idx]),
-            gustKmh: round(h.wind_gusts_10m?.[idx]),
+            gustMph: round(h.wind_gusts_10m?.[idx]),
             hour: h.time[idx].slice(11, 16)
         };
     }
@@ -147,7 +158,7 @@
 
     // ---------------------------------------------------------------- dialog
 
-    let draft = null;   // { id?, place, time, conditions, tempC, windKmh, windDir, gustKmh, source }
+    let draft = null;   // { id?, place, time, conditions, tempC, windMph, windDir, gustMph, source }
 
     const nowHHMM = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
     const numOrNull = (v) => { const n = parseFloat(String(v).replace(',', '.')); return Number.isFinite(n) ? Math.round(n) : null; };
@@ -159,8 +170,8 @@
         const round_ = h.round();
         const existing = entryId ? (w.entries || []).find(e => e.id === entryId) : null;
         draft = existing
-            ? { ...existing, place: w.place || null }
-            : { time: round_.date === todayIso() || !round_.date ? nowHHMM() : '10:00', conditions: '', tempC: null, windKmh: null, windDir: '', gustKmh: null, source: 'manual', place: w.place || null };
+            ? { ...norm(existing), place: w.place || null }
+            : { time: round_.date === todayIso() || !round_.date ? nowHHMM() : '10:00', conditions: '', tempC: null, windMph: null, windDir: '', gustMph: null, source: 'manual', place: w.place || null };
         let el = document.getElementById('weather-dialog');
         if (!el) { el = document.createElement('div'); el.id = 'weather-dialog'; el.className = 'no-print'; document.body.appendChild(el); }
         render(round_.ground || round_.event || '');
@@ -207,9 +218,9 @@
                     ${field('Conditions', `<select data-wx-f="conditions" class="${INPUT}"><option value="">—</option>${CONDITIONS.map(c => `<option ${draft.conditions === c ? 'selected' : ''}>${c}</option>`).join('')}</select>`)}
                     <div class="grid grid-cols-2 gap-2">
                         ${field('Temperature (°C)', `<input type="number" inputmode="decimal" step="1" data-wx-f="tempC" value="${draft.tempC ?? ''}" class="${INPUT}">`)}
-                        ${field('Wind (km/h)', `<input type="number" inputmode="numeric" step="1" min="0" data-wx-f="windKmh" value="${draft.windKmh ?? ''}" class="${INPUT}">`)}
+                        ${field('Wind (mph)', `<input type="number" inputmode="numeric" step="1" min="0" data-wx-f="windMph" value="${draft.windMph ?? ''}" class="${INPUT}">`)}
                         ${field('Wind from', `<select data-wx-f="windDir" class="${INPUT}"><option value="">—</option>${COMPASS.map(c => `<option ${draft.windDir === c ? 'selected' : ''}>${c}</option>`).join('')}</select>`)}
-                        ${field('Gusts (km/h, optional)', `<input type="number" inputmode="numeric" step="1" min="0" data-wx-f="gustKmh" value="${draft.gustKmh ?? ''}" class="${INPUT}">`)}
+                        ${field('Gusts (mph, optional)', `<input type="number" inputmode="numeric" step="1" min="0" data-wx-f="gustMph" value="${draft.gustMph ?? ''}" class="${INPUT}">`)}
                     </div>
                     <div class="flex gap-2 justify-between pt-1">
                         ${editing ? `<button type="button" data-wx="delete" class="text-sm font-bold px-3 py-2 rounded-lg border border-red-300 text-red-700 bg-white">Delete</button>` : '<span></span>'}
@@ -241,7 +252,7 @@
         const f = e.target.dataset.wxF;
         if (!f || !draft) return;
         const v = e.target.value;
-        draft[f] = ['tempC', 'windKmh', 'gustKmh'].includes(f) ? numOrNull(v) : v;
+        draft[f] = ['tempC', 'windMph', 'gustMph'].includes(f) ? numOrNull(v) : v;
         draft.source = 'manual';
     }
 
@@ -287,9 +298,9 @@
             status('Getting the weather…');
             try {
                 const wx = await fetchWeather(draft.place, host().round().date, time);
-                Object.assign(draft, { conditions: wx.conditions, tempC: wx.tempC, windKmh: wx.windKmh, windDir: wx.windDir, gustKmh: wx.gustKmh, source: 'auto' });
+                Object.assign(draft, { conditions: wx.conditions, tempC: wx.tempC, windMph: wx.windMph, windDir: wx.windDir, gustMph: wx.gustMph, source: 'auto' });
                 const set = (f, v) => { const i = document.querySelector(`#weather-dialog [data-wx-f="${f}"]`); if (i) i.value = v ?? ''; };
-                set('conditions', wx.conditions); set('tempC', wx.tempC); set('windKmh', wx.windKmh); set('windDir', wx.windDir); set('gustKmh', wx.gustKmh);
+                set('conditions', wx.conditions); set('tempC', wx.tempC); set('windMph', wx.windMph); set('windDir', wx.windDir); set('gustMph', wx.gustMph);
                 status(`Weather for ${wx.hour} at ${draft.place.name}. Check it and press Save.`);
             } catch (err) {
                 status(navigator.onLine ? err.message : 'You’re offline — enter the weather by hand.', 'error');
@@ -308,10 +319,10 @@
             const entry = {
                 id: draft.id || `w${Date.now().toString(36)}`,
                 time, conditions: draft.conditions || '',
-                tempC: draft.tempC ?? null, windKmh: draft.windKmh ?? null, windDir: draft.windDir || '', gustKmh: draft.gustKmh ?? null,
+                tempC: draft.tempC ?? null, windMph: draft.windMph ?? null, windDir: draft.windDir || '', gustMph: draft.gustMph ?? null,
                 source: draft.source || 'manual'
             };
-            if (!entry.conditions && entry.tempC === null && entry.windKmh === null && !entry.windDir) return status('Enter some weather, or press Get weather.', 'error');
+            if (!entry.conditions && entry.tempC === null && entry.windMph === null && !entry.windDir) return status('Enter some weather, or press Get weather.', 'error');
             const w = host().get() || {};
             const entries = (w.entries || []).filter(x => x.id !== entry.id).concat(entry);
             const next = { entries };
