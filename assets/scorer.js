@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-13 (clay icons)';
+    const SCORER_BUILD = 'scorer 2026-11-14 (export viewers: share + print)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -1677,7 +1677,7 @@
         </div>`;
     }
 
-    window.exportToPDF = () => {
+    function fillPrintView() {
         document.getElementById('p-ground').innerText = state.ground || 'N/A';
         document.getElementById('p-date').innerText = yyyymmdd(state.date) || 'N/A';
         document.getElementById('p-event').innerText = state.event || '';
@@ -1687,7 +1687,14 @@
         document.getElementById('p-discipline').innerText = D.name;
         generateExportGrid('p-grid');
         document.getElementById('p-presentations').innerHTML = exportPresentationsHtml(false);
+    }
 
+    // Only one print mode at a time: afterprint (which normally clears them) isn't reliable everywhere.
+    const clearPrintModes = () => document.body.classList.remove('print-images', 'print-deck');
+
+    window.exportToPDF = () => {
+        clearPrintModes();
+        fillPrintView();
         // The browser derives the print dialog's suggested filename from document.title.
         // Swap it, print, then restore on the afterprint event so the tab title stays clean.
         const prevTitle = document.title;
@@ -1758,50 +1765,204 @@
         catch (e) { console.error(e); notify('Could not create the scorecard image.', 'error'); }
     };
 
-    // In-app viewer: renders the same images and shows them full screen. Tap an image to zoom.
-    let viewerFiles = [];
-    let viewerUrls = [];
-    window.showScorecard = async () => {
-        const viewer = document.getElementById('scorecard-viewer');
-        const body = document.getElementById('scorecard-viewer-body');
-        viewer.classList.remove('hidden');
-        viewer.classList.add('flex');
-        document.body.style.overflow = 'hidden';
-        body.innerHTML = '<div class="m-auto text-sm font-semibold text-slate-200 flex items-center gap-2"><i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Creating scorecard…</div>';
-        if (window.lucide) lucide.createIcons();
+    // ---- Minimal PDF writer: one full-page JPEG per page (used for sharing PDFs) ----
+    // Pages are canvases; each becomes a DCT-encoded image XObject stretched over a page of
+    // wPt × hPt points. Plain ASCII structure, byte offsets tracked for the xref table.
+    async function pdfFromCanvases(canvases, wPt, hPt, quality = 0.88) {
+        const enc = new TextEncoder();
+        const chunks = [];
+        const offsets = [];
+        let size = 0;
+        const push = (part) => { const b = typeof part === 'string' ? enc.encode(part) : part; chunks.push(b); size += b.length; };
+        const obj = (n, body) => { offsets[n] = size; push(`${n} 0 obj\n`); body(); push('\nendobj\n'); };
+        const jpegs = [];
+        for (const c of canvases) {
+            const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', quality));
+            jpegs.push({ bytes: new Uint8Array(await blob.arrayBuffer()), w: c.width, h: c.height });
+        }
+        const n = jpegs.length;
+        const pageNum = (i) => 3 + i * 3;           // page, contents, image objects per page
+        push('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
+        obj(1, () => push('<< /Type /Catalog /Pages 2 0 R >>'));
+        obj(2, () => push(`<< /Type /Pages /Count ${n} /Kids [${jpegs.map((_, i) => `${pageNum(i)} 0 R`).join(' ')}] >>`));
+        jpegs.forEach((img, i) => {
+            const p = pageNum(i);
+            const content = `q ${wPt.toFixed(2)} 0 0 ${hPt.toFixed(2)} 0 0 cm /Im0 Do Q`;
+            obj(p, () => push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${wPt.toFixed(2)} ${hPt.toFixed(2)}] /Resources << /XObject << /Im0 ${p + 2} 0 R >> >> /Contents ${p + 1} 0 R >>`));
+            obj(p + 1, () => { push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`); });
+            obj(p + 2, () => {
+                push(`<< /Type /XObject /Subtype /Image /Width ${img.w} /Height ${img.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.bytes.length} >>\nstream\n`);
+                push(img.bytes);
+                push('\nendstream');
+            });
+        });
+        const total = 3 + n * 3;
+        const xref = size;
+        push(`xref\n0 ${total}\n0000000000 65535 f \n`);
+        for (let i = 1; i < total; i++) push(`${String(offsets[i]).padStart(10, '0')} 00000 n \n`);
+        push(`trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+        return new Blob(chunks, { type: 'application/pdf' });
+    }
+    const A4_LANDSCAPE_PT = [841.89, 595.28];
+    const A4_LANDSCAPE_PX = [1123, 794];       // at 96 dpi
+
+    // ---- The Print/PDF scorecard rendered as A4-landscape page images ----
+    // Clones the filled #print-view into off-screen pages styled like the print stylesheet
+    // (.print-sim mirrors the @media print rules), paginating the presentations list by stand
+    // block so nothing is cut in half.
+    async function buildPdfPages() {
+        fillPrintView();
+        const [PW, PH] = A4_LANDSCAPE_PX;
+        const host = document.createElement('div');
+        host.style.cssText = 'position:absolute; left:-9999px; top:0;';
+        document.body.appendChild(host);
+        const newPage = () => {
+            const pg = document.createElement('div');
+            pg.className = 'print-sim';
+            pg.style.cssText = `width:${PW}px; height:${PH}px; box-sizing:border-box; padding:19px; background:#fff; overflow:hidden;`;
+            host.appendChild(pg);
+            return pg;
+        };
+        const stripIds = (el) => { el.removeAttribute('id'); el.querySelectorAll('[id]').forEach(e => e.removeAttribute('id')); return el; };
         try {
-            viewerFiles = await buildScorecardImages();
+            const pv = document.getElementById('print-view');
+            // Page 1: the scorecard
+            const p1 = newPage();
+            Array.from(pv.children).forEach(ch => { if (ch.id !== 'p-presentations') p1.appendChild(stripIds(ch.cloneNode(true))); });
+            const pages = [p1];
+            // Presentations pages
+            const pres = document.getElementById('p-presentations').firstElementChild;
+            if (pres) {
+                const parts = Array.from(pres.children);
+                const header = parts.filter(el => el.classList.contains('print-header') || el.classList.contains('print-event'));
+                const list = parts.find(el => !header.includes(el) && el.children.length && el.querySelector('ul'));
+                const footer = parts[parts.length - 1] !== list ? parts[parts.length - 1] : null;
+                const blocks = list ? Array.from(list.children) : [];
+                let pg = null, listEl = null;
+                const start = () => {
+                    pg = newPage(); pages.push(pg);
+                    header.forEach(h => pg.appendChild(h.cloneNode(true)));
+                    listEl = list.cloneNode(false); pg.appendChild(listEl);
+                };
+                start();
+                blocks.forEach(b => {
+                    const el = b.cloneNode(true);
+                    listEl.appendChild(el);
+                    if (pg.scrollHeight > PH && listEl.children.length > 1) { el.remove(); start(); listEl.appendChild(el); }
+                });
+                if (footer) {
+                    const f = footer.cloneNode(true);
+                    pg.appendChild(f);
+                    if (pg.scrollHeight > PH) { f.remove(); start(); pg.appendChild(f); }
+                }
+            }
+            const canvases = [];
+            for (const pg of pages) {
+                host.style.position = 'fixed'; host.style.left = '0'; host.style.zIndex = '-1';
+                pages.forEach(x => { x.style.display = x === pg ? 'block' : 'none'; });
+                canvases.push(await html2canvas(pg, { scale: 2, backgroundColor: '#ffffff', useCORS: true, width: PW, height: PH }));
+            }
+            return canvases;
+        } finally {
+            host.remove();
+        }
+    }
+
+    // ---- In-app viewer shared by Show scorecard and Show PDF: page images + Share / Print ----
+    let viewer = null;   // { kind, files, urls, canvases }
+    const canvasUrl = (c) => new Promise(res => c.toBlob(b => res(URL.createObjectURL(b)), 'image/png'));
+
+    async function openViewer(kind) {
+        const el = document.getElementById('scorecard-viewer');
+        const body = document.getElementById('scorecard-viewer-body');
+        const isPdf = kind === 'pdf';
+        document.getElementById('doc-viewer-title').innerHTML = `${isPdf ? 'PDF' : 'Scorecard'} <span class="font-normal text-slate-400">· tap ${isPdf ? 'a page' : 'an image'} to zoom</span>`;
+        el.classList.remove('hidden');
+        el.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+        body.innerHTML = `<div class="m-auto text-sm font-semibold text-slate-200 flex items-center gap-2"><i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Creating ${isPdf ? 'PDF' : 'scorecard'}…</div>`;
+        if (window.lucide) lucide.createIcons();
+        closeViewerResources();
+        viewer = { kind, files: [], urls: [], canvases: [] };
+        const mine = viewer;
+        let captions;
+        try {
+            if (isPdf) {
+                mine.canvases = await buildPdfPages();
+                mine.urls = await Promise.all(mine.canvases.map(canvasUrl));
+                captions = mine.canvases.map((_, i) => `Page ${i + 1} of ${mine.canvases.length}`);
+            } else {
+                mine.files = await buildScorecardImages();
+                mine.urls = mine.files.map(f => URL.createObjectURL(f));
+                captions = mine.files.map((_, i) => (i === 0 ? 'Scorecard' : 'Presentations'));
+            }
         } catch (e) {
             console.error(e);
-            body.innerHTML = '<div class="m-auto text-sm font-semibold text-red-200">Could not create the scorecard image.</div>';
+            body.innerHTML = `<div class="m-auto text-sm font-semibold text-red-200">Could not create the ${isPdf ? 'PDF' : 'scorecard'}.</div>`;
             return;
         }
-        if (viewer.classList.contains('hidden')) return;   // closed while rendering
-        viewerUrls.forEach(u => URL.revokeObjectURL(u));
-        viewerUrls = viewerFiles.map(f => URL.createObjectURL(f));
-        body.innerHTML = viewerUrls.map((url, i) => `<figure class="space-y-1">
-            <figcaption class="text-[11px] font-bold uppercase tracking-wider text-slate-300">${i === 0 ? 'Scorecard' : 'Presentations'}</figcaption>
+        if (viewer !== mine || el.classList.contains('hidden')) return;   // closed or replaced while rendering
+        body.innerHTML = mine.urls.map((url, i) => `<figure class="space-y-1">
+            <figcaption class="text-[11px] font-bold uppercase tracking-wider text-slate-300">${captions[i]}</figcaption>
             <div class="overflow-x-auto rounded-lg bg-white shadow-lg">
-                <img src="${url}" alt="${i === 0 ? 'Scorecard' : 'Clay presentations'}" onclick="this.classList.toggle('max-w-none'); this.classList.toggle('w-[250%]')" class="block w-full h-auto cursor-zoom-in">
+                <img src="${url}" alt="${escapeHtml(captions[i])}" onclick="this.classList.toggle('max-w-none'); this.classList.toggle('w-[250%]')" class="block w-full h-auto cursor-zoom-in">
             </div>
         </figure>`).join('');
-    };
+    }
+
+    function closeViewerResources() {
+        if (viewer) viewer.urls.forEach(u => URL.revokeObjectURL(u));
+        viewer = null;
+    }
+
+    window.showScorecard = () => openViewer('scorecard');
+    window.showPdf = () => openViewer('pdf');
 
     window.closeScorecard = () => {
-        const viewer = document.getElementById('scorecard-viewer');
-        if (!viewer || viewer.classList.contains('hidden')) return;
-        viewer.classList.add('hidden');
-        viewer.classList.remove('flex');
+        const el = document.getElementById('scorecard-viewer');
+        if (!el || el.classList.contains('hidden')) return;
+        el.classList.add('hidden');
+        el.classList.remove('flex');
         document.body.style.overflow = '';
         document.getElementById('scorecard-viewer-body').innerHTML = '';
-        viewerUrls.forEach(u => URL.revokeObjectURL(u));
-        viewerUrls = [];
+        closeViewerResources();
     };
 
-    window.shareScorecardFromViewer = async () => {
-        try { await shareOrDownload(viewerFiles.length ? viewerFiles : await buildScorecardImages()); }
-        catch (e) { console.error(e); notify('Could not share the scorecard.', 'error'); }
+    window.shareFromViewer = async () => {
+        if (!viewer) return;
+        try {
+            if (viewer.kind === 'pdf') {
+                const canvases = viewer.canvases.length ? viewer.canvases : await buildPdfPages();
+                const blob = await pdfFromCanvases(canvases, ...A4_LANDSCAPE_PT);
+                await shareOrDownload([new File([blob], `${filenameStem()}.pdf`, { type: 'application/pdf' })]);
+            } else {
+                await shareOrDownload(viewer.files.length ? viewer.files : await buildScorecardImages());
+            }
+        } catch (e) { console.error(e); notify('Could not share it.', 'error'); }
     };
+
+    window.printFromViewer = () => {
+        if (!viewer) return;
+        if (viewer.kind === 'pdf') return window.exportToPDF();   // vector print of the real print view
+        printImages(viewer.urls, filenameStem());
+    };
+
+    // Print a set of images, one per A4-landscape page (Show scorecard › Print).
+    function printImages(urls, title) {
+        let host = document.getElementById('image-print');
+        if (!host) { host = document.createElement('div'); host.id = 'image-print'; document.body.appendChild(host); }
+        host.innerHTML = urls.map(u => `<div class="ip-page"><img src="${u}" alt=""></div>`).join('');
+        const imgs = Array.from(host.querySelectorAll('img'));
+        Promise.all(imgs.map(i => (i.complete ? null : new Promise(res => { i.onload = i.onerror = res; })))).then(() => {
+            const prevTitle = document.title;
+            document.title = title;
+            clearPrintModes();
+            document.body.classList.add('print-images');
+            const restore = () => { document.body.classList.remove('print-images'); document.title = prevTitle; window.removeEventListener('afterprint', restore); };
+            window.addEventListener('afterprint', restore);
+            window.print();
+        });
+    }
 
     function mountSkeleton() {
         const setupStand = D.editable.standCount
@@ -1872,21 +2033,17 @@
                     </div>
                     <div id="export-dropdown" class="hidden pointer-events-auto absolute right-2 top-2 w-60">
                         <div class="bg-white text-slate-900 rounded-xl shadow-xl border border-slate-200 overflow-hidden p-2">
-                            <button onclick="closeHeaderMenus(); exportToPDF();" class="${MENU_ITEM}">
-                                <i data-lucide="printer" class="w-4 h-4 text-slate-500"></i>
-                                Print / save as PDF
-                            </button>
                             <button onclick="closeHeaderMenus(); showScorecard();" class="${MENU_ITEM}">
                                 <i data-lucide="eye" class="w-4 h-4 text-slate-500"></i>
                                 Show scorecard
                             </button>
+                            <button onclick="closeHeaderMenus(); showPdf();" class="${MENU_ITEM}">
+                                <i data-lucide="file-text" class="w-4 h-4 text-slate-500"></i>
+                                Show PDF
+                            </button>
                             <button onclick="closeHeaderMenus(); window.ClayScorerPresentation ? ClayScorerPresentation.open() : notify('Presentation is still loading — try again in a moment.');" class="${MENU_ITEM}">
                                 <i data-lucide="presentation" class="w-4 h-4 text-slate-500"></i>
-                                Presentation
-                            </button>
-                            <button onclick="closeHeaderMenus(); shareAsImage();" class="${MENU_ITEM}">
-                                <i data-lucide="image" class="w-4 h-4 text-slate-500"></i>
-                                Share scorecard image
+                                Show presentation
                             </button>
                             <button onclick="closeHeaderMenus(); downloadCSV();" class="${MENU_ITEM}">
                                 <i data-lucide="file-spreadsheet" class="w-4 h-4 text-slate-500"></i>
@@ -2052,14 +2209,15 @@
             </div>
         </nav>
         <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-        <div id="scorecard-viewer" class="hidden fixed inset-0 z-[70] bg-slate-900 flex-col no-print" role="dialog" aria-modal="true" aria-label="Scorecard">
+        <div id="scorecard-viewer" class="hidden fixed inset-0 z-[70] bg-slate-900 flex-col no-print" role="dialog" aria-modal="true" aria-label="Scorecard viewer">
             <div class="flex items-center justify-between gap-2 px-3 py-2 bg-slate-900 border-b border-slate-700" style="padding-top: max(0.5rem, env(safe-area-inset-top));">
                 <div class="min-w-0">
                     <div class="text-[11px] text-orange-400 font-black uppercase tracking-widest leading-none">${D.code}</div>
-                    <div class="text-sm font-bold text-white truncate">Scorecard <span class="font-normal text-slate-400">· tap image to zoom</span></div>
+                    <div id="doc-viewer-title" class="text-sm font-bold text-white truncate">Scorecard</div>
                 </div>
                 <div class="flex items-center gap-2 flex-shrink-0">
-                    <button onclick="shareScorecardFromViewer()" class="${BTN_SMALL} bg-orange-500 text-white border-orange-500 inline-flex items-center gap-1"><i data-lucide="share-2" class="w-3.5 h-3.5"></i> Share</button>
+                    <button onclick="shareFromViewer()" class="${BTN_SMALL} bg-orange-500 text-white border-orange-500 inline-flex items-center gap-1"><i data-lucide="share-2" class="w-3.5 h-3.5"></i> Share</button>
+                    <button onclick="printFromViewer()" class="${BTN_SMALL} bg-slate-700 text-white border-slate-600 inline-flex items-center gap-1"><i data-lucide="printer" class="w-3.5 h-3.5"></i> Print</button>
                     <button onclick="closeScorecard()" class="${BTN_SMALL} bg-white text-slate-900 border-white">Close</button>
                 </div>
             </div>
@@ -2697,7 +2855,9 @@
             if (t) state.deckTitle = t; else delete state.deckTitle;
             save();
         },
-        notify: (m, tone) => notify(m, tone)
+        notify: (m, tone) => notify(m, tone),
+        pdfFromCanvases: (canvases, wPt, hPt) => pdfFromCanvases(canvases, wPt, hPt),
+        shareFiles: (files) => shareOrDownload(files)
     };
 
     document.addEventListener('DOMContentLoaded', () => {

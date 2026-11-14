@@ -103,6 +103,11 @@ const SQUAD = [
   await p.waitForSelector('#scorecard-viewer-body img', { timeout: 20000 });
   await shot('scorecard-viewer');
   await p.evaluate(() => closeScorecard());
+  await p.locator('#export-menu-btn').click();
+  await p.locator('button:has-text("Show PDF")').click();
+  await p.waitForSelector('#scorecard-viewer-body img', { timeout: 30000 });
+  await shot('pdf-viewer');
+  await p.evaluate(() => closeScorecard());
 
   // 6b. Presentation: fill in the rest of the round, then the title picker and the slideshow
   await p.evaluate(() => {

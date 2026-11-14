@@ -51,7 +51,7 @@ If a discipline has a round in progress, its tile shows **Continue: …** with t
 | Orange logo | Back to the discipline list. Each discipline has its own icon: a crossing clay (Sporting), a clay rising from a trap (Sportrap), a clay over five stands (Compak), high and low houses (Skeet) |
 | **History** (box icon + count) | Saved rounds, Import CSV, New round — see [Round history](#7-round-history) |
 | **Cloud** | Sign in and sync — see [Signing in and syncing](#9-signing-in-and-syncing) |
-| **Export** (orange) | Print/PDF, Show scorecard, Share image, CSV — see [Exporting and sharing](#8-exporting-and-sharing) |
+| **Export** (orange) | Show scorecard, Show PDF, Show presentation, Download CSV — see [Exporting and sharing](#8-exporting-and-sharing) |
 | **Lock** | Lock the round so scores can't be changed |
 
 The thin orange bar under the header shows how much of the round has been shot.
@@ -235,11 +235,20 @@ A round's identity is its **ground + date + event**. If you change any of these,
 
 Tap the orange **Export** button:
 
-- **Print / save as PDF.** Opens the print dialog with a printable scorecard: ground, discipline, date, event, every shooter's hits and misses, totals, notes and a signature line. If any clays are described, the presentations follow on a separate page. To get a PDF file, choose *Save as PDF* in the print dialog.
-- **Show scorecard.** Shows the scorecard image inside the app, plus a presentations image if any clays are described. Tap an image to zoom in and scroll; tap **Share** to send it, or **Close** to go back.
-- **Share scorecard image.** Creates the same image(s) and opens your phone's share sheet (Messages, WhatsApp, email…). On a computer the images download instead.
-- **Presentation.** A slide deck about the round, with stats, charts, awards and some friendly roasting (see [Presentation](#presentation) below).
+- **Show scorecard.** The scorecard as an image, plus a presentations image if any clays are described.
+- **Show PDF.** The printable scorecard as A4 landscape pages: ground, discipline, date, event, every shooter's hits and misses, totals, notes and a signature line. If any clays are described, the presentations follow on their own pages.
+- **Show presentation.** A slide deck about the round, with stats, charts, awards and some friendly roasting (see [Presentation](#presentation) below).
 - **Download CSV.** A spreadsheet-friendly file with the round details, per-stand totals and every shot. It can be imported again later (see [Round history](#7-round-history)).
+
+The first three open full screen inside the app. Tap an image or page to zoom in and scroll. Each viewer has the same buttons:
+
+| Button | Show scorecard | Show PDF | Show presentation |
+|---|---|---|---|
+| **Share** | Sends the image(s) | Sends a `.pdf` file | Sends the slides as a `.pdf` file |
+| **Print** | Prints the image(s), one per page | Opens the print dialog with the scorecard (choose *Save as PDF* there for a sharper file) | Prints one slide per page |
+| **Close** | Back to scoring | Back to scoring | Back to scoring |
+
+**Share** opens your phone's share sheet (Messages, WhatsApp, email…); on a computer the file downloads instead.
 
 How the scorecards look:
 
@@ -252,15 +261,17 @@ See [example-outputs.pdf](example-outputs.pdf) for full examples of every discip
 
 <img src="guide/scorecard-viewer.png" width="300" alt="Show scorecard viewer">
 
+<img src="guide/pdf-viewer.png" width="300" alt="Show PDF viewer">
+
 ### Presentation
 
-**Export › Presentation** turns the current round into a 16:9 slide deck. It works for every discipline, and it's built from the round's scores, so score some targets first.
+**Export › Show presentation** turns the current round into a 16:9 slide deck. It works for every discipline, and it's built from the round's scores, so score some targets first.
 
 <img src="guide/presentation-picker.png" width="300" alt="Choosing a presentation title">
 
 1. **Pick a title.** The app suggests three, made from the date, the ground and how the shoot went (e.g. *20261103 The Wergs Wobble*), or you can type your own. The title you choose is remembered with the round.
-2. **View slides** opens a full-screen slideshow. Swipe, or use **Prev** / **Next**, to move between slides; on a computer the arrow keys work too. **Notes** shows the speaker notes for each slide, with the raw numbers behind it. The slides are easier to read with the phone turned sideways.
-3. **Save as PDF**, here or from the slideshow, prints the deck one slide per page. Choose *Save as PDF* in the print dialog.
+2. **Show slides** opens a full-screen slideshow. Swipe, or use **Prev** / **Next**, to move between slides; on a computer the arrow keys work too. **Notes** shows the speaker notes for each slide, with the raw numbers behind it. The slides are easier to read with the phone turned sideways.
+3. **Share** sends the deck as a 16:9 `.pdf` file, one slide per page. **Print** prints it one slide per page; choose *Save as PDF* in the print dialog for a sharper file.
 
 <img src="guide/presentation-viewer.png" width="600" alt="Presentation slideshow on a phone held sideways">
 

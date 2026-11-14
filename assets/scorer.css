@@ -36,6 +36,29 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; m
     .sig-line { border-top: 1pt solid black; width: 200pt; text-align: center; padding-top: 4pt; font-size: 8pt; }
 }
 
+/* Screen copy of the @media print rules, used to render the Print/PDF scorecard into page
+   images for Export › Show PDF (buildPdfPages in scorer.js). Keep in step with the block above. */
+.print-sim { font-family: "Courier New", Courier, monospace; color: black; }
+.print-sim table { width: 100% !important; border-collapse: collapse !important; border: 1.5pt solid black !important; table-layout: fixed; }
+.print-sim th, .print-sim td { border: 0.35pt solid #9ca3af !important; padding: 0 !important; color: black !important; text-align: center !important; vertical-align: middle !important; overflow: hidden; height: 30px; }
+.print-sim .print-header { display: flex; justify-content: space-between; border-bottom: 2pt solid black; padding-bottom: 4pt; margin-bottom: 4pt; font-size: 11pt; }
+.print-sim .print-event { text-align: center; font-size: 10pt; font-style: italic; font-weight: bold; padding: 2pt 0 6pt; margin-bottom: 4pt; border-bottom: 0.5pt solid #888; }
+.print-sim .print-notes { margin-top: 10pt; font-size: 9pt; }
+.print-sim .signature-section { margin-top: 20pt; }
+.print-sim .sig-line { border-top: 1pt solid black; width: 200pt; text-align: center; padding-top: 4pt; font-size: 8pt; }
+
+/* Show scorecard › Print: images only, one per A4-landscape page. */
+#image-print { display: none; }
+@page imgpage { size: A4 landscape; margin: 8mm; }
+@media print {
+    body.print-images { margin: 0 !important; padding: 0 !important; }
+    body.print-images > *:not(#image-print) { display: none !important; }
+    body.print-images #image-print { display: block !important; }
+    #image-print .ip-page { page: imgpage; break-after: page; page-break-after: always; }
+    #image-print .ip-page:last-child { break-after: auto; page-break-after: auto; }
+    #image-print img { display: block; width: 100%; height: auto; max-height: 190mm; object-fit: contain; }
+}
+
 #capture-container, #capture-presentations {
     position: absolute; left: -9999px; top: 0; width: 1200px; background: white; padding: 40px; color: black; font-family: "Courier New", Courier, monospace;
 }

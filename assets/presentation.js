@@ -718,8 +718,7 @@
             <label class="dkp-opt"><input type="radio" name="dkp-title" value="__custom"> <input type="text" id="dkp-custom" placeholder="Your own title" value=""></label>
             <div class="dkp-actions">
                 <button type="button" data-act="cancel">Cancel</button>
-                <button type="button" data-act="pdf" class="dkp-orange">Save as PDF</button>
-                <button type="button" data-act="view" class="dkp-primary">View slides</button>
+                <button type="button" data-act="view" class="dkp-primary">Show slides</button>
             </div></div>`;
         document.body.appendChild(picker);
         const custom = picker.querySelector('#dkp-custom');
@@ -736,8 +735,7 @@
             const title = chosen();
             window.ClayScorerDeck.setDeckTitle(title);
             picker.remove();
-            if (act === 'view') view(m, title);
-            else printDeck(m, title);
+            view(m, title);
         });
     }
 
@@ -753,7 +751,8 @@
             <div class="dkv-bar">
                 <div class="dkv-title">${esc(title)}</div>
                 <button type="button" data-act="notes" aria-pressed="false">Notes</button>
-                <button type="button" data-act="pdf" class="dkv-primary">PDF</button>
+                <button type="button" data-act="share" class="dkv-primary">Share</button>
+                <button type="button" data-act="print">Print</button>
                 <button type="button" data-act="close">Close</button>
             </div>
             <div class="dkv-stage"><div class="dkv-frame"></div></div>
@@ -770,7 +769,8 @@
             if (act === 'close') close();
             else if (act === 'prev') go(-1);
             else if (act === 'next') go(1);
-            else if (act === 'pdf') printDeck(m, title);
+            else if (act === 'print') printDeck(m, title);
+            else if (act === 'share') shareDeck(m, title, e.target.closest('button'));
             else if (act === 'notes') { current.notes = !current.notes; e.target.setAttribute('aria-pressed', String(current.notes)); show(); }
         });
         let x0 = null;
@@ -833,6 +833,34 @@
         current = null;
     }
 
+    // Share: render every slide to an image and wrap them in a 16:9 PDF (one slide per page).
+    async function shareDeck(m, title, btn) {
+        const bridge = window.ClayScorerDeck;
+        if (!window.html2canvas || !bridge?.pdfFromCanvases) return;
+        const label = btn ? btn.textContent : '';
+        if (btn) { btn.disabled = true; btn.textContent = 'Preparing…'; }
+        const host = document.createElement('div');
+        host.style.cssText = `position:fixed; left:0; top:0; width:${W}px; height:${H}px; z-index:-1; overflow:hidden;`;
+        document.body.appendChild(host);
+        try {
+            if (document.fonts?.load) await Promise.all(["700 40px 'Oswald'", "600 40px 'Oswald'", "400 24px 'DM Sans'", "700 24px 'DM Sans'"].map(f => document.fonts.load(f)));
+            const slides = buildSlides(m, title);
+            const canvases = [];
+            for (let i = 0; i < slides.length; i++) {
+                host.innerHTML = slideHtml(slides[i], i, slides.length, title);
+                canvases.push(await window.html2canvas(host.firstElementChild, { scale: 0.75, width: W, height: H, backgroundColor: null, useCORS: true }));
+            }
+            const blob = await bridge.pdfFromCanvases(canvases, 841.89, 473.56);
+            await bridge.shareFiles([new File([blob], `${m.data.filenameStem}_presentation.pdf`, { type: 'application/pdf' })]);
+        } catch (e) {
+            console.error(e);
+            bridge.notify('Could not create the presentation PDF.', 'error');
+        } finally {
+            host.remove();
+            if (btn) { btn.disabled = false; btn.textContent = label; }
+        }
+    }
+
     async function printDeck(m, title) {
         ensureStyles();
         const slides = buildSlides(m, title);
@@ -845,6 +873,7 @@
         const prevTitle = document.title;
         const fileTitle = `${m.data.filenameStem}_presentation`;
         document.title = fileTitle;
+        document.body.classList.remove('print-images');
         document.body.classList.add('print-deck');
         const restore = () => {
             document.body.classList.remove('print-deck');
@@ -855,5 +884,5 @@
         window.print();
     }
 
-    window.ClayScorerPresentation = { open, analyse, titleSuggestions, buildSlides, _view: view, _print: printDeck, _model: model };
+    window.ClayScorerPresentation = { open, analyse, titleSuggestions, buildSlides, _view: view, _print: printDeck, _share: shareDeck, _model: model };
 })();
