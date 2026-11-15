@@ -1,7 +1,8 @@
 /* ClayScorer — Presentation deck (Export › Presentation).
  *
  * Builds a 16:9 slide deck from the current round: cover, squad, podium, milestones,
- * stand-by-stand grid, hit-rate and running-total charts, barrels, streaks, stand stories,
+ * stand-by-stand grid, hit-rate and running-total charts, barrels, clay types (from the clay
+ * presentation descriptions), streaks, stand stories,
  * awards, a score check and a closing slide. Every number is computed here from the round
  * data (window.ClayScorerDeck.getData() in scorer.js); humour lines are templates driven by
  * those numbers — nothing is invented. Viewed in an in-app slideshow or printed to PDF
@@ -26,6 +27,20 @@
 
     // ---------------------------------------------------------------- analysis
 
+    const RANGES = ['Close', 'Medium', 'Far'];
+    const RANGE_OF = { '0-5': 'Close', '5-10': 'Close', '10-15': 'Medium', '15-20': 'Medium', '20-30': 'Far', '30+': 'Far' };
+    const TYPE_PLURAL = { Crosser: 'crossers', Teal: 'teal', Crow: 'crows', Driven: 'driven birds', Overhead: 'overheads', Looper: 'loopers', Battue: 'battues', Rabbit: 'rabbits', Rabbue: 'rabbues', Quartering: 'quartering birds' };
+    const typePlural = (t) => TYPE_PLURAL[t] || `${String(t).toLowerCase()}s`;
+    const MIN_TYPE_SHOTS = 3;     // a type needs this many shots before it counts as a favourite / nemesis
+    // A shooter's best and worst clay type (by hit rate, at least MIN_TYPE_SHOTS shot), or null.
+    function typeExtremes(s) {
+        const list = Object.entries(s.byType || {}).filter(([, v]) => v.shot >= MIN_TYPE_SHOTS).map(([type, v]) => ({ type, ...v, rate: pct(v.hits, v.shot) }));
+        if (list.length < 1) return null;
+        const fav = list.slice().sort((a, b) => b.rate - a.rate || b.shot - a.shot)[0];
+        const nem = list.slice().sort((a, b) => a.rate - b.rate || b.shot - a.shot)[0];
+        return { fav, nem, count: list.length };
+    }
+
     function analyse(data) {
         const SL = data.standLabel;
         const stands = data.stands;
@@ -36,7 +51,15 @@
             const seq = [];          // card order, shot targets only
             const perStand = stands.map(() => ({ hits: 0, shot: 0, targets: 0 }));
             const barrel = { b1h: 0, b1n: 0, b2h: 0, b2n: 0, doubles: 0, blanks: 0, pairs: 0 };
+            const byType = {}, byRange = {};
+            const tally = (o, key, h) => { if (!key) return; o[key] = o[key] || { hits: 0, shot: 0 }; o[key].shot++; if (h) o[key].hits++; };
             sh.stands.forEach((st, si) => {
+                (st.clays || []).forEach((c, i) => {
+                    const h = st.hits[i];
+                    if (!c || h === null) return;
+                    tally(byType, c.presentation, h);
+                    tally(byRange, RANGE_OF[c.distance], h);
+                });
                 perStand[si].targets = st.hits.length;
                 const kindAt = {};
                 const barrelAt = {};
@@ -81,7 +104,7 @@
                 unshot: Math.max(0, scheduled - shot - (data.optionLabel && !sh.option ? 1 : 0)),
                 scheduled, cumulative, barrel,
                 hitStreak: longestRun(seq, true), missStreak: longestRun(seq, false),
-                rawStands: sh.stands
+                rawStands: sh.stands, byType, byRange
             };
         });
 
@@ -129,8 +152,19 @@
             if (contrast && contrast.gap === 0) contrast = null;
         }
 
+        // Clay presentations (from the clay presentation dialog): squad totals per type / range.
+        const squadBy = (field) => {
+            const out = {};
+            shooters.forEach(s => Object.entries(s[field]).forEach(([k, v]) => { out[k] = out[k] || { hits: 0, shot: 0 }; out[k].hits += v.hits; out[k].shot += v.shot; }));
+            return out;
+        };
+        squad.byType = squadBy('byType');
+        squad.byRange = squadBy('byRange');
+        const types = Object.keys(squad.byType).sort((a, b) => squad.byType[b].shot - squad.byType[a].shot || a.localeCompare(b));
+        const ranges = RANGES.filter(r => squad.byRange[r]);
+
         const pairsExist = shooters.some(s => s.barrel.pairs > 0);
-        return { data, SL, stands, nStands, standName, shooters, ranked, squad, milestones, best, worst, contrast, pairsExist, maxTargets };
+        return { types, ranges, data, SL, stands, nStands, standName, shooters, ranked, squad, milestones, best, worst, contrast, pairsExist, maxTargets };
     }
 
     function longestRun(seq, value) {
@@ -185,6 +219,48 @@
 
     // ---------------------------------------------------------------- humour (data-driven only)
 
+    // Weather recorded in Round notes, boiled down to the facts the jokes may use.
+    function weatherFacts(D) {
+        const es = D.weatherEntries || [];
+        if (!es.length) return null;
+        const nums = (k) => es.map(e => e[k]).filter(Number.isFinite);
+        const wind = nums('windMph'), gust = nums('gustMph'), temp = nums('tempC');
+        const conds = es.map(e => e.conditions).filter(Boolean);
+        return {
+            wet: conds.find(c => /rain|drizzle|showers|sleet|snow|thunder/i.test(c)) || null,
+            fog: conds.some(c => /fog/i.test(c)),
+            sunny: conds.some(c => /sunny/i.test(c)),
+            maxWind: wind.length ? Math.max(...wind) : null,
+            maxGust: gust.length ? Math.max(...gust) : null,
+            minTemp: temp.length ? Math.min(...temp) : null,
+            maxTemp: temp.length ? Math.max(...temp) : null
+        };
+    }
+    const isCalm = (wx) => !!wx && !wx.wet && wx.maxWind !== null && wx.maxWind <= 5 && (wx.maxGust === null || wx.maxGust <= 10);
+    // The most notable thing to blame, as a noun phrase ("18 mph gusts"), or null.
+    function weatherExcuse(wx) {
+        if (!wx) return null;
+        if (wx.wet) return `the ${wx.wet.toLowerCase()}`;
+        if (wx.maxGust !== null && wx.maxGust >= 20) return `${wx.maxGust} mph gusts`;
+        if (wx.maxWind !== null && wx.maxWind >= 12) return `a ${wx.maxWind} mph wind`;
+        if (wx.minTemp !== null && wx.minTemp <= 5) return `${wx.minTemp} °C cold fingers`;
+        if (wx.maxTemp !== null && wx.maxTemp >= 25) return `${wx.maxTemp} °C heat`;
+        if (wx.fog) return 'the fog';
+        if (wx.sunny) return 'the sun in their eyes';
+        return null;
+    }
+    function weatherGag(wx) {
+        if (!wx) return '';
+        if (wx.wet) return `Shot in ${wx.wet.toLowerCase()}: dedication, or poor judgement.`;
+        if (wx.maxGust !== null && wx.maxGust >= 20) return `Gusts of ${wx.maxGust} mph. Some clays took the scenic route.`;
+        if (wx.maxWind !== null && wx.maxWind >= 12) return `A ${wx.maxWind} mph wind gave everyone a ready-made excuse.`;
+        if (wx.minTemp !== null && wx.minTemp <= 5) return `${wx.minTemp} °C. Gloves on, excuses ready.`;
+        if (wx.maxTemp !== null && wx.maxTemp >= 25) return `${wx.maxTemp} °C. Sun cream and sweaty palms.`;
+        if (wx.fog) return 'Fog on the ground. Some clays were heard, not seen.';
+        if (isCalm(wx)) return 'Barely a breath of wind. No excuses today.';
+        return '';
+    }
+
     function coverGag(m) {
         const r = m.squad.rate ?? 0;
         const escaped = plural(m.squad.misses, 'clay');
@@ -203,8 +279,22 @@
         const bestSi = valid.slice().sort((a, b) => s.standPcts[b] - s.standPcts[a])[0];
         const worstSi = valid.slice().sort((a, b) => s.standPcts[a] - s.standPcts[b])[0];
         if (!s.shot) return 'Turned up. Has not fired yet.';
-        if (n > 1 && rank === 0) return s.gun ? `Top of the pile at ${p}. The ${s.gun} earned its keep.` : `Top of the pile at ${p}. Will mention it. Repeatedly.`;
-        if (n > 1 && rank === n - 1) return s.gun ? `${p}. Not the ${s.gun}'s fault. Probably.` : `${p} — the clays' favourite shooter.`;
+        const excuse = weatherExcuse(m.wx);
+        if (n > 1 && m.ranked.every(x => x.rate === s.rate)) return `${p}, dead level with everyone. Nobody gets bragging rights.`;
+        if (n > 1 && rank === 0) {
+            if (excuse) return `Top of the pile at ${p}, despite ${excuse}.${s.gun ? ` The ${s.gun} earned its keep.` : ''}`;
+            return s.gun ? `Top of the pile at ${p}. The ${s.gun} earned its keep.` : `Top of the pile at ${p}. Will mention it. Repeatedly.`;
+        }
+        const ext = typeExtremes(s);
+        if (n > 1 && rank === n - 1) {
+            if (excuse) return `${p}. Blames ${excuse}${s.gun ? `, not the ${s.gun}` : ''}.`;
+            if (ext && ext.nem.rate <= 0.5) return `${p}. Undone by the ${typePlural(ext.nem.type)}: ${ext.nem.hits}/${ext.nem.shot}.`;
+            if (isCalm(m.wx)) return `${p} — on a still day, too. No wind to blame.`;
+            return s.gun ? `${p}. Not the ${s.gun}'s fault. Probably.` : `${p} — the clays' favourite shooter.`;
+        }
+        if (ext && ext.count > 1 && ext.fav.rate - ext.nem.rate >= 0.3) {
+            return `${fmtPct(ext.fav.rate)} on ${typePlural(ext.fav.type)}, ${fmtPct(ext.nem.rate)} on ${typePlural(ext.nem.type)}. The ${typePlural(ext.nem.type)} have been told.`;
+        }
         if (bestSi !== undefined && worstSi !== undefined && s.standPcts[bestSi] - s.standPcts[worstSi] >= 0.4) {
             return `${fmtPct(s.standPcts[bestSi])} on ${m.standName(bestSi)}, ${fmtPct(s.standPcts[worstSi])} on ${m.standName(worstSi)}. Consistency is overrated.`;
         }
@@ -238,6 +328,10 @@
         return `<circle cx="${x}" cy="${y}" r="${r}" ${a}/>`;
     }
 
+    // True when two series share a value at the same point (lineChart draws those side by side).
+    const sharesPoints = (series) => series.some((a, k) => series.some((b, j) => j > k && a.values.some((v, i) => v !== null && v !== undefined && v === b.values[i])));
+    const sharedNote = (series) => (sharesPoints(series) ? '<div class="dk-footnote">Where lines meet on the same value they are drawn side by side, so every shooter stays visible.</div>' : '');
+
     function lineChart({ series, xLabels, yMax, yTicks, yFmt, yTitle, highlights = [], notes = [], height = 620 }) {
         const w = 1728, h = height;
         const L = 130, R = 90, T = 70, B = xLabels.length > 10 ? 120 : 90;
@@ -261,8 +355,17 @@
                 : `<text x="${xAt(i)}" y="${T + ph + 40}" text-anchor="middle" font-size="24" fill="#d6c7b8">${esc(lab)}</text>`;
         });
         g += `<text transform="translate(34,${T + ph / 2}) rotate(-90)" text-anchor="middle" font-size="24" fill="#d6c7b8">${esc(yTitle)}</text>`;
-        series.forEach(s => {
-            const pts = s.values.map((v, i) => (v === null ? null : [xAt(i), yAt(v)]));
+        // Series on the same value at the same point are spread a few pixels apart (in series
+        // order), so lines that run together show as parallel lines and every marker stays visible.
+        const DODGE = 12;
+        const offsets = series.map(() => new Array(n).fill(0));
+        for (let i = 0; i < n; i++) {
+            const groups = new Map();
+            series.forEach((s, k) => { const v = s.values[i]; if (v === null || v === undefined) return; const key = Math.round(v * 1e6); if (!groups.has(key)) groups.set(key, []); groups.get(key).push(k); });
+            groups.forEach(ks => { if (ks.length > 1) ks.forEach((k, j) => { offsets[k][i] = (j - (ks.length - 1) / 2) * DODGE; }); });
+        }
+        series.forEach((s, k) => {
+            const pts = s.values.map((v, i) => (v === null || v === undefined ? null : [xAt(i), yAt(v) + offsets[k][i]]));
             let d = '', pen = false;
             pts.forEach(p => { if (!p) { pen = false; return; } d += `${pen ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)} `; pen = true; });
             g += `<path d="${d}" fill="none" stroke="${s.colour}" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>`;
@@ -287,6 +390,7 @@
         const SL = m.SL;
         const add = (cls, body, notes) => slides.push({ cls, body, notes });
         const D = m.data;
+        m.wx = weatherFacts(D);
         const meta = [D.discipline.name, D.ground, D.event, ukDate(D.date)].filter(Boolean).map(esc).join(' · ');
         const incomplete = m.shooters.filter(s => s.unshot > 0);
         const fewer = m.shooters.filter(s => s.shot < Math.max(...m.shooters.map(x => x.shot)));
@@ -296,7 +400,7 @@
         add('dk-cover', `
             <div class="dk-kicker">${esc(D.discipline.code)} · ${meta}</div>
             <h1 class="dk-title">${esc(title)}</h1>
-            <div class="dk-gag">${esc(coverGag(m))}</div>
+            <div class="dk-gag">${esc([coverGag(m), weatherGag(m.wx)].filter(Boolean).join(' '))}</div>
             ${D.weather ? `<div class="dk-weather">Conditions: ${esc(D.weather)}</div>` : ''}`,
             `Squad: ${m.shooters.length} shooters, ${m.squad.shot} clays shot, ${m.squad.hits} hits (${fmtPct(m.squad.rate)}), ${m.squad.misses} misses.${D.weather ? `\nWeather: ${D.weather}` : ''}`);
 
@@ -398,7 +502,7 @@
                 const b = valid.slice().sort((a, c) => s.standPcts[c] - s.standPcts[a])[0];
                 const w = valid.slice().sort((a, c) => s.standPcts[a] - s.standPcts[c])[0];
                 return `<div><svg width="36" height="36" viewBox="0 0 36 36">${marker(s.marker, 18, 18, 10, s.colour)}</svg><strong>${esc(s.name)}</strong> avg ${fmtPct(s.rate)} · best ${b !== undefined ? `${esc(m.standName(b))} ${fmtPct(s.standPcts[b])}` : '–'} · worst ${w !== undefined ? `${esc(m.standName(w))} ${fmtPct(s.standPcts[w])}` : '–'}</div>`;
-            }).join('')}</div>`,
+            }).join('')}</div>${sharedNote(m.shooters.map(s => ({ values: s.standPcts })))}`,
             m.shooters.map(s => `${s.name}: ` + s.standPcts.map((p, si) => `${m.standName(si)} ${fmtPct(p)}`).join(', ')).join('\n')
             + (disasters.length ? `\nShaded red: ${disasters.map(i => `${m.standName(i)} (squad ${fmtPct(m.squad.perStand[i].rate)})`).join(', ')}.` : ''));
 
@@ -428,7 +532,7 @@
                 xLabels, yMax: yMaxCum, yTicks: Array.from({ length: yMaxCum / step + 1 }, (_, i) => i * step), yFmt: v => `${v}`, yTitle: 'Hits',
                 notes: cumNotes, height: 600
             })}</div>
-            <div class="dk-keys">${m.shooters.map(s => `<div><svg width="36" height="36" viewBox="0 0 36 36">${marker(s.marker, 18, 18, 10, s.colour)}</svg><strong>${esc(s.name)}</strong> ${s.hits}</div>`).join('')}</div>`,
+            <div class="dk-keys">${m.shooters.map(s => `<div><svg width="36" height="36" viewBox="0 0 36 36">${marker(s.marker, 18, 18, 10, s.colour)}</svg><strong>${esc(s.name)}</strong> ${s.hits}</div>`).join('')}</div>${sharedNote(m.shooters.map(s => ({ values: s.cumulative })))}`,
             m.shooters.map(s => `${s.name}: ${s.cumulative.join(' → ')}`).join('\n')
             + (leadNotes.length ? `\nLead changes: ${leadNotes.map(n => `${m.standName(n.si)} ${n.text}`).join('; ')}.` : '\nNo lead changes.'));
 
@@ -451,6 +555,32 @@
                 <div class="dk-note">Doubles = both barrels hit · Blanks = both missed.</div>
                 <div class="dk-footnote">${esc(pairing)}</div>`,
                 rows.map((r, i) => `${i < m.shooters.length ? m.shooters[i].name : 'Squad'}: 1st ${r.b.b1h}/${r.b.b1n}, 2nd ${r.b.b2h}/${r.b.b2n}, doubles ${r.b.doubles}, blanks ${r.b.blanks} of ${r.b.pairs} complete pairs`).join('\n') + `\n${pairing}`);
+        }
+
+        // 8b. Clay types (only when clay presentations were described)
+        if (m.types.length) {
+            const cell = (v) => (v && v.shot ? `<div class="dk-c"><span class="dk-cell ${band(pct(v.hits, v.shot))}">${fmtPct(pct(v.hits, v.shot))}</span> <span class="dk-dim">${v.hits}/${v.shot}</span></div>` : '<div class="dk-c dk-dim">–</div>');
+            const rowsFor = (keys, field, label) => keys.map(k => `<div class="dk-strong">${esc(label(k))}</div>${m.shooters.map(s => cell(s[field][k])).join('')}${cell(m.squad[field][k])}`).join('');
+            const toughest = m.types.filter(t => m.squad.byType[t].shot >= MIN_TYPE_SHOTS).sort((a, b) => pct(m.squad.byType[a].hits, m.squad.byType[a].shot) - pct(m.squad.byType[b].hits, m.squad.byType[b].shot))[0];
+            const easiest = m.types.filter(t => m.squad.byType[t].shot >= MIN_TYPE_SHOTS).sort((a, b) => pct(m.squad.byType[b].hits, m.squad.byType[b].shot) - pct(m.squad.byType[a].hits, m.squad.byType[a].shot))[0];
+            const r = (t) => fmtPct(pct(m.squad.byType[t].hits, m.squad.byType[t].shot));
+            const gag = toughest && easiest && toughest !== easiest
+                ? `The squad ate ${typePlural(easiest)} for breakfast (${r(easiest)}). The ${typePlural(toughest)} fought back (${r(toughest)}).`
+                : '';
+            const cols = `1.2fr repeat(${m.shooters.length + 1}, 1fr)`;
+            const shown = m.types.slice(0, m.ranges.length ? 7 : 10);
+            add('dk-alt', `
+                <h2 class="dk-h">Clay types</h2>
+                <div class="dk-sub">Hit rate by presentation, from the clay descriptions${m.types.length > shown.length ? ` · the ${shown.length} most-shot types` : ''}</div>
+                <div class="dk-grid dk-tight" style="grid-template-columns:${cols}">
+                    <div class="dk-hd">Presentation</div>${m.shooters.map(s => `<div class="dk-hd dk-c">${who(s)}</div>`).join('')}<div class="dk-hd dk-c">Squad</div>
+                    ${rowsFor(shown, 'byType', t => t)}
+                    ${m.ranges.length ? `<div class="dk-hd">Distance</div>${m.shooters.map(() => '<div class="dk-hd"></div>').join('')}<div class="dk-hd"></div>${rowsFor(m.ranges, 'byRange', k => ({ Close: 'Close (0–10 m)', Medium: 'Medium (10–20 m)', Far: 'Far (20 m+)' })[k])}` : ''}
+                </div>
+                ${gag ? `<div class="dk-roast dk-types-gag">${esc(gag)}</div>` : ''}`,
+                m.types.map(t => `${t}: ` + m.shooters.map(s => s.byType[t] ? `${s.name} ${s.byType[t].hits}/${s.byType[t].shot}` : null).filter(Boolean).join(', ') + ` | squad ${m.squad.byType[t].hits}/${m.squad.byType[t].shot}`).join('\n')
+                + (m.ranges.length ? '\n' + m.ranges.map(k => `${k}: squad ${m.squad.byRange[k].hits}/${m.squad.byRange[k].shot}`).join(', ') : '')
+                + '\nOnly clays with a presentation set in the clay presentation dialog are counted.');
         }
 
         // 9. Streaks and slumps
@@ -544,6 +674,12 @@
             const hi = Math.max(...standBest.map(x => x.p)); const xs = standBest.filter(x => x.p === hi);
             bests.push({ name: `${m.SL} Slayer`, who: [...new Set(xs.map(x => x.s))], stat: `${fmtPct(hi)} on ${[...new Set(xs.map(x => x.si))].sort((a, b) => a - b).slice(0, 3).map(m.standName).join(', ')}` });
         }
+        if (m.types.length) {
+            // Specialist: best hit rate on the squad's most-shot clay type.
+            const t = m.types[0];
+            const rateOn = (s) => (s.byType[t] && s.byType[t].shot >= MIN_TYPE_SHOTS ? pct(s.byType[t].hits, s.byType[t].shot) : null);
+            w = top(rateOn); if (w.length && rateOn(w[0]) !== null) bests.push({ name: `${t} Specialist`, who: w, stat: `${fmtPct(rateOn(w[0]))} on ${typePlural(t)} (${w[0].byType[t].hits}/${w[0].byType[t].shot})` });
+        }
         if (m.pairsExist) {
             w = top(s => pct(s.barrel.b2h, s.barrel.b2n)); if (w.length && w[0].barrel.b2n) bests.push({ name: 'Second Barrel Hero', who: w, stat: `${fmtPct(pct(w[0].barrel.b2h, w[0].barrel.b2n))} with the 2nd barrel` });
             w = top(s => s.barrel.doubles); if (w[0].barrel.doubles) bests.push({ name: 'Double Act', who: w, stat: plural(w[0].barrel.doubles, 'double') });
@@ -557,6 +693,15 @@
         if (standBest.length) {
             const lo = Math.min(...standBest.map(x => x.p)); const xs = standBest.filter(x => x.p === lo);
             if (lo < 1) worsts.push({ name: 'Black Hole', who: [...new Set(xs.map(x => x.s))], stat: `${fmtPct(lo)} on ${[...new Set(xs.map(x => x.si))].sort((a, b) => a - b).slice(0, 3).map(m.standName).join(', ')}` });
+        }
+        {
+            // Nemesis: the lowest hit rate anyone had on one clay type.
+            const nems = S.map(s => ({ s, e: typeExtremes(s) })).filter(x => x.e && x.e.nem.rate < 0.5);
+            if (nems.length) {
+                const lo = Math.min(...nems.map(x => x.e.nem.rate));
+                const xs = nems.filter(x => x.e.nem.rate === lo);
+                worsts.push({ name: 'Nemesis', who: xs.map(x => x.s), stat: `${xs[0].e.nem.type}: ${xs[0].e.nem.hits}/${xs[0].e.nem.shot} (${fmtPct(lo)})` });
+            }
         }
         if (m.pairsExist) {
             w = top(s => s.barrel.blanks); if (w[0].barrel.blanks) worsts.push({ name: 'Blank Cheque', who: w, stat: `${plural(w[0].barrel.blanks, 'pair')} missed with both barrels` });
@@ -602,6 +747,7 @@
         .dk-strong { font-weight: 700; }
         .dk-dim { color: #b8a596; font-weight: 400; }
         .dk-roast { color: #fde68a; font-style: italic; }
+        .dk-types-gag { margin-top: 18px; font-size: 30px; }
         .dk-good { color: #4ade80; } .dk-bad { color: #fb7185; }
         .dk-lead { color: #fdba74; font-weight: 700; }
         .dk-chip { display: inline-block; width: 24px; height: 24px; border-radius: 50%; margin-right: 12px; flex: 0 0 auto; border: 2px solid #1f1611; }

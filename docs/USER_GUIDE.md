@@ -72,6 +72,10 @@ Open **Round setup** at the top of the page.
 
 Everything saves automatically; there's no Save button.
 
+**Shooting order.** Tap **Order** in the Squad header, then use the up and down arrows to move shooters. Number 1 shoots first. On English Sporting, **First up** then moves one place each stand. Scores stay with each shooter, so you can change the order at any time unless the round is locked. Tap **Done** to go back to editing names.
+
+<img src="guide/squad-order.png" width="300" alt="Changing the shooting order">
+
 ### Regular shooters
 
 Save the people you shoot with regularly so you don't have to type their details every time.
@@ -298,7 +302,7 @@ Tap **Add … cards to this round** to finish. If the round was scored or change
 Tap the orange **Export** button:
 
 - **Show scorecard.** The scorecard as an image, plus a presentations image if any clays are described.
-- **Show PDF.** The printable scorecard as A4 landscape pages: ground, discipline, date, event, every shooter's hits and misses, totals, notes and a signature line. If any clays are described, the presentations follow on their own pages.
+- **Show PDF.** The printable scorecard as A4 landscape pages: ground, discipline, date, event, every shooter's hits and misses (highest total first), totals, weather and notes. If any clays are described, the presentations follow on their own pages.
 - **Show presentation.** A slide deck about the round, with stats, charts, awards and some friendly roasting (see [Presentation](#presentation) below).
 - **Download CSV.** A spreadsheet-friendly file with the round details, per-stand totals and every shot. It can be imported again later (see [Round history](#7-round-history)).
 
@@ -341,24 +345,25 @@ See [example-outputs.pdf](example-outputs.pdf) for full examples of every discip
 
 | Slide | What it shows |
 |---|---|
-| Cover | The title and a one-line gag |
-| The squad | Each shooter's clays, gun and cartridges (if filled in) and a roast line, plus squad totals |
+| Cover | The title, a one-line gag, and a line about the weather if any was recorded |
+| The squad | Each shooter's clays, gun and cartridges (if filled in) and a roast line, plus squad totals. Roasts can mention the recorded weather (rain, wind, gusts, cold, heat) or a shooter's best and worst clay type |
 | Podium | Top three by hit rate |
 | Milestones | Hits after the first 6 / 8 / 10 / 12 clays of **every** stand, and who led at each point. Only on stands longer than that, so usually English Sporting only |
 | Stand by stand | Every shooter's hits and % per stand, plus the squad, colour-banded: green 80%+, blue 60–79%, amber 40–59%, red-orange under 40%. The % is always shown, so you don't need to rely on colour |
-| Hit rate per stand | Line chart per shooter, with the disaster stand shaded |
-| Running total | Cumulative hits, with lead changes marked |
+| Hit rate per stand | Line chart per shooter, with the disaster stand shaded. Where shooters share a value, their lines are drawn side by side so none is hidden |
+| Running total | Cumulative hits, with lead changes marked. Shared values are drawn side by side, as above |
 | Barrel by barrel | 1st and 2nd barrel hit rates, **doubles** (both hit) and **blanks** (both missed). Pairs only: Sporting pairs, Sportrap/Compak on-report and sim pairs, Skeet doubles. Singles and the +1 clay aren't counted, and the slide is left out if there are no pairs |
+| Clay types | Hit rate per shooter and for the squad for each presentation (Crosser, Teal …) and distance band (close, medium, far). Comes from the [clay presentation](#5-describing-clay-presentations) descriptions, and only appears when clays have been described |
 | Streaks and slumps | Longest run of hits and of misses, in card order across stands, with where each started and ended |
 | Stand stories | Best stand, worst stand, and the biggest gap between two shooters on one stand |
-| Awards | Comic awards for the bests and the worsts, each with the stat behind it |
+| Awards | Comic awards for the bests and the worsts, each with the stat behind it, including a specialist on the most common clay type and a **Nemesis** for someone's worst type |
 | Score check | Totals counted three ways to show they agree, and any clays not shot yet |
 | Final scores | Ranking and a closing gag |
 
 - **Each shooter keeps one colour and marker shape** on every slide.
 - **Everyone is compared by hit rate**, so a shooter with fewer clays isn't penalised.
 - **Unscored clays are left out** of every rate rather than counted as misses.
-- **The jokes come only from the numbers.** Nothing about weather or excuses is invented.
+- **The jokes come only from the numbers.** Weather lines only use the weather recorded in Round notes, and clay-type lines only use the clay descriptions. Nothing is invented.
 
 <img src="guide/presentation-slide.png" width="600" alt="Stand-by-stand slide">
 

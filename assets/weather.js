@@ -354,5 +354,5 @@
 
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && draft) close(); });
 
-    window.ClayWeather = { open, close, sectionHtml, describe, summary, searchPlaces, fetchWeather, conditionsFromCode, CONDITIONS };
+    window.ClayWeather = { open, close, sectionHtml, describe, summary, norm, searchPlaces, fetchWeather, conditionsFromCode, CONDITIONS };
 })();

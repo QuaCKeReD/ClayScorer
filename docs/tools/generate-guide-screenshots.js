@@ -56,6 +56,11 @@ const SQUAD = [
   await p.evaluate(() => { saveShooterAsRegular(0); saveShooterAsRegular(1); document.getElementById('toast').className = 'toast hidden'; });
   await scrollTo('#regular-picker', 200);
   await shot('regulars-squad');
+  await p.evaluate(() => { document.getElementById('toast').className = 'toast hidden'; toggleSquadOrder(); });
+  await scrollTo('#squad-order-help', 200);
+  await shot('squad-order');
+  await p.evaluate(() => toggleSquadOrder());
+  await scrollTo('#regular-picker', 200);
   await p.locator('button:has-text("Regulars")').click();
   await shot('regulars-manager');
   await p.evaluate(() => closeRegulars());

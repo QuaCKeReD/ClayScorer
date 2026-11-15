@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-15 (Overhead presentation)';
+    const SCORER_BUILD = 'scorer 2026-11-15 (deck weather, squad order)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -941,6 +941,22 @@
         renderRegularsDialog();
     };
 
+    // Shooting order = the order of state.shooters (ids, and so scores, move with each shooter).
+    let squadOrdering = false;
+    window.toggleSquadOrder = () => {
+        if (state.isLocked) return;
+        squadOrdering = !squadOrdering;
+        render();
+    };
+    window.moveShooter = (idx, dir) => {
+        if (state.isLocked) return;
+        const j = idx + dir;
+        if (j < 0 || j >= state.shooters.length) return;
+        const list = state.shooters;
+        [list[idx], list[j]] = [list[j], list[idx]];
+        render(); save();
+    };
+
     window.removeShooter = (id) => {
         if (state.shooters.length <= 1) return;
         const shooter = state.shooters.find(s => s.id === id);
@@ -1156,6 +1172,9 @@
         if (getOptionHit(shId) === true) t++;
         return t;
     }
+    // Every output (scorecard grid, CSV, Presentation) lists shooters by total, highest first;
+    // ties keep the squad's shooting order.
+    const shootersByTotal = () => state.shooters.slice().sort((a, b) => getShooterTotal(b.id) - getShooterTotal(a.id));
 
     window.deleteCurrentRound = async () => {
         const key = state._roundKey || (isNamedRound(state) ? roundKey(state) : null);
@@ -1252,10 +1271,11 @@
             csv += `Clay Metadata,${state.stands.map(s => q(JSON.stringify(normalizeClayMeta(s.clayMeta, presentationCountForStand(s))))).join(',')}\n`;
         }
         csv += `\n`;
-        // Totals block: per-shooter, per-stand hits + grand total
+        const byTotal = shootersByTotal();
+        // Totals block (shooters by total, as in every output): per-shooter, per-stand hits + grand total
         csv += `Shooter,CPSA,Class,`;
         csv += state.stands.map(s => `${abbr}${s.id}${s.extraClay ? '+1' : ''}`).join(',') + ',Total\n';
-        state.shooters.forEach(s => {
+        byTotal.forEach(s => {
             const perStand = state.stands.map(st => {
                 const base = state.hits[s.id]?.[st.id]?.filter(h => h === true).length || 0;
                 return base + (getOptionHitForStand(s.id, st.id) === true ? 1 : 0);
@@ -1265,7 +1285,7 @@
         // Details block: per-target H (hit) / M (miss) / . (not shot). Lets importCSV
         // reconstruct the exact hit arrays instead of falling back to "N hits at front".
         csv += `\nDetails\nShooter,Stand,Shots\n`;
-        state.shooters.forEach(s => {
+        byTotal.forEach(s => {
             state.stands.forEach(st => {
                 const arr = state.hits[s.id]?.[st.id];
                 if (!arr || !arr.length) return;
@@ -1275,7 +1295,7 @@
         });
         if (OPTION) {
             csv += `\nOption\nShooter,Stand,Shot\n`;
-            state.shooters.forEach(s => {
+            byTotal.forEach(s => {
                 const opt = state.optionHits?.[s.id];
                 if (!opt || opt.hit === null || opt.hit === undefined) return;
                 csv += `${q(s.name)},${opt.standId},${opt.hit === true ? 'H' : 'M'}\n`;
@@ -1736,8 +1756,7 @@
 
         // Multi-word names go one word per line so the narrow name column stays readable.
         const nameLines = (name) => String(name || '').trim().split(/\s+/).map(escapeHtml).join('<br>');
-        const sorted = state.shooters.map(s => ({ ...s, t: getShooterTotal(s.id) })).sort((a, b) => b.t - a.t);
-        sorted.forEach(s => {
+        shootersByTotal().map(s => ({ ...s, t: getShooterTotal(s.id) })).forEach(s => {
             let r1 = `<tr><td style="text-align:left; padding:2px 4px; vertical-align:middle; white-space:normal; word-break:break-word; line-height:1.15; border-right:${blockBorder} !important; ${shooterBorder} ${shooterBottomBorder}" rowspan="2"><strong>${nameLines(s.name)}</strong></td>`;
             let r2 = `<tr>`;
             state.stands.forEach(st => {
@@ -1797,17 +1816,16 @@
                     <div style="text-align:right"><strong>DATE:</strong> ${date}</div>
                 </div>
                 ${event ? `<div class="print-event"><strong>EVENT:</strong> ${event}</div>` : ''}`;
-        const size = isShare ? '12pt' : '9.5pt';
-        const list = blocks.map(({ st, lines }) => `<div style="margin-bottom:${isShare ? '14px' : '8pt'}; page-break-inside:avoid; break-inside:avoid;">
-                <div style="font-weight:bold; font-size:${isShare ? '13pt' : '10.5pt'};">${escapeHtml(ROUND_LABEL)} ${st.id}${st.extraClay ? ' (+1)' : ''}</div>
-                <ul style="margin:3px 0 0; padding-left:${isShare ? '28px' : '16pt'}; list-style:disc;">
-                    ${lines.map(l => `<li style="margin:2px 0;">${escapeHtml(l)}</li>`).join('')}
+        const size = isShare ? '12pt' : '8.5pt';
+        const list = blocks.map(({ st, lines }) => `<div style="margin-bottom:${isShare ? '14px' : '5pt'}; page-break-inside:avoid; break-inside:avoid;">
+                <div style="font-weight:bold; font-size:${isShare ? '13pt' : '9.5pt'};">${escapeHtml(ROUND_LABEL)} ${st.id}${st.extraClay ? ' (+1)' : ''}</div>
+                <ul style="margin:${isShare ? '3px' : '1pt'} 0 0; padding-left:${isShare ? '28px' : '14pt'}; list-style:disc;">
+                    ${lines.map(l => `<li style="margin:${isShare ? '2px' : '0.5pt'} 0;">${escapeHtml(l)}</li>`).join('')}
                 </ul>
             </div>`).join('');
         return `<div style="${isShare ? '' : 'break-before:page; page-break-before:always;'}">
             ${header}
-            <div style="margin-top:${isShare ? '20px' : '10pt'}; font-size:${size}; line-height:1.4;">${list}</div>
-            ${isShare ? '<div style="margin-top: 30px; font-size: 11pt; font-weight: bold;">Generated by QuaCKeReD</div>' : '<div style="text-align: center; margin-top: 20px; font-size: 8pt; font-weight: bold; color: #666;">Generated by QuaCKeReD</div>'}
+            <div style="margin-top:${isShare ? '20px' : '8pt'}; font-size:${size}; line-height:${isShare ? 1.4 : 1.3};">${list}</div>
         </div>`;
     }
 
@@ -1973,7 +1991,6 @@
                 const parts = Array.from(pres.children);
                 const header = parts.filter(el => el.classList.contains('print-header') || el.classList.contains('print-event'));
                 const list = parts.find(el => !header.includes(el) && el.children.length && el.querySelector('ul'));
-                const footer = parts[parts.length - 1] !== list ? parts[parts.length - 1] : null;
                 const blocks = list ? Array.from(list.children) : [];
                 let pg = null, listEl = null;
                 const start = () => {
@@ -1987,11 +2004,6 @@
                     listEl.appendChild(el);
                     if (pg.scrollHeight > PH && listEl.children.length > 1) { el.remove(); start(); listEl.appendChild(el); }
                 });
-                if (footer) {
-                    const f = footer.cloneNode(true);
-                    pg.appendChild(f);
-                    if (pg.scrollHeight > PH) { f.remove(); start(); pg.appendChild(f); }
-                }
             }
             const canvases = [];
             for (const pg of pages) {
@@ -2226,12 +2238,14 @@
                         <div class="flex justify-between items-center mb-2">
                             <h3 class="${SECTION_HEAD}">Squad <span id="squad-count" class="normal-case font-semibold text-slate-400"></span></h3>
                             <div class="flex gap-2">
+                                <button id="squad-order-btn" onclick="toggleSquadOrder()" class="${BTN_SMALL} bg-white text-slate-800 border-slate-400 inline-flex items-center gap-1" title="Change the shooting order"><i data-lucide="arrow-up-down" class="w-3.5 h-3.5"></i> <span>Order</span></button>
                                 <button onclick="openRegulars()" class="${BTN_SMALL} bg-white text-slate-800 border-slate-400 inline-flex items-center gap-1"><i data-lucide="users" class="w-3.5 h-3.5"></i> Regulars</button>
                                 <button id="add-shooter-btn" onclick="addShooter()" class="${BTN_SMALL} bg-slate-900 text-white border-slate-900 disabled:opacity-40">+ Add shooter</button>
                             </div>
                         </div>
                         <div id="regular-picker" class="mb-2"></div>
-                        <div class="squad-grid-item px-2.5 pb-1 text-[11px] font-semibold text-slate-700" aria-hidden="true">
+                        <div id="squad-order-help" class="hidden mb-2 text-sm text-slate-700"></div>
+                        <div id="squad-head" class="squad-grid-item px-2.5 pb-1 text-[11px] font-semibold text-slate-700" aria-hidden="true">
                             <span>#</span><span>Name</span><span>CPSA no.</span><span>Class</span><span></span>
                         </div>
                         <div id="squad-list" class="space-y-2"></div>
@@ -2319,10 +2333,6 @@
                 <div id="cap-event-row" style="display:none; text-align:center; font-size: 12pt; font-weight: bold; font-style: italic; padding: 6px 0 10px; margin-bottom: 10px; border-bottom: 1pt solid #ccc;"><strong>EVENT:</strong> <span id="cap-event"></span></div>
                 <div style="height: 10px;"></div>
                 <table id="cap-grid"></table>
-                <div style="margin-top: 30px; display: flex; justify-content: space-between; align-items: center; font-size: 11pt; font-weight: bold;">
-                    <span>Generated by QuaCKeReD</span>
-                    <div style="border-top: 1.5pt solid black; width: 300px; text-align: center; padding-top: 8px;">SCORER / SHOOTER SIGNATURE</div>
-                </div>
             </div>
 
             <div id="capture-presentations"></div>
@@ -2337,8 +2347,6 @@
                 <table id="p-grid"></table>
                 <div id="p-weather-row" class="print-notes" style="display:none;"><strong>WEATHER:</strong> <span id="p-weather"></span></div>
                 <div class="print-notes"><strong>NOTES:</strong> <span id="p-notes"></span></div>
-                <div class="signature-section"><div class="sig-line">SIGNATURE</div></div>
-                <div style="text-align: center; margin-top: 20px; font-size: 8pt; font-weight: bold; color: #666;">Generated by QuaCKeReD</div>
                 <div id="p-presentations"></div>
             </div>
         </main>
@@ -2658,7 +2666,28 @@
         document.getElementById('squad-count').textContent = `(${state.shooters.length}/${MAX_SHOOTERS})`;
         document.getElementById('add-shooter-btn').disabled = state.shooters.length >= MAX_SHOOTERS;
         const list = document.getElementById('squad-list'); list.innerHTML = '';
-        state.shooters.forEach((s, i) => {
+        if (squadOrdering && (state.shooters.length < 2 || state.isLocked)) squadOrdering = false;
+        const orderBtn = document.getElementById('squad-order-btn');
+        orderBtn.classList.toggle('hidden', state.shooters.length < 2);
+        orderBtn.disabled = !!state.isLocked;
+        orderBtn.querySelector('span').textContent = squadOrdering ? 'Done' : 'Order';
+        orderBtn.className = orderBtn.className.replace(/ ?(bg-orange-500 text-white border-orange-500|bg-white text-slate-800 border-slate-400)/, '') + (squadOrdering ? ' bg-orange-500 text-white border-orange-500' : ' bg-white text-slate-800 border-slate-400');
+        document.getElementById('squad-head').classList.toggle('hidden', squadOrdering);
+        const help = document.getElementById('squad-order-help');
+        help.classList.toggle('hidden', !squadOrdering);
+        help.textContent = squadOrdering ? `Shooting order: number 1 shoots first.${ROTATE ? ` First up then moves one place each ${ROUND_LABEL.toLowerCase()}.` : ''} Scores stay with each shooter.` : '';
+        if (squadOrdering) {
+            state.shooters.forEach((s, i) => {
+                const div = document.createElement('div');
+                div.className = 'bg-white p-2 rounded-xl border-2 border-orange-300 flex items-center gap-2';
+                const btn = 'w-11 h-11 flex-shrink-0 flex items-center justify-center rounded-lg border border-slate-400 bg-slate-50 text-slate-800 disabled:opacity-25';
+                div.innerHTML = `<span class="w-6 text-center text-sm font-black text-slate-700">${i + 1}</span>
+                    <span class="flex-1 min-w-0 truncate text-sm font-bold">${escapeHtml(s.name || `Shooter ${i + 1}`)}</span>
+                    <button onclick="moveShooter(${i}, -1)" ${i === 0 ? 'disabled' : ''} class="${btn}" aria-label="Move ${escapeHtml(s.name)} up" title="Move up"><i data-lucide="chevron-up" class="w-6 h-6"></i></button>
+                    <button onclick="moveShooter(${i}, 1)" ${i === state.shooters.length - 1 ? 'disabled' : ''} class="${btn}" aria-label="Move ${escapeHtml(s.name)} down" title="Move down"><i data-lucide="chevron-down" class="w-6 h-6"></i></button>`;
+                list.appendChild(div);
+            });
+        } else state.shooters.forEach((s, i) => {
             const div = document.createElement('div');
             div.className = 'bg-slate-50 p-2 rounded-xl border border-slate-300 squad-grid-item';
             div.innerHTML = `<span class="text-xs font-bold text-slate-700 text-center">${i + 1}</span>
@@ -2976,7 +3005,7 @@
                 if (!D.fixedStands && stand.extraClay && group[0] === standTargets(stand) - 1) return '+1 single';
                 return 'single';
             };
-            const shooters = state.shooters.map(sh => {
+            const shooters = shootersByTotal().map(sh => {
                 const stands = state.stands.map(st => {
                     const setupStand = HAS_PRESENTATION_MAP ? (state.stands.find(x => x.id === getShooterRoundStand(sh.id, st.id)) || st) : st;
                     const formatMap = HAS_PRESENTATION_MAP ? getStandFormatMap(setupStand) : [];
@@ -2986,7 +3015,16 @@
                         return v === true || v === false ? v : null;
                     });
                     const groups = shotGroups(st, formatMap).map(g => ({ idx: g, kind: kindOf(st, formatMap, g) }));
-                    return { standId: st.id, hits, groups };
+                    // Each clay's described presentation (type + distance band), or null.
+                    const presMap = HAS_PRESENTATION_MAP ? getStandPresentationMap(setupStand) : null;
+                    const clays = hits.map((_, i) => {
+                        let meta;
+                        if (presMap) meta = presMap[i] ? setupStand.clayMeta?.[presMap[i] - 1] : null;
+                        else if (!D.fixedStands) meta = st.clayMeta?.[i >= st.targets ? 2 : i % 2];
+                        else meta = st.clayMeta?.[i];
+                        return meta && (meta.presentation || meta.distance) ? { presentation: meta.presentation || '', distance: meta.distance || '' } : null;
+                    });
+                    return { standId: st.id, hits, groups, clays };
                 });
                 const opt = state.optionHits?.[sh.id];
                 return {
@@ -3005,6 +3043,7 @@
                 shooters,
                 deckTitle: state.deckTitle || '',
                 weather: window.ClayWeather ? ClayWeather.summary(state.weather) : '',
+                weatherEntries: window.ClayWeather && state.weather?.entries ? state.weather.entries.map(e => ClayWeather.norm(e)) : [],
                 filenameStem: filenameStem()
             };
         },
