@@ -304,7 +304,7 @@ async function handleApi(req, res, url) {
             const str = (v, n) => String(v ?? '').slice(0, n);
             const clean = regulars.filter(r => r && typeof r === 'object' && String(r.name || '').trim()).map(r => ({
                 id: str(r.id, 40), name: str(r.name, 40), cpsa: str(r.cpsa, 12), class: str(r.class, 4),
-                gun: str(r.gun, 60), cartridges: str(r.cartridges, 60)
+                gun: str(r.gun, 60), cartridges: String(r.cartridges ?? '')   // no length limit (the request body limit still applies)
             }));
             const result = q.upsertRegulars.run(user.id, JSON.stringify(clean), Math.trunc(updatedAt));
             return sendJson(res, 200, { applied: result.changes > 0, serverUpdatedAt: q.getRegulars.get(user.id)?.updated_at ?? null });

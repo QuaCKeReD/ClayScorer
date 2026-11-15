@@ -405,16 +405,19 @@
             `Squad: ${m.shooters.length} shooters, ${m.squad.shot} clays shot, ${m.squad.hits} hits (${fmtPct(m.squad.rate)}), ${m.squad.misses} misses.${D.weather ? `\nWeather: ${D.weather}` : ''}`);
 
         // 2. Squad
-        const showCpsa = m.shooters.some(s => s.cpsa), showGun = m.shooters.some(s => s.gun), showCart = m.shooters.some(s => s.cartridges);
+        const hasGun = m.shooters.some(s => s.gun), hasCart = m.shooters.some(s => s.cartridges);
+        // Long gun / cartridge text gets its own "The kit" slide so the squad slide stays readable.
+        const kitSlide = (hasGun || hasCart) && (m.shooters.some(s => (s.gun || '').length + (s.cartridges || '').length > 50) || m.shooters.length > 6);
+        const showCpsa = m.shooters.some(s => s.cpsa), showGun = hasGun && !kitSlide, showCart = hasCart && !kitSlide;
         const cols = ['Shooter', showCpsa && 'CPSA no.', 'Clays', showGun && 'Gun', showCart && 'Cartridges', 'Roast'].filter(Boolean);
-        const tmpl = ['1.3fr', showCpsa && '0.8fr', '0.6fr', showGun && '1fr', showCart && '1fr', '2.6fr'].filter(Boolean).join(' ');
+        const tmpl = ['max-content', showCpsa && '0.8fr', '0.6fr', showGun && '1fr', showCart && '1fr', '2.6fr'].filter(Boolean).join(' ');
         add('', `
             <h2 class="dk-h">The squad</h2>
             <div class="dk-sub">${plural(m.shooters.length, 'shooter')} · ${m.squad.shot} clays · ${m.squad.hits} hits · ${fmtPct(m.squad.rate)} squad hit rate</div>
             <div class="dk-grid" style="grid-template-columns:${tmpl}">
                 ${cols.map(c => `<div class="dk-hd">${c}</div>`).join('')}
                 ${m.shooters.map(s => [
-                    `<div class="dk-strong">${who(s)}</div>`,
+                    `<div class="dk-strong dk-nowrap">${who(s)}</div>`,
                     showCpsa && `<div>${esc(s.cpsa || '–')}</div>`,
                     `<div>${s.shot}${s.unshot ? ` <span class="dk-dim">(${s.unshot} not shot)</span>` : ''}</div>`,
                     showGun && `<div>${esc(s.gun || '–')}</div>`,
@@ -425,6 +428,17 @@
             ${compareNote}`,
             m.shooters.map(s => `${s.name}: ${s.hits}/${s.shot} (${fmtPct(s.rate)})${s.unshot ? `, ${s.unshot} not shot` : ''}${s.gun ? `, gun ${s.gun}` : ''}${s.cartridges ? `, cartridges ${s.cartridges}` : ''}`).join('\n')
             + `\nSquad: ${m.squad.hits}/${m.squad.shot} (${fmtPct(m.squad.rate)}).`);
+        if (kitSlide) {
+            const kit = m.shooters.filter(s => s.gun || s.cartridges);
+            add('dk-alt', `
+                <h2 class="dk-h">The kit</h2>
+                <div class="dk-sub">Guns and cartridges</div>
+                <div class="dk-grid dk-tight" style="grid-template-columns:max-content ${hasGun ? '1fr ' : ''}${hasCart ? '1.8fr' : ''}">
+                    <div class="dk-hd">Shooter</div>${hasGun ? '<div class="dk-hd">Gun</div>' : ''}${hasCart ? '<div class="dk-hd">Cartridges</div>' : ''}
+                    ${kit.map(s => `<div class="dk-strong dk-nowrap">${who(s)}</div>${hasGun ? `<div>${esc(s.gun || '–')}</div>` : ''}${hasCart ? `<div>${esc(s.cartridges || '–')}</div>` : ''}`).join('')}
+                </div>`,
+                kit.map(s => `${s.name}: ${[s.gun && `gun ${s.gun}`, s.cartridges && `cartridges ${s.cartridges}`].filter(Boolean).join(', ')}`).join('\n'));
+        }
 
         // 3. Podium
         const podiumOrder = [m.ranked[1], m.ranked[0], m.ranked[2]].filter(Boolean);
@@ -587,11 +601,11 @@
         add('', `
             <h2 class="dk-h">Streaks and slumps</h2>
             <div class="dk-sub">In card order, running across ${SL.toLowerCase()}s</div>
-            <div class="dk-grid" style="grid-template-columns:1.2fr 1.9fr 1.9fr 2fr">
+            <div class="dk-grid" style="grid-template-columns:max-content max-content max-content 1fr;${m.shooters.some(s => s.name.length > 14) || m.shooters.length > 6 ? ' font-size:24px;' : ''}">
                 <div class="dk-hd">Shooter</div><div class="dk-hd">Longest hit streak</div><div class="dk-hd">Longest miss streak</div><div class="dk-hd">Verdict</div>
-                ${m.shooters.map(s => `<div class="dk-strong">${who(s)}</div>
-                    <div><strong class="dk-good">${s.hitStreak.len}</strong> ${s.hitStreak.len ? `<span class="dk-dim">${esc(posText(m, s.hitStreak.from))} → ${esc(posText(m, s.hitStreak.to))}</span>` : ''}</div>
-                    <div><strong class="dk-bad">${s.missStreak.len}</strong> ${s.missStreak.len ? `<span class="dk-dim">${esc(posText(m, s.missStreak.from))} → ${esc(posText(m, s.missStreak.to))}</span>` : ''}</div>
+                ${m.shooters.map(s => `<div class="dk-strong dk-nowrap">${who(s)}</div>
+                    <div class="dk-nowrap"><strong class="dk-good">${s.hitStreak.len}</strong> ${s.hitStreak.len ? `<span class="dk-dim">${esc(posText(m, s.hitStreak.from))} → ${esc(posText(m, s.hitStreak.to))}</span>` : ''}</div>
+                    <div class="dk-nowrap"><strong class="dk-bad">${s.missStreak.len}</strong> ${s.missStreak.len ? `<span class="dk-dim">${esc(posText(m, s.missStreak.from))} → ${esc(posText(m, s.missStreak.to))}</span>` : ''}</div>
                     <div class="dk-roast">${esc(streakRoast(s))}</div>`).join('')}
             </div>`,
             m.shooters.map(s => `${s.name}: hits ${s.hitStreak.len} (${posText(m, s.hitStreak.from)} to ${posText(m, s.hitStreak.to)}), misses ${s.missStreak.len} (${posText(m, s.missStreak.from)} to ${posText(m, s.missStreak.to)})`).join('\n')
@@ -750,6 +764,8 @@
         .dk-types-gag { margin-top: 18px; font-size: 30px; }
         .dk-good { color: #4ade80; } .dk-bad { color: #fb7185; }
         .dk-lead { color: #fdba74; font-weight: 700; }
+        .dk-slide[data-fit] .dk-grid { font-size: var(--fit) !important; }
+        .dk-grid > div.dk-nowrap { flex-wrap: nowrap; white-space: nowrap; padding-right: 28px; }
         .dk-chip { display: inline-block; width: 24px; height: 24px; border-radius: 50%; margin-right: 12px; flex: 0 0 auto; border: 2px solid #1f1611; }
         .dk-note { margin-top: 18px; font-size: 24px; color: #d6c7b8; }
         .dk-footnote { position: absolute; left: 96px; right: 96px; bottom: 80px; font-size: 24px; color: #b8a596; }
@@ -832,8 +848,37 @@
         document.head.appendChild(st);
     }
 
+    const loadFonts = async () => {
+        try { if (document.fonts?.load) await Promise.all(["700 40px 'Oswald'", "600 40px 'Oswald'", "400 24px 'DM Sans'", "700 24px 'DM Sans'"].map(f => document.fonts.load(f))); } catch (e) {}
+    };
+
+    // Very long text (e.g. unlimited cartridge descriptions) could run off a slide: render each
+    // slide off-screen and step the table text down until it fits. Normal slides are untouched.
+    function fitSlides(slides, title) {
+        ensureStyles();
+        const host = document.createElement('div');
+        host.style.cssText = `position:fixed; left:-${W * 2}px; top:0; width:${W}px; height:${H}px; overflow:hidden; visibility:hidden;`;
+        document.body.appendChild(host);
+        try {
+            slides.forEach((sl, i) => {
+                delete sl.fit;
+                host.innerHTML = slideHtml(sl, i, slides.length, title);
+                const el = host.firstElementChild;
+                const grid = el.querySelector('.dk-grid');
+                if (!grid) return;
+                let size = parseFloat(getComputedStyle(grid).fontSize) || 26;
+                while (el.scrollHeight > el.clientHeight + 1 && size > 16) {
+                    size -= 1;
+                    el.style.setProperty('--fit', `${size}px`); el.setAttribute('data-fit', '');
+                    sl.fit = size;
+                }
+            });
+        } finally { host.remove(); }
+        return slides;
+    }
+
     function slideHtml(sl, i, n, title) {
-        return `<section class="dk-slide ${sl.cls}" data-notes="${esc(sl.notes || '')}">${sl.body}<div class="dk-pageno">${esc(title)} · ${i + 1}/${n}</div></section>`;
+        return `<section class="dk-slide ${sl.cls}"${sl.fit ? ` data-fit style="--fit:${sl.fit}px"` : ''} data-notes="${esc(sl.notes || '')}">${sl.body}<div class="dk-pageno">${esc(title)} · ${i + 1}/${n}</div></section>`;
     }
 
     // ---------------------------------------------------------------- UI
@@ -884,11 +929,13 @@
             window.ClayScorerDeck.setDeckTitle(title);
             picker.remove();
             view(m, title);
+            // Re-fit once the slide fonts have loaded (their widths decide what fits).
+            loadFonts().then(() => { if (current && current.title === title) { fitSlides(current.slides, title); show(); } });
         });
     }
 
     function view(m, title) {
-        const slides = buildSlides(m, title);
+        const slides = fitSlides(buildSlides(m, title), title);
         current = { m, title, slides, index: 0, notes: false };
         const v = document.createElement('div');
         v.id = 'deck-viewer';
@@ -992,7 +1039,7 @@
         document.body.appendChild(host);
         try {
             if (document.fonts?.load) await Promise.all(["700 40px 'Oswald'", "600 40px 'Oswald'", "400 24px 'DM Sans'", "700 24px 'DM Sans'"].map(f => document.fonts.load(f)));
-            const slides = buildSlides(m, title);
+            const slides = fitSlides(buildSlides(m, title), title);
             const canvases = [];
             for (let i = 0; i < slides.length; i++) {
                 host.innerHTML = slideHtml(slides[i], i, slides.length, title);
@@ -1011,7 +1058,8 @@
 
     async function printDeck(m, title) {
         ensureStyles();
-        const slides = buildSlides(m, title);
+        try { if (document.fonts?.load) await Promise.all(["700 40px 'Oswald'", "600 40px 'Oswald'", "400 24px 'DM Sans'", "700 24px 'DM Sans'"].map(f => document.fonts.load(f))); } catch (e) {}
+        const slides = fitSlides(buildSlides(m, title), title);
         let host = document.getElementById('deck-print');
         if (!host) { host = document.createElement('div'); host.id = 'deck-print'; document.body.appendChild(host); }
         host.innerHTML = slides.map((sl, i) => `<div class="dk-page">${slideHtml(sl, i, slides.length, title)}</div>`).join('');

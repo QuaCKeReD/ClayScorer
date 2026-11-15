@@ -67,7 +67,7 @@ Open **Round setup** at the top of the page.
 - **Shooting ground**, **Date** and **Event name.** Fill in a ground or an event name to keep the round in History. Rounds with neither are not saved to History.
 - **Number of stands** (English Sporting only), from 1 to 20. Sportrap, Compak and Skeet show their fixed format instead.
 - **Squad:** tap **+ Add shooter**, up to 10 shooters. Each has a **Name**, an optional **CPSA no.** and a **Class** (AAA, AA, A, B, C, U). Tap the red **×** to remove a shooter. If they have scores, you're asked to confirm first. A round always keeps at least one shooter.
-- **Gun** and **Cartridges** (optional, under each shooter): shown on the [Presentation](#presentation) squad slide. Leave them blank if you don't want them there.
+- **Gun** and **Cartridges** (optional, under each shooter): shown on the [Presentation](#presentation) squad slide. There's no length limit on Cartridges, so you can describe a different load for each barrel. Leave them blank if you don't want them on the slides.
 - **+ New round** starts a fresh round. The current one stays in History.
 
 Everything saves automatically; there's no Save button.
@@ -346,7 +346,7 @@ See [example-outputs.pdf](example-outputs.pdf) for full examples of every discip
 | Slide | What it shows |
 |---|---|
 | Cover | The title, a one-line gag, and a line about the weather if any was recorded |
-| The squad | Each shooter's clays, gun and cartridges (if filled in) and a roast line, plus squad totals. Roasts can mention the recorded weather (rain, wind, gusts, cold, heat) or a shooter's best and worst clay type |
+| The squad | Each shooter's clays, gun and cartridges (if filled in) and a roast line, plus squad totals. If the gun and cartridge details are long, or there are more than six shooters, they move to their own **The kit** slide straight after. Roasts can mention the recorded weather (rain, wind, gusts, cold, heat) or a shooter's best and worst clay type |
 | Podium | Top three by hit rate |
 | Milestones | Hits after the first 6 / 8 / 10 / 12 clays of **every** stand, and who led at each point. Only on stands longer than that, so usually English Sporting only |
 | Stand by stand | Every shooter's hits and % per stand, plus the squad, colour-banded: green 80%+, blue 60–79%, amber 40–59%, red-orange under 40%. The % is always shown, so you don't need to rely on colour |
@@ -360,7 +360,8 @@ See [example-outputs.pdf](example-outputs.pdf) for full examples of every discip
 | Score check | Totals counted three ways to show they agree, and any clays not shot yet |
 | Final scores | Ranking and a closing gag |
 
-- **Each shooter keeps one colour and marker shape** on every slide.
+- **Each shooter keeps one colour and marker shape** on every slide. Names always stay on one line next to their colour dot.
+- **Long text is fitted to the slide.** If a table would run off the bottom, its text is made smaller until it fits.
 - **Everyone is compared by hit rate**, so a shooter with fewer clays isn't penalised.
 - **Unscored clays are left out** of every rate rather than counted as misses.
 - **The jokes come only from the numbers.** Weather lines only use the weather recorded in Round notes, and clay-type lines only use the clay descriptions. Nothing is invented.

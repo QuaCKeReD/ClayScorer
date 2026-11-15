@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-15 (deck weather, squad order)';
+    const SCORER_BUILD = 'scorer 2026-11-15 (kit slide, unlimited cartridges)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -873,7 +873,7 @@
     // Manage regulars: a centred window listing every saved shooter with editable fields.
     function regularsDialogHtml() {
         const items = readRegulars().slice().sort(byRegularName);
-        const field = (r, key, ph, max) => `<input type="text" value="${escapeHtml(r[key] || '')}" maxlength="${max}" placeholder="${ph}" aria-label="${ph}" onchange="updateRegular('${r.id}', '${key}', this.value)" class="bg-white border border-slate-400 rounded-md px-2 py-1.5 text-sm w-full min-w-0">`;
+        const field = (r, key, ph, max) => `<input type="text" value="${escapeHtml(r[key] || '')}" ${max ? `maxlength="${max}"` : ''} placeholder="${ph}" aria-label="${ph}" onchange="updateRegular('${r.id}', '${key}', this.value)" class="bg-white border border-slate-400 rounded-md px-2 py-1.5 text-sm w-full min-w-0">`;
         return `<div class="fixed inset-0 z-[60] bg-slate-900/60" onclick="closeRegulars()" aria-hidden="true"></div>
             <div role="dialog" aria-modal="true" aria-label="Regular shooters" class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[61] w-[min(34rem,calc(100vw-1rem))] max-h-[85vh] overflow-y-auto rounded-xl border-4 border-orange-500 ring-4 ring-white/80 bg-white shadow-2xl">
                 <div class="sticky top-0 z-10 flex items-center justify-between gap-2 px-3 py-2 bg-slate-100 border-b border-slate-300">
@@ -889,7 +889,7 @@
                             <select onchange="updateRegular('${r.id}', 'class', this.value)" aria-label="Class" class="bg-white border border-slate-400 rounded-md px-1 py-1.5 text-sm font-semibold w-16 flex-shrink-0">${CLASSES.map(c => `<option ${r.class === c ? 'selected' : ''}>${c}</option>`).join('')}</select>
                             <button type="button" onclick="deleteRegular('${r.id}')" class="text-red-500 flex-shrink-0 w-8 h-8 flex items-center justify-center" aria-label="Delete ${escapeHtml(r.name || 'regular')}" title="Delete"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                         </div>
-                        <div class="flex gap-2">${field(r, 'gun', 'Gun (optional)', 60)}${field(r, 'cartridges', 'Cartridges (optional)', 60)}</div>
+                        <div class="flex gap-2">${field(r, 'gun', 'Gun (optional)', 60)}${field(r, 'cartridges', 'Cartridges (optional)', 0)}</div>
                     </div>`).join('')}
                     <button type="button" onclick="addRegular()" class="${BTN_SMALL} bg-white text-slate-900 border-slate-400 w-full h-10">+ Add regular</button>
                     <p class="text-xs text-slate-600">Saved on this device for every discipline${window.ClayScorerCloud?.isSignedIn?.() ? ', and synced to your account' : '. Sign in to sync them to your other devices'}. Changes here don't alter rounds you've already set up.</p>
@@ -2711,7 +2711,7 @@
                 })()}
                 <div class="flex gap-2 min-w-0" style="grid-column: 2 / 5;">
                     <input type="text" value="${escapeHtml(s.gun || '')}" maxlength="40" placeholder="Gun (optional)" aria-label="Shooter ${i + 1} gun" onchange="updateShooter(${i}, 'gun', this.value)" class="bg-white border border-slate-300 rounded-md px-2 py-1.5 text-sm w-full min-w-0">
-                    <input type="text" value="${escapeHtml(s.cartridges || '')}" maxlength="40" placeholder="Cartridges (optional)" aria-label="Shooter ${i + 1} cartridges" onchange="updateShooter(${i}, 'cartridges', this.value)" class="bg-white border border-slate-300 rounded-md px-2 py-1.5 text-sm w-full min-w-0">
+                    <input type="text" value="${escapeHtml(s.cartridges || '')}" placeholder="Cartridges (optional)" aria-label="Shooter ${i + 1} cartridges" onchange="updateShooter(${i}, 'cartridges', this.value)" class="bg-white border border-slate-300 rounded-md px-2 py-1.5 text-sm w-full min-w-0">
                 </div>
                 ${(() => {
                     const st = regularStatus(s);
