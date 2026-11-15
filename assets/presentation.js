@@ -1263,7 +1263,9 @@
         #deck-picker label.dkp-opt { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; margin-bottom: 8px; font-size: 15px; font-weight: 600; }
         #deck-picker label.dkp-opt:has(input:checked) { border-color: #f97316; background: #fff7ed; }
         #deck-picker input[type=text] { width: 100%; height: 42px; border: 1px solid #94a3b8; border-radius: 8px; padding: 0 10px; font-size: 15px; font-weight: 600; }
-        #deck-picker .dkp-ai { margin-top: 6px; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; background: #f8fafc; font-size: 14px; color: #334155; display: grid; gap: 8px; }
+        #deck-picker h4 { margin: 14px 0 2px; font-size: 15px; font-weight: 800; }
+        #deck-picker .dkp-badge { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px; background: #f97316; color: #fff; font-size: 11px; font-weight: 800; vertical-align: middle; }
+        #deck-picker .dkp-ai { margin-top: 10px; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; background: #f8fafc; font-size: 14px; color: #334155; display: grid; gap: 8px; }
         #deck-picker .dkp-tone { display: flex; align-items: center; gap: 8px; font-weight: 700; }
         #deck-picker .dkp-tone select { height: 38px; border: 1px solid #94a3b8; border-radius: 8px; padding: 0 8px; font-size: 15px; font-weight: 600; background: #fff; }
         #deck-picker button.dkp-ai-btn { background: #f97316; color: #fff; border-color: #f97316; }
@@ -1352,14 +1354,21 @@
         let roll = 0;
         let options = [];
         let aiStatus = null;          // { available, signedIn } from the server, or null (unknown / no server)
-        let busy = false, aiError = '';
+        let busy = false, aiError = '', justWrote = false;
         const tone = () => m.data.deckTone || 'gentle';
         const ai = () => activeAi(m);
+        // With AI-written jokes in use, the first set of title ideas is the AI's; "More ideas" then
+        // offers the built-in ones. Right after writing, the first AI title is pre-selected.
         const optionsHtml = () => {
             const a = roll === 0 ? ai() : null;
-            const suggestions = a && a.titles.length ? a.titles.slice(0, 4).map(t => (date ? `${date} ${t}` : t)) : titleSuggestions(m, roll);
+            const aiTitles = a && a.titles.length ? a.titles.slice(0, 4).map(t => (date ? `${date} ${t}` : t)) : [];
+            const suggestions = aiTitles.length ? aiTitles : titleSuggestions(m, roll);
             options = saved && !suggestions.includes(saved) ? [saved, ...suggestions] : suggestions;
-            return options.map((t, i) => `<label class="dkp-opt"><input type="radio" name="dkp-title" value="${esc(t)}" ${(saved && roll === 0 ? t === saved : i === (saved ? 1 : 0)) ? 'checked' : ''}> ${esc(t)}</label>`).join('');
+            const pickIdx = justWrote && aiTitles.length ? options.indexOf(aiTitles[0]) : -1;
+            return options.map((t, i) => {
+                const on = pickIdx >= 0 ? i === pickIdx : (saved && roll === 0 ? t === saved : i === (saved ? 1 : 0));
+                return `<label class="dkp-opt"><input type="radio" name="dkp-title" value="${esc(t)}" ${on ? 'checked' : ''}> <span>${esc(t)}${aiTitles.includes(t) ? ' <span class="dkp-badge">AI</span>' : ''}</span></label>`;
+            }).join('');
         };
         const aiHtml = () => {
             const st = aiStatus;
@@ -1371,7 +1380,7 @@
             else if (a) line = `<span><strong>Using AI-written jokes</strong> (${esc(cap(stored.tone || 'gentle'))}${stored.tone && stored.tone !== tone() ? ` — Rewrite to use ${esc(cap(tone()))}` : ''}).</span> <button type="button" data-act="builtin" class="dkp-link">Use built-in jokes</button>`;
             else if (stored && stored.use === false && stored.key === factsKey(deckFacts(m))) line = '<span>Using the built-in jokes.</span> <button type="button" data-act="useai" class="dkp-link">Use the AI-written ones</button>';
             else if (stored && stored.text) line = '<span>The scores or notes have changed since the AI wrote the jokes, so the built-in ones are used. Write again to update.</span>';
-            else line = '<span>Built-in jokes, or have AI write ones for this round.</span>';
+            else line = '<span>Built-in jokes, or have AI write the jokes and some title ideas for this round.</span>';
             const canWrite = st && st.available && st.signedIn && !busy;
             const btnLabel = a || (stored && stored.text) ? 'Rewrite with AI' : 'Write with AI';
             const hint = !st ? '' : !st.available ? '<div class="dkp-ai-hint">Writing with AI isn’t set up on this server.</div>' : !st.signedIn ? '<div class="dkp-ai-hint">Sign in (cloud button) to write with AI.</div>' : '';
@@ -1384,12 +1393,13 @@
         picker.setAttribute('role', 'dialog');
         picker.setAttribute('aria-modal', 'true');
         picker.innerHTML = `<div class="dkp-box">
-            <h3>Presentation title</h3>
+            <h3>Presentation</h3>
+            <div class="dkp-ai">${aiHtml()}</div>
+            <h4>Title</h4>
             <p>Pick a title for the deck, or write your own.</p>
             <div class="dkp-list">${optionsHtml()}</div>
             <button type="button" data-act="more" class="dkp-more">More ideas</button>
             <label class="dkp-opt"><input type="radio" name="dkp-title" value="__custom"> <input type="text" id="dkp-custom" placeholder="Your own title" value=""></label>
-            <div class="dkp-ai">${aiHtml()}</div>
             <div class="dkp-actions">
                 <button type="button" data-act="cancel">Cancel</button>
                 <button type="button" data-act="view" class="dkp-primary">Show slides</button>
@@ -1430,6 +1440,7 @@
                 const stored = { key: factsKey(facts), tone: data.tone || tone(), model: data.model || '', at: Date.now(), text: data.text };
                 m.data.deckAi = stored;
                 bridge.setDeckAi(stored);
+                justWrote = true;
             } catch (err) {
                 aiError = `${err.message || 'The AI writer failed.'} The built-in jokes still work.`;
             } finally {
