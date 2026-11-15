@@ -448,6 +448,99 @@
         return pick(m, 'close', [`${W} by ${pts}. ${last}: the clays have sent a thank-you card.`, `${W} wins by ${pts}. ${last} brought up the rear with dignity.`, `${W} by ${pts}. ${last}, there's always next week.`, `${W} takes it by ${pts}. ${last} kept the clay industry in business.`]);
     }
 
+    // ---------------------------------------------------------------- one overall roast per slide
+
+    const slideRoast = (text) => (text ? `<div class="dk-roast dk-slide-roast">${esc(text)}</div>` : '');
+    const countBy = (list) => list.reduce((o, k) => ((o[k] = (o[k] || 0) + 1), o), {});
+
+    function kitRoast(m, kit) {
+        const pool = [];
+        const guns = kit.filter(s => s.gun);
+        const makes = countBy(guns.map(s => cap(s.gun.trim().split(/\s+/)[0].toLowerCase())));
+        const [make, count] = Object.entries(makes).sort((a, b) => b[1] - a[1])[0] || [];
+        if (count >= 2) pool.push(`${count} ${make}s in one squad. Brand loyalty or peer pressure?`, `${make} counted ${count} times. Somebody's on commission.`, `${count} ${make}s on the rack. How original.`);
+        else if (guns.length >= 2) pool.push(`${guns.length} different guns, ${guns.length} different excuses.`, 'No two guns the same. A squad of individualists.');
+        const W = m.ranked[0];
+        if (W && m.ranked.length > 1) {
+            if (W.gun) pool.push(`The ${W.gun} won the day. Expect it to be mentioned.`, `${W.name}'s ${W.gun} topped the lot. Correlation, not causation.`);
+            else if (guns.length) pool.push(`${W.name} won without telling us the gun. Trade secret.`);
+        }
+        const essay = kit.filter(s => (s.cartridges || '').length > 60).sort((a, b) => b.cartridges.length - a.cartridges.length)[0];
+        if (essay) pool.push(`${essay.name} wrote an essay on cartridges. Commitment noted.`, `${essay.name}'s cartridge notes run longer than some stands.`);
+        if (!pool.length) pool.push('Tools of the trade, as declared by the squad.', 'The kit list. Results may vary.');
+        return pick(m, 'slide:kit', pool);
+    }
+
+    function milestoneRoast(m) {
+        const ms = m.milestones;
+        const n = m.ranked.length;
+        const first = ms[0];
+        if (n < 2) {
+            const s = m.ranked[0];
+            return s ? pick(m, 'slide:ms', [`${s.name} against the clays: ${fmtPct(first.rows[s.k].rate)} after the first ${first.k}, ${fmtPct(s.rate)} at the end.`, `${fmtPct(first.rows[s.k].rate)} early on, ${fmtPct(s.rate)} by the finish. ${s.rate >= first.rows[s.k].rate ? 'Got better with age.' : 'Faded a touch.'}`]) : '';
+        }
+        const W = m.ranked[0];
+        const sole = (lst) => (lst.length === 1 ? lst[0] : null);
+        const leaders = [...ms.map(x => sole(x.leaders)), sole(leadersBy(m.shooters, s => s.rate))];
+        const early = leaders[0];
+        if (leaders.every(l => l && l === W)) return pick(m, 'slide:ms', [`${W.name} led from the first ${first.k} clays and never let go.`, `Wire to wire: ${W.name} on top at every milestone.`, `${W.name} hit the front early and stayed there.`]);
+        if (early && early !== W) return pick(m, 'slide:ms', [`${early.name} led after the first ${first.k}. ${W.name} had other ideas.`, `Early pace from ${early.name}; ${W.name} finished stronger.`, `${early.name} peaked early. ${W.name} timed it better.`]);
+        let changes = 0;
+        leaders.reduce((prev, l) => { if (l && prev && l !== prev) changes++; return l || prev; }, null);
+        if (changes) return pick(m, 'slide:ms', [`The lead changed hands ${plural(changes, 'time')}. Nobody could settle.`, `${plural(changes, 'lead change')} across the milestones. Keep up at the back.`]);
+        return pick(m, 'slide:ms', ['Shared leads early on. Nobody wanted to commit.', 'Neck and neck through the milestones.']);
+    }
+
+    function barrelRoast(m) {
+        const b = m.squad.barrel;
+        const r1 = pct(b.b1h, b.b1n), r2 = pct(b.b2h, b.b2n);
+        if (r1 === null || r2 === null) return '';
+        const p1 = fmtPct(r1), p2 = fmtPct(r2);
+        let lead;
+        if (r2 > r1 + 0.05) lead = pick(m, 'slide:barrel', [`Second barrels beat first barrels (${p2} vs ${p1}). Slow starters.`, `The second shot was the better shot: ${p2} vs ${p1}.`, `${p2} with the second barrel, ${p1} with the first. Warming up mid-pair.`]);
+        else if (r1 > r2 + 0.05) lead = pick(m, 'slide:barrel', [`First barrel ${p1}, second ${p2}. The second clay is where it went wrong.`, `Sharp first shots (${p1}), shakier follow-ups (${p2}).`, `${p1} then ${p2}: the second bird kept getting away.`]);
+        else lead = pick(m, 'slide:barrel', [`First and second barrels within a whisker: ${p1} vs ${p2}.`, `${p1} and ${p2}. Both barrels pulling their weight.`]);
+        const tail = b.blanks
+            ? pick(m, 'slide:barrel:tail', [` ${plural(b.blanks, 'pair')} escaped both barrels.`, ` ${plural(b.blanks, 'pair')} with nothing from either barrel.`, ` ${b.blanks} blank${b.blanks === 1 ? '' : 's'} on the card.`])
+            : pick(m, 'slide:barrel:tail', [' Not a single blank pair. Impressive.', ' No blanks at all. Tidy.']);
+        return lead + tail;
+    }
+
+    function streaksOverall(m) {
+        const S = m.shooters.filter(s => s.shot);
+        if (!S.length) return '';
+        const maxHit = Math.max(...S.map(s => s.hitStreak.len)), maxMiss = Math.max(...S.map(s => s.missStreak.len));
+        const A = S.filter(s => s.hitStreak.len === maxHit), B = S.filter(s => s.missStreak.len === maxMiss);
+        const an = joinNames(A.map(s => s.name)), bn = joinNames(B.map(s => s.name));
+        if (maxMiss <= 1) return pick(m, 'slide:streak', [`${maxMiss ? 'Nobody missed two in a row.' : 'Not one miss all round.'} Best run: ${an}, ${maxHit} straight.`, `${an} put ${maxHit} together, and nobody ${maxMiss ? 'missed twice running' : 'missed at all'}. Tidy.`]);
+        if (A.length === 1 && B.length === 1 && A[0] === B[0]) return pick(m, 'slide:streak', [`${an} had the best run (${maxHit}) and the worst slump (${maxMiss}). A rollercoaster.`, `Highs and lows for ${an}: ${maxHit} straight, then ${maxMiss} misses in a row.`]);
+        return pick(m, 'slide:streak', [`${an}'s ${maxHit} in a row was the run of the day. ${bn}'s ${maxMiss}-miss slump was the one to forget.`, `Hot hand: ${an} (${maxHit} straight). Cold patch: ${bn} (${maxMiss} misses).`, `${an} strung ${maxHit} together; ${bn} dropped ${maxMiss} in a row. Swings and roundabouts.`]);
+    }
+
+    function storiesOverall(m) {
+        if (m.best === undefined || m.best === m.worst) return '';
+        const bp = fmtPct(m.squad.perStand[m.best].rate), wp = fmtPct(m.squad.perStand[m.worst].rate);
+        const sb = m.standName(m.best), sw = m.standName(m.worst);
+        const gap = ptsGap(m.squad.perStand[m.best].rate, m.squad.perStand[m.worst].rate);
+        return pick(m, 'slide:stories', [`From ${bp} on ${sb} to ${wp} on ${sw}: a ${gap}-point swing in one round.`, `${sb} was a party (${bp}); ${sw} was a wake (${wp}).`, `${gap} points between the best and worst ${m.SL.toLowerCase()}s. Variety, they call it.`, `${sb}: smiles. ${sw}: silence. ${gap} points apart.`]);
+    }
+
+    function awardsRoast(m, bests, worsts) {
+        const pool = [];
+        const good = countBy(bests.flatMap(a => a.who.map(s => s.name)));
+        const bad = countBy(worsts.flatMap(a => a.who.map(s => s.name)));
+        const [topName, topN] = Object.entries(good).sort((a, b) => b[1] - a[1])[0] || [];
+        if (topN >= 2) pool.push(`${topName} collects ${topN} awards. Cabinet space required.`, `${topN} awards for ${topName}. Speech prepared, presumably.`);
+        const both = Object.keys(good).filter(nm => bad[nm]);
+        if (both.length) pool.push(`${joinNames(both)} made both lists. Range.`, `${joinNames(both)}: a best and a worst. Versatile.`);
+        const [badName, badN] = Object.entries(bad).sort((a, b) => b[1] - a[1])[0] || [];
+        if (badN >= 2) pool.push(`${badName} takes ${badN} of the worsts. Consistency of a kind.`);
+        const none = m.ranked.length > 1 ? m.shooters.filter(s => s.shot && !good[s.name] && !bad[s.name]).map(s => s.name) : [];
+        if (none.length) pool.push(`${joinNames(none)} ${none.length === 1 ? 'leaves' : 'leave'} empty-handed. Next time.`, `Nothing for ${joinNames(none)} this week. Quietly anonymous.`);
+        if (!pool.length) pool.push('Trophies all round. Well, some of them.', 'The silverware, such as it is.');
+        return pick(m, 'slide:awards', pool);
+    }
+
     // ---------------------------------------------------------------- SVG helpers
 
     function marker(shape, x, y, r, fill) {
@@ -519,6 +612,7 @@
     function buildSlides(m, title) {
         const slides = [];
         const SL = m.SL;
+        const tight = m.shooters.length > 6 ? ' dk-tight' : '';   // big squads: tighter table rows
         const add = (cls, body, notes) => slides.push({ cls, body, notes });
         const D = m.data;
         m.wx = weatherFacts(D);
@@ -566,6 +660,7 @@
             add('dk-alt', `
                 <h2 class="dk-h">The kit</h2>
                 <div class="dk-sub">Guns and cartridges</div>
+                ${slideRoast(kitRoast(m, kit))}
                 <div class="dk-grid dk-tight" style="grid-template-columns:max-content ${hasGun ? '1fr ' : ''}${hasCart ? '1.8fr' : ''}">
                     <div class="dk-hd">Shooter</div>${hasGun ? '<div class="dk-hd">Gun</div>' : ''}${hasCart ? '<div class="dk-hd">Cartridges</div>' : ''}
                     ${kit.map(s => `<div class="dk-strong dk-nowrap">${who(s)}</div>${hasGun ? `<div>${esc(s.gun || '–')}</div>` : ''}${hasCart ? `<div>${esc(s.cartridges || '–')}</div>` : ''}`).join('')}
@@ -600,7 +695,8 @@
             add('dk-alt', `
                 <h2 class="dk-h">Milestones</h2>
                 <div class="dk-sub">"First 6" = the first 6 clays of every ${SL.toLowerCase()}, not clay 6 in card order</div>
-                <div class="dk-grid" style="grid-template-columns:${mcols}">
+                ${slideRoast(milestoneRoast(m))}
+                <div class="dk-grid${tight}" style="grid-template-columns:${mcols}">
                     <div class="dk-hd">Shooter</div>
                     ${m.milestones.map(ms => `<div class="dk-hd dk-c dk-stack"><span>First ${ms.scope}</span><span class="dk-dim">first ${ms.k} / ${SL.toLowerCase()}</span></div>`).join('')}
                     <div class="dk-hd dk-c dk-stack"><span>Full card</span><span class="dk-dim">${m.shooters[0] ? m.shooters[0].scheduled : ''} clays</span></div>
@@ -609,7 +705,7 @@
                         return `<div class="dk-c ${lead ? 'dk-lead' : ''}">${row.hits}/${row.shot} · ${fmtPct(row.rate)}${lead ? ' ★' : ''}</div>`;
                     }).join('')}<div class="dk-c">${s.hits}/${s.shot} · ${fmtPct(s.rate)}</div>`).join('')}
                 </div>
-                <div class="dk-callouts">${callouts.map(c => `<div>${c}</div>`).join('')}${finalGap ? `<div>${finalGap}</div>` : ''}</div>
+                ${tight ? '' : `<div class="dk-callouts">${callouts.map(c => `<div>${c}</div>`).join('')}${finalGap ? `<div>${finalGap}</div>` : ''}</div>`}
                 <div class="dk-note">★ = leader at that point (by hit rate).</div>`,
                 m.milestones.map(ms => `First ${ms.k}/${SL.toLowerCase()} (${ms.scope} clays): ` + m.shooters.map(s => `${s.name} ${ms.rows[s.k].hits}/${ms.rows[s.k].shot}`).join(', ')).join('\n'));
         }
@@ -694,7 +790,8 @@
             }[D.discipline.id] || 'Pairs only; singles are not counted.';
             add('dk-alt', `
                 <h2 class="dk-h">Barrel by barrel</h2>
-                <div class="dk-grid" style="grid-template-columns:1.4fr repeat(3,0.8fr) repeat(3,0.8fr) 0.9fr 0.9fr">
+                ${slideRoast(barrelRoast(m))}
+                <div class="dk-grid${tight}" style="grid-template-columns:1.4fr repeat(3,0.8fr) repeat(3,0.8fr) 0.9fr 0.9fr">
                     <div class="dk-hd">Shooter</div><div class="dk-hd dk-c">1st hit</div><div class="dk-hd dk-c">1st miss</div><div class="dk-hd dk-c">1st %</div>
                     <div class="dk-hd dk-c">2nd hit</div><div class="dk-hd dk-c">2nd miss</div><div class="dk-hd dk-c">2nd %</div><div class="dk-hd dk-c">Doubles</div><div class="dk-hd dk-c">Blanks</div>
                     ${rows.map(r => `<div class="dk-strong">${r.label}</div><div class="dk-c">${r.b.b1h}</div><div class="dk-c">${r.b.b1n - r.b.b1h}</div><div class="dk-c">${fmtPct(pct(r.b.b1h, r.b.b1n))}</div><div class="dk-c">${r.b.b2h}</div><div class="dk-c">${r.b.b2n - r.b.b2h}</div><div class="dk-c">${fmtPct(pct(r.b.b2h, r.b.b2n))}</div><div class="dk-c">${r.b.doubles}</div><div class="dk-c">${r.b.blanks}</div>`).join('')}
@@ -732,7 +829,8 @@
         add('', `
             <h2 class="dk-h">Streaks and slumps</h2>
             <div class="dk-sub">In card order, running across ${SL.toLowerCase()}s</div>
-            <div class="dk-grid" style="grid-template-columns:max-content max-content max-content 1fr;${m.shooters.some(s => s.name.length > 14) || m.shooters.length > 6 ? ' font-size:24px;' : ''}">
+            ${slideRoast(streaksOverall(m))}
+            <div class="dk-grid${tight}" style="grid-template-columns:max-content max-content max-content 1fr;${m.shooters.some(s => s.name.length > 14) || m.shooters.length > 6 ? ' font-size:24px;' : ''}">
                 <div class="dk-hd">Shooter</div><div class="dk-hd">Longest hit streak</div><div class="dk-hd">Longest miss streak</div><div class="dk-hd">Verdict</div>
                 ${m.shooters.map(s => `<div class="dk-strong dk-nowrap">${who(s)}</div>
                     <div class="dk-nowrap"><strong class="dk-good">${s.hitStreak.len}</strong> ${s.hitStreak.len ? `<span class="dk-dim">${esc(posText(m, s.hitStreak.from))} → ${esc(posText(m, s.hitStreak.to))}</span>` : ''}</div>
@@ -752,6 +850,7 @@
             const c = m.contrast;
             add('dk-alt', `
                 <h2 class="dk-h">${SL} stories</h2>
+                ${slideRoast(storiesOverall(m))}
                 <div class="dk-stories">
                     ${card('Best', m.best, storyLine(m, 'best'), 'good')}
                     ${card('Worst', m.worst, storyLine(m, 'worst'), 'bad')}
@@ -770,6 +869,7 @@
             const list = (items, cls) => items.map(a => `<div class="dk-award ${cls}"><div class="dk-award-name">${esc(a.name)}</div><div class="dk-award-who">${esc(joinNames(a.who.map(s => s.name)))}</div><div class="dk-dim">${esc(a.stat)}</div></div>`).join('');
             add('', `
                 <h2 class="dk-h">Awards</h2>
+                ${slideRoast(awardsRoast(m, bests, worsts))}
                 <div class="dk-awards"><div><div class="dk-hd dk-good">The bests</div>${list(bests, 'good')}</div><div><div class="dk-hd dk-bad">The worsts</div>${list(worsts, 'bad')}</div></div>`,
                 [...bests, ...worsts].map(a => `${a.name}: ${a.who.map(s => s.name).join(' & ')} — ${a.stat}`).join('\n'));
         }
@@ -778,7 +878,7 @@
         add('dk-alt', `
             <h2 class="dk-h">Score check</h2>
             <div class="dk-sub">Every number in this deck is recomputed from the scored clays</div>
-            <div class="dk-grid" style="grid-template-columns:1.3fr 1fr 1fr 1fr 1fr">
+            <div class="dk-grid${tight}" style="grid-template-columns:1.3fr 1fr 1fr 1fr 1fr">
                 <div class="dk-hd">Shooter</div><div class="dk-hd dk-c">Sum of ${SL.toLowerCase()}s</div><div class="dk-hd dk-c">Clay-by-clay</div><div class="dk-hd dk-c">Running total</div><div class="dk-hd dk-c">Not shot</div>
                 ${m.shooters.map(s => {
                     const bySeq = s.seq.filter(e => e.hit).length;
@@ -908,6 +1008,7 @@
         .dk-strong { font-weight: 700; }
         .dk-dim { color: #b8a596; font-weight: 400; }
         .dk-roast { color: #fde68a; font-style: italic; }
+        .dk-slide-roast { font-size: 30px; margin: 6px 0 18px; max-width: 1700px; }
         .dk-types-gag { margin-top: 18px; font-size: 30px; }
         .dk-good { color: #4ade80; } .dk-bad { color: #fb7185; }
         .dk-lead { color: #fdba74; font-weight: 700; }
@@ -960,6 +1061,8 @@
         #deck-viewer button.dkv-primary { background: #ea580c; border-color: #ea580c; color: #fff; }
         #deck-viewer .dkv-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; touch-action: pan-y pinch-zoom; }
         #deck-viewer .dkv-frame { position: relative; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+        #deck-viewer .dkv-desktop { display: none; }
+        @media (hover: hover) and (pointer: fine) { #deck-viewer .dkv-desktop { display: inline-block; } }
         #deck-viewer .dkv-frame > .dk-slide { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
         #deck-viewer .dkv-nav { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 8px 10px max(10px, env(safe-area-inset-bottom)); background: #1a120d; border-top: 1px solid #3a2a20; font: 700 14px 'DM Sans', system-ui, sans-serif; }
         #deck-viewer .dkv-notes { max-height: 28vh; overflow-y: auto; padding: 10px 14px; background: #120c08; border-top: 1px solid #3a2a20; font: 14px/1.45 'DM Sans', system-ui, sans-serif; white-space: pre-wrap; color: #e7d9cc; }
@@ -1102,6 +1205,7 @@
                 <div class="dkv-title">${esc(title)}</div>
                 <button type="button" data-act="notes" aria-pressed="false">Notes</button>
                 <button type="button" data-act="share" class="dkv-primary">Share</button>
+                <button type="button" data-act="save" class="dkv-desktop" title="Save to this computer">Save</button>
                 <button type="button" data-act="print">Print</button>
                 <button type="button" data-act="close">Close</button>
             </div>
@@ -1121,6 +1225,7 @@
             else if (act === 'next') go(1);
             else if (act === 'print') printDeck(m, title);
             else if (act === 'share') shareDeck(m, title, e.target.closest('button'));
+            else if (act === 'save') shareDeck(m, title, e.target.closest('button'), true);
             else if (act === 'notes') { current.notes = !current.notes; e.target.setAttribute('aria-pressed', String(current.notes)); show(); }
         });
         let x0 = null;
@@ -1184,7 +1289,7 @@
     }
 
     // Share: render every slide to an image and wrap them in a 16:9 PDF (one slide per page).
-    async function shareDeck(m, title, btn) {
+    async function shareDeck(m, title, btn, saveOnly = false) {
         const bridge = window.ClayScorerDeck;
         if (!window.html2canvas || !bridge?.pdfFromCanvases) return;
         const label = btn ? btn.textContent : '';
@@ -1201,7 +1306,8 @@
                 canvases.push(await window.html2canvas(host.firstElementChild, { scale: 0.75, width: W, height: H, backgroundColor: null, useCORS: true }));
             }
             const blob = await bridge.pdfFromCanvases(canvases, 841.89, 473.56);
-            await bridge.shareFiles([new File([blob], `${m.data.filenameStem}_presentation.pdf`, { type: 'application/pdf' })]);
+            const file = new File([blob], `${m.data.filenameStem}_presentation.pdf`, { type: 'application/pdf' });
+            await (saveOnly && bridge.saveFiles ? bridge.saveFiles([file]) : bridge.shareFiles([file]));
         } catch (e) {
             console.error(e);
             bridge.notify('Could not create the presentation PDF.', 'error');
@@ -1235,5 +1341,5 @@
         window.print();
     }
 
-    window.ClayScorerPresentation = { open, analyse, titleSuggestions, buildSlides, _view: view, _print: printDeck, _share: shareDeck, _model: model };
+    window.ClayScorerPresentation = { open, analyse, titleSuggestions, buildSlides, _fit: fitSlides, _view: view, _print: printDeck, _share: shareDeck, _model: model };
 })();

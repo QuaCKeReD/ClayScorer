@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-15 (more varied deck humour)';
+    const SCORER_BUILD = 'scorer 2026-11-15 (slide roasts, Save on computers)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -1904,6 +1904,11 @@
             catch (e) { if (e.name !== 'AbortError') throw e; }
             return;
         }
+        await downloadFiles(files);
+    }
+
+    // Save straight to the computer: one download per file (the viewers' Save button).
+    async function downloadFiles(files) {
         for (const file of files) {
             const a = document.createElement('a');
             a.href = URL.createObjectURL(file);
@@ -2088,6 +2093,19 @@
                 await shareOrDownload(viewer.files.length ? viewer.files : await buildScorecardImages());
             }
         } catch (e) { console.error(e); notify('Could not share it.', 'error'); }
+    };
+
+    window.saveFromViewer = async () => {
+        if (!viewer) return;
+        try {
+            if (viewer.kind === 'pdf') {
+                const canvases = viewer.canvases.length ? viewer.canvases : await buildPdfPages();
+                const blob = await pdfFromCanvases(canvases, ...A4_LANDSCAPE_PT);
+                await downloadFiles([new File([blob], `${filenameStem()}.pdf`, { type: 'application/pdf' })]);
+            } else {
+                await downloadFiles(viewer.files.length ? viewer.files : await buildScorecardImages());
+            }
+        } catch (e) { console.error(e); notify('Could not save it.', 'error'); }
     };
 
     window.printFromViewer = () => {
@@ -2366,6 +2384,7 @@
                 </div>
                 <div class="flex items-center gap-2 flex-shrink-0">
                     <button onclick="shareFromViewer()" class="${BTN_SMALL} bg-orange-500 text-white border-orange-500 inline-flex items-center gap-1"><i data-lucide="share-2" class="w-3.5 h-3.5"></i> Share</button>
+                    <button onclick="saveFromViewer()" class="desktop-only hidden ${BTN_SMALL} bg-slate-700 text-white border-slate-600 items-center gap-1" title="Save to this computer"><i data-lucide="download" class="w-3.5 h-3.5"></i> Save</button>
                     <button onclick="printFromViewer()" class="${BTN_SMALL} bg-slate-700 text-white border-slate-600 inline-flex items-center gap-1"><i data-lucide="printer" class="w-3.5 h-3.5"></i> Print</button>
                     <button onclick="closeScorecard()" class="${BTN_SMALL} bg-white text-slate-900 border-white">Close</button>
                 </div>
@@ -3054,7 +3073,8 @@
         },
         notify: (m, tone) => notify(m, tone),
         pdfFromCanvases: (canvases, wPt, hPt) => pdfFromCanvases(canvases, wPt, hPt),
-        shareFiles: (files) => shareOrDownload(files)
+        shareFiles: (files) => shareOrDownload(files),
+        saveFiles: (files) => downloadFiles(files)
     };
 
     document.addEventListener('DOMContentLoaded', () => {

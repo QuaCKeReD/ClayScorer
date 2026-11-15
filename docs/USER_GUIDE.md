@@ -311,10 +311,11 @@ The first three open full screen inside the app. Tap an image or page to zoom in
 | Button | Show scorecard | Show PDF | Show presentation |
 |---|---|---|---|
 | **Share** | Sends the image(s) | Sends a `.pdf` file | Sends the slides as a `.pdf` file |
+| **Save** (computers only) | Downloads the `.png` image(s) | Downloads the `.pdf` file | Downloads the slides as a `.pdf` file |
 | **Print** | Prints the image(s), one per page | Opens the print dialog with the scorecard (choose *Save as PDF* there for a sharper file) | Prints one slide per page |
 | **Close** | Back to scoring | Back to scoring | Back to scoring |
 
-**Share** opens your phone's share sheet (Messages, WhatsApp, email…); on a computer the file downloads instead.
+**Share** opens your phone's share sheet (Messages, WhatsApp, email…); on a computer the file downloads instead. **Save** only appears on a computer (with a mouse or trackpad) and always downloads the files straight to your Downloads folder. On a phone, use **Share** and pick *Save to Files* or *Save image*.
 
 How the scorecards look:
 
@@ -337,7 +338,7 @@ See [example-outputs.pdf](example-outputs.pdf) for full examples of every discip
 
 1. **Pick a title.** The app suggests three. Each starts with the date and names the ground or event, mixed with the squad hit rate, who won and by how much, and the weather if recorded (e.g. *20261108 Kelly-Smith Beats the Wind at Winter League*). Tap **More ideas** for another three, or type your own. The title you choose is remembered with the round.
 2. **Show slides** opens a full-screen slideshow. Swipe, or use **Prev** / **Next**, to move between slides; on a computer the arrow keys work too. **Notes** shows the speaker notes for each slide, with the raw numbers behind it. The slides are easier to read with the phone turned sideways.
-3. **Share** sends the deck as a 16:9 `.pdf` file, one slide per page. **Print** prints it one slide per page; choose *Save as PDF* in the print dialog for a sharper file.
+3. **Share** sends the deck as a 16:9 `.pdf` file, one slide per page. On a computer, **Save** downloads that file. **Print** prints it one slide per page; choose *Save as PDF* in the print dialog for a sharper file.
 
 <img src="guide/presentation-viewer.png" width="600" alt="Presentation slideshow on a phone held sideways">
 
@@ -364,6 +365,7 @@ See [example-outputs.pdf](example-outputs.pdf) for full examples of every discip
 - **Long text is fitted to the slide.** If a table would run off the bottom, its text is made smaller until it fits.
 - **Everyone is compared by hit rate**, so a shooter with fewer clays isn't penalised.
 - **Unscored clays are left out** of every rate rather than counted as misses.
+- **One overall roast per slide.** The kit, Milestones, Barrel by barrel, Streaks and slumps, Stand stories and Awards each have a one-line verdict under the heading, built from that slide's numbers (e.g. who led wire to wire, which barrel let the squad down, who left the awards empty-handed).
 - **The jokes vary.** Each situation has several possible lines. The mix depends on the round and the title, so the same deck always reads the same on screen, in the PDF and when printed. Pick a different title to get a different set. No two shooters on the squad slide get the same line.
 - **The jokes come only from the numbers.** Weather lines only use the weather recorded in Round notes, and clay-type lines only use the clay descriptions. Nothing is invented.
 

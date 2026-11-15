@@ -146,3 +146,8 @@ summary::-webkit-details-marker { display: none; }
 }
 .toast-error { background: #991b1b; }
 .toast-success { background: #166534; }
+
+/* Save buttons in the output viewers: computers only (mouse / trackpad). Phones use Share. */
+@media (hover: hover) and (pointer: fine) {
+    .desktop-only.hidden { display: inline-flex !important; }
+}
