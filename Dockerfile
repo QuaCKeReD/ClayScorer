@@ -7,8 +7,11 @@ ENV NODE_ENV=production \
     DATA_DIR=/data
 
 WORKDIR /app
+# Server dependency (Anthropic SDK, for scorecard photos), installed from the lockfile.
+COPY server/package.json server/package-lock.json ./server/
+RUN cd server && npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 COPY server/ ./server/
-COPY index.html sporting.html sportrap.html compak.html skeet.html users.html migrate.html \
+COPY index.html sporting.html sportrap.html compak.html skeet.html users.html import.html migrate.html \
      manifest.json favicon.ico service_worker.js ./public/
 COPY assets/ ./public/assets/
 # Host file modes vary (e.g. 600 in synced folders); the app only needs to be world-readable.

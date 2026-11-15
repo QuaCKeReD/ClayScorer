@@ -1,0 +1,9 @@
+{
+  "name": "clayscorer-server",
+  "private": true,
+  "type": "module",
+  "description": "ClayScorer self-hosted server (static app + SQLite API + scorecard photo reading)",
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.3.0"
+  }
+}

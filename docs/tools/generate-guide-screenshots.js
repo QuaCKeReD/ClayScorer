@@ -194,6 +194,42 @@ const SQUAD = [
   await p.goto(`${B}/users.html`); await p.waitForTimeout(1200);
   await shot('account', { fullPage: true });
 
+  // 12. Import scorecard photos (the docs container runs the reader in mock mode: made-up cards, no API call)
+  const cardPng = async (name, marks) => {
+    const q = await ctx.newPage();
+    await q.setViewportSize({ width: 330, height: 330 });
+    await q.setContent(`<meta name="viewport" content="width=device-width"><body style="margin:0;background:#e7e2d3;font:12px sans-serif"><div style="margin:12px;padding:10px;background:#fffdf5;border:2px solid #555;transform:rotate(-2deg)">
+      <div style="font-weight:bold;border-bottom:1px solid #555;margin-bottom:8px">SCORECARD &nbsp; Name: <span style="font-family:cursive">${name}</span></div>
+      ${marks.map((m, i) => `<div style="display:flex;gap:6px;margin:4px 0"><b style="width:48px">Stand ${i + 1}</b>${[...m].map(c => `<span style="width:18px;height:18px;border:1px solid #777;text-align:center;font-family:cursive;font-size:14px">${c === 'H' ? '/' : 'O'}</span>`).join('')}</div>`).join('')}
+    </div></body>`);
+    const buf = await q.screenshot(); await q.close(); return buf;
+  };
+  await p.evaluate(async () => {
+    await fetch('/api/regulars', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-ClayScorer': '1' }, body: JSON.stringify({ updatedAt: Date.now(), regulars: [
+      { id: 'g1', name: 'Jo Carter', cpsa: '104233', class: 'AA' }, { id: 'g2', name: 'Sam Patel', cpsa: '118902', class: 'A' } ] }) });
+  });
+  await p.goto(`${B}/import.html?discipline=sporting`); await p.waitForTimeout(1000);
+  await p.setInputFiles('input[data-act="files"]', [
+    { name: 'card1.png', mimeType: 'image/png', buffer: await cardPng('J. Carter', ['HHMHHHHM', 'HHHHMHHH', 'HMHHHH', 'HHHHHH', 'HHMHHHMHHH']) },
+    { name: 'card2.png', mimeType: 'image/png', buffer: await cardPng('S. Patel', ['HMHHHHMM', 'HHMHHHHH', 'HHHHMH', 'MHHHHH', 'HHHHMHHHHM']) }
+  ]);
+  await p.fill('[data-act="ground"]', 'Example Shooting Ground'); await p.fill('[data-act="event"]', 'Club Sporting');
+  await p.locator('[data-act="date"]').fill('2026-11-08'); await p.locator('[data-act="date"]').blur();
+  await p.evaluate(() => window.scrollTo(0, 0));
+  await shot('import-photos', { fullPage: true });
+  // The mock reader always returns its own fictitious names; show them as these regulars' cards.
+  await p.click('[data-act="read"]');
+  await p.waitForSelector('#review', { timeout: 20000 });
+  await p.evaluate(() => {
+    const S = ClayImport._state;
+    const names = ['J. Carter', 'S. Patel', 'R. Hughes'];
+    S.cards = S.cards.slice(0, 3); S.notes = '';
+    S.cards.forEach((c, i) => { c.readName = names[i]; c.newName = names[i]; c.regularId = i < 2 ? `g${i + 1}` : ''; c.autoMatched = i < 2; });
+    ClayImport._render();
+  });
+  await el('#review > section:nth-child(1)', 'import-layout');
+  await el('#review > section:nth-child(2)', 'import-card');
+
   console.log('screenshots done, errors:', JSON.stringify(errs));
   await b.close();
 })();

@@ -2,7 +2,7 @@
 .claude
 data
 _archive
-node_modules
+**/node_modules
 .env
 *.md
 docker-compose.yml

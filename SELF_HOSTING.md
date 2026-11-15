@@ -73,6 +73,22 @@ user's browser (no key, nothing for the server to configure). **Use my location*
 the app is served over https (or localhost); over plain http, users can still search for a place
 or type the weather in.
 
+## Scorecard photo import
+
+**Import scorecard photos** (`import.html`) reads photos of paper scorecards and turns them into a round. The server sends the photos to the [Anthropic API](https://docs.anthropic.com/) (Claude) to be read, so it needs an API key:
+
+1. Create a key in the [Anthropic Console](https://console.anthropic.com/settings/keys).
+2. Add `ANTHROPIC_API_KEY=sk-ant-…` to `.env`.
+3. Run `docker compose up -d --build`.
+
+Without a key, the page says the feature isn't set up. Everything else works as before.
+
+- **Who can use it.** Only signed-in users. Each user can do `SCORECARD_READS_PER_HOUR` reads an hour (default 30).
+- **Cost.** Each read is billed to your Anthropic account by tokens, roughly a few pence for a few photos. See [pricing](https://www.anthropic.com/pricing).
+- **Privacy.** Photos go to Anthropic to be read. ClayScorer doesn't store them.
+- **Model.** The default is `claude-opus-5-5`; set `SCORECARD_MODEL` to change it. If that model is unavailable, the API may fall back to another Claude model automatically.
+- **Testing.** `SCORECARD_READER_MOCK=1` returns made-up cards without calling the API.
+
 ## Moving existing rounds
 
 **From the old Firebase cloud sync:** sign in to this server (Account & users), then open
@@ -111,3 +127,6 @@ The app's service worker picks up new versions when `CACHE_NAME` in `service_wor
 | `SESSION_DAYS`    | `30`     | How long a sign-in lasts |
 | `TRUST_PROXY`     | `false`  | Use `X-Forwarded-For` for the client IP (behind a reverse proxy) |
 | `PUID` / `PGID`   | `1000`   | User/group the container runs as (must own `./data`) |
+| `ANTHROPIC_API_KEY` | —      | Enables scorecard photo import |
+| `SCORECARD_READS_PER_HOUR` | `30` | Photo reads per user per hour |
+| `SCORECARD_MODEL` | `claude-opus-5-5` | Claude model used to read scorecards |

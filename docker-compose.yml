@@ -24,6 +24,12 @@ services:
       SESSION_DAYS: ${SESSION_DAYS:-30}
       # true when a reverse proxy (e.g. Caddy) is in front: client IP comes from X-Forwarded-For.
       TRUST_PROXY: ${TRUST_PROXY:-false}
+      # Scorecard photo import (import.html) reads cards with Claude via the Anthropic API.
+      # Leave empty to switch it off. Each read is billed to this key's account.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      SCORECARD_READS_PER_HOUR: ${SCORECARD_READS_PER_HOUR:-30}
+      SCORECARD_MODEL: ${SCORECARD_MODEL:-}
+      SCORECARD_READER_MOCK: ${SCORECARD_READER_MOCK:-}
     volumes:
       # SQLite database (clayscorer.db + WAL files). Back up this folder.
       - ./data:/data

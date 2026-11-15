@@ -236,6 +236,7 @@ Tap **History** in the header. Every round with a ground or event name is kept h
 | **Open** | Switches to that round (the current round stays in History) |
 | Bin icon | Deletes that round, after asking. When signed in, it is deleted from the server too |
 | **+ New round** | Starts a fresh round; the current one stays in History |
+| **Import photos** | Opens the scorecard photo import with this discipline chosen (see below) |
 | **Import CSV** | Loads a round from a CSV exported by ClayScorer (see below) |
 | **Delete all history** | Removes every saved round for this discipline, after asking |
 
@@ -247,6 +248,34 @@ A round's identity is its **ground + date + event**. If you change any of these,
 - **Fixed layouts must match.** For Sportrap, Compak and Skeet, the stand layout must match.
 - **The round needs a name.** It must have a ground or event name.
 - **What happens.** The round is added to History, and the app offers to open it.
+
+### Importing scorecard photos
+
+Paper scorecards can be turned into a round. Open **Import scorecard photos** from the home page, or **History › Import photos** on a discipline page. You need to be signed in, and the server's administrator has to have set the feature up.
+
+<img src="guide/import-photos.png" width="300" alt="Choosing the discipline and adding scorecard photos">
+
+1. **Discipline.** Pick what the cards are for. From History, it is already chosen.
+2. **Photos.** Tap **Add photos** to choose from your photo library, take a photo, or pick image files. On a computer you can also drag files onto the box. You can add up to 12 photos, and a photo can hold several cards. Tap **×** to remove a photo.
+3. **Round.** Enter a ground or event name (you need at least one) and the date, then tap **Read scorecards**. Reading takes up to about a minute.
+
+The photos are sent to the Anthropic API (Claude) to be read. They aren't kept, either by ClayScorer or as part of the round. If an iPhone HEIC photo won't open, export it as JPEG first.
+
+**Check the cards.** The summary at the top shows the stands that will be created. For English Sporting, each stand gets the **highest number of clays on any card**. An odd number becomes pairs plus a +1 single. Cards with fewer clays on a stand leave the rest as not shot. Sportrap, Compak and Skeet keep their fixed layouts, and you get a warning if a card doesn't fit.
+
+<img src="guide/import-layout.png" width="300" alt="Stand layout taken from the cards">
+
+Each card then shows what was read:
+
+- **Shooter.** If the name on the card matches one of your [regular shooters](#regular-shooters), it is matched automatically and their CPSA number, class and gear are used. Matching ignores case and accepts initials ("P. Sargent" matches "Paul Sargent"). Change the match with the drop-down, or choose **New shooter** and type the name.
+- **Clays.** Green **H** is a hit, red **M** is a miss and **·** is not shot. Tap a clay to change it: hit, then miss, then not shot.
+- **Doubtful marks** have an amber outline, with the reason under the stand, for example an overwritten mark. Check these against the photo.
+- **Written scores.** Each stand's count is compared with any score written on the card. A difference shows **✗ — check** in red. The total is compared the same way.
+- **Include.** Untick a card to leave it out. A round holds up to 10 shooters.
+
+<img src="guide/import-card.png" width="300" alt="Checking one card: matched regular, clays, doubtful mark">
+
+Tap **Create round**. The discipline page opens with the new round, which is also saved in History. If a round with the same ground, date and event already exists, you're asked before it is replaced.
 
 ---
 
@@ -375,6 +404,7 @@ Each user only sees their own rounds. You can't delete your own account or the l
 - **The app looks out of date after an update.** Close and reopen it, or reload the page, once or twice. The app caches itself for offline use and picks up new versions on the next load.
 - **Rounds are saved per device and per browser.** Clearing your browser's site data, or using a private/incognito window, removes rounds that haven't been synced. Sign in if you want a backup.
 - **Different web addresses keep separate data.** Rounds saved while using the app at one address aren't visible at another address, even on the same phone. To move them, sign in at both, or export a CSV and import it.
+- **Scorecard photos not read well?** Take each photo straight on, in good light, with the whole card in the frame. Fewer cards per photo helps.
 - **Nothing in History?** Only rounds with a ground or event name are saved there. Add a name in **Round setup**.
 - **Scored the wrong shooter?** Tap **Undo** straight away, or tap the wrong button again to clear it, then score the right shooter.
 - **Can't change anything?** The round is probably locked. Look for the yellow banner and tap **Unlock**.

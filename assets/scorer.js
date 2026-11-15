@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-14 (weather place per entry)';
+    const SCORER_BUILD = 'scorer 2026-11-15 (scorecard photo import)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -1542,6 +1542,70 @@
         }
     };
 
+    // ---- Scorecard photo import (import.html) ----
+    // The import page leaves a reviewed transcription in localStorage and opens this
+    // discipline's page; here it becomes a round in history and is opened.
+    // Payload: { discipline, ground, event, date, standClays: [n per stand], shooters: [{ name, cpsa,
+    //   class, gun, cartridges, stands: [[true|false|null, ...] per stand] }] }
+    const PENDING_IMPORT_KEY = 'clayscorer:pending-import';
+    function applyPendingImport() {
+        let p = null;
+        try { p = JSON.parse(localStorage.getItem(PENDING_IMPORT_KEY) || 'null'); } catch (e) {}
+        if (!p || p.discipline !== D.id) return;
+        try { localStorage.removeItem(PENDING_IMPORT_KEY); } catch (e) {}
+        const st = makeDefaultState();
+        st.ground = String(p.ground || '').trim();
+        st.event = String(p.event || '').trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(p.date || '')) st.date = p.date;
+        if (!isNamedRound(st)) { notify('Scorecard import needs a ground or event name.', 'error'); return; }
+        if (!D.fixedStands) {
+            // English Sporting: one stand per card stand; odd counts mean pairs plus a +1 single.
+            const opts = D.targetOptions || [4, 6, 8, 10, 12];
+            const minT = Math.min(...opts), maxT = Math.max(...opts);
+            st.stands = (p.standClays || []).slice(0, 20).map((n, i) => {
+                const extraClay = n % 2 === 1;
+                const targets = Math.max(minT, Math.min(maxT, extraClay ? n - 1 : n));
+                return { id: i + 1, targets, extraClay, description: '', clayMeta: normalizeClayMeta([], 2 + (extraClay ? 1 : 0)) };
+            });
+            if (!st.stands.length) st.stands = makeDefaultState().stands;
+        }
+        const baseId = Date.now();
+        st.shooters = (p.shooters || []).slice(0, MAX_SHOOTERS).map((sh, i) => {
+            const out = { id: baseId + i, name: String(sh.name || `Shooter ${i + 1}`).slice(0, 40), cpsa: sh.cpsa || '', class: sh.class || 'U' };
+            if (sh.gun) out.gun = sh.gun;
+            if (sh.cartridges) out.cartridges = sh.cartridges;
+            return out;
+        });
+        if (!st.shooters.length) { notify('No scorecards to import.', 'error'); return; }
+        st.hits = {};
+        st.optionHits = {};
+        st.shooters.forEach((sh, i) => {
+            const src = p.shooters[i].stands || [];
+            st.hits[sh.id] = {};
+            st.stands.forEach((stand, si) => {
+                const total = standTargets(stand);
+                const marks = Array.isArray(src[si]) ? src[si] : [];
+                st.hits[sh.id][stand.id] = Array.from({ length: total }, (_, k) => (marks[k] === true || marks[k] === false ? marks[k] : null));
+                // Skeet: a mark beyond a station's targets is the option target shot there.
+                if (OPTION && marks.length > total && !st.optionHits[sh.id]) {
+                    const extra = marks.slice(total).find(m => m === true || m === false);
+                    if (extra !== undefined) st.optionHits[sh.id] = { standId: stand.id, hit: extra };
+                }
+            });
+        });
+        const current = state;
+        state = st;
+        normalizeState();
+        state = current;
+        const key = roundKey(st);
+        const store = readHistory();
+        if (store[key] && !confirm(`A round for ${st.ground || st.event} on ${getUKDate(st.date)} is already in history. Replace it with the imported scorecards?`)) return;
+        store[key] = { ...st, _roundKey: key, _updatedAt: Date.now() };
+        writeHistory(store);
+        window.loadRound(key);
+        notify(`Imported ${st.shooters.length} scorecard${st.shooters.length === 1 ? '' : 's'}. Check the scores, then carry on as normal.`, 'success');
+    }
+
     function generateExportGrid(tid) {
         const grid = document.getElementById(tid);
         grid.innerHTML = '';
@@ -2292,6 +2356,7 @@
                             <i data-lucide="upload" class="w-3.5 h-3.5"></i> Import CSV
                             <input type="file" accept=".csv,text/csv" onchange="handleImportChange(this)" style="display:none">
                         </label>
+                        <a href="import.html?discipline=${D.id}" class="${BTN_SMALL} bg-white text-slate-700 border-slate-300 inline-flex items-center gap-1"><i data-lucide="camera" class="w-3.5 h-3.5"></i> Import photos</a>
                         <button onclick="closeHeaderMenus(); newRound()" class="${BTN_SMALL} bg-slate-900 text-white border-slate-900">+ New round</button>
                     </div>
                 </div>
@@ -2933,5 +2998,6 @@
         // could leave state named but history empty until the user next mutates something.
         if (isNamedRound(state)) save();
         render();
+        applyPendingImport();
     });
 })();

@@ -1,6 +1,6 @@
 /* ClayScorer self-hosted server.
  *
- * One dependency-free Node process that:
+ * One Node process (its only dependency is the Anthropic SDK, for scorecard photos) that:
  *   - serves the static app (APP_DIR),
  *   - stores signed-in users' round history in SQLite (DATA_DIR/clayscorer.db),
  *   - manages users (username + scrypt password hash, role 'admin' | 'user').
@@ -15,6 +15,7 @@ import { promisify } from 'node:util';
 import { readFile, stat, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readScorecards, scorecardReaderAvailable, ScorecardError } from './scorecards.js';
 
 const scrypt = promisify(scryptCb);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -28,6 +29,8 @@ const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
 const SESSION_DAYS = Number(process.env.SESSION_DAYS || 30);
 const COOKIE = 'cs_session';
 const MAX_BODY = 2 * 1024 * 1024;
+const MAX_SCORECARD_BODY = 40 * 1024 * 1024;      // up to 12 downscaled photos
+const SCORECARD_READS_PER_HOUR = Number(process.env.SCORECARD_READS_PER_HOUR || 30);
 const DISCIPLINES = new Set(['sporting', 'sportrap', 'compak', 'skeet']);
 const USERNAME_RE = /^[a-z0-9._-]{3,32}$/i;
 const MIN_PASSWORD = 8;
@@ -173,12 +176,12 @@ function sendJson(res, status, body) {
     res.end(data);
 }
 
-async function readJson(req) {
+async function readJson(req, limit = MAX_BODY) {
     let size = 0;
     const chunks = [];
     for await (const chunk of req) {
         size += chunk.length;
-        if (size > MAX_BODY) throw new HttpError(413, 'Request too large');
+        if (size > limit) throw new HttpError(413, 'Request too large');
         chunks.push(chunk);
     }
     if (!chunks.length) return {};
@@ -212,6 +215,9 @@ function validateDiscipline(d) {
 }
 
 // ---------- API routes ----------
+
+// Per-user timestamps of scorecard reads in the last hour (each read is a paid API call).
+const scorecardReads = new Map();
 
 async function handleApi(req, res, url) {
     const { pathname } = url;
@@ -261,6 +267,28 @@ async function handleApi(req, res, url) {
         // Sign out every other device that knew the old password.
         q.deleteUserSessionsExcept.run(user.id, sha256(sessionToken(req)));
         return sendJson(res, 200, { ok: true });
+    }
+
+    // --- Scorecard photos: is reading available, and read a batch (signed-in users only) ---
+    if (pathname === '/api/scorecards/status' && method === 'GET') {
+        return sendJson(res, 200, { available: scorecardReaderAvailable(), signedIn: !!currentUser(req) });
+    }
+    if (pathname === '/api/scorecards/read' && method === 'POST') {
+        const user = requireUser(req);
+        if (!scorecardReaderAvailable()) throw new HttpError(503, 'Scorecard reading isn’t set up on this server (no ANTHROPIC_API_KEY).');
+        const now = Date.now();
+        const recent = (scorecardReads.get(user.id) || []).filter(t => now - t < 3600_000);
+        if (recent.length >= SCORECARD_READS_PER_HOUR) throw new HttpError(429, 'Too many scorecard reads this hour. Try again later.');
+        const { discipline, images } = await readJson(req, MAX_SCORECARD_BODY);
+        validateDiscipline(discipline);
+        recent.push(now);
+        scorecardReads.set(user.id, recent);
+        try {
+            return sendJson(res, 200, await readScorecards({ discipline, images }));
+        } catch (err) {
+            if (err instanceof ScorecardError) throw new HttpError(err.status, err.message);
+            throw err;
+        }
     }
 
     // --- Regular shooters: GET returns the list, PUT replaces it if newer ---
