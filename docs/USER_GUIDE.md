@@ -366,6 +366,7 @@ See [example-outputs.pdf](example-outputs.pdf) for full examples of every discip
 - **Everyone is compared by hit rate**, so a shooter with fewer clays isn't penalised.
 - **Unscored clays are left out** of every rate rather than counted as misses.
 - **One overall roast per slide.** The kit, Milestones, Barrel by barrel, Streaks and slumps, Stand stories and Awards each have a one-line verdict under the heading, built from that slide's numbers (e.g. who led wire to wire, which barrel let the squad down, who left the awards empty-handed).
+- **Round notes join in.** A sentence in the round's **Notes** that names a shooter is quoted after their roast on the squad slide. The final slide adds a line about the notes: a joke if they mention something it recognises (trap trouble, new kit, a debut, a birthday, something forgotten, a late start, food and drink, a busy ground, the conditions, a competition, coaching), otherwise a quote of the first sentence. The notes are only quoted or matched on keywords; nothing is read into them.
 - **The jokes vary.** Each situation has several possible lines. The mix depends on the round and the title, so the same deck always reads the same on screen, in the PDF and when printed. Pick a different title to get a different set. No two shooters on the squad slide get the same line.
 - **The jokes come only from the numbers.** Weather lines only use the weather recorded in Round notes, and clay-type lines only use the clay descriptions. Nothing is invented.
 

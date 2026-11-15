@@ -448,6 +448,58 @@
         return pick(m, 'close', [`${W} by ${pts}. ${last}: the clays have sent a thank-you card.`, `${W} wins by ${pts}. ${last} brought up the rear with dignity.`, `${W} by ${pts}. ${last}, there's always next week.`, `${W} takes it by ${pts}. ${last} kept the clay industry in business.`]);
     }
 
+    // ---------------------------------------------------------------- round notes
+
+    // Round notes are free text, so they're never interpreted beyond simple keyword topics:
+    // a sentence naming a shooter is quoted in their roast, and a recognised topic (trap
+    // trouble, new kit, a debut…) picks a closing line. Nothing is made up from them.
+    const noteSentences = (D) => String(D.notes || '').split(/\n+/).flatMap(line => line.split(/(?<=[.!?])\s+|\s*;\s*/)).map(t => t.replace(/\s+/g, ' ').trim()).filter(t => t.length >= 3);
+    const clip = (t, n = 110) => (t.length > n ? `${t.slice(0, n - 1).replace(/\s+\S*$/, '')}…` : t);
+    const reEsc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // The first notes sentence that names this shooter (full name, first name or surname).
+    function noteAbout(m, s) {
+        const parts = String(s.name || '').split(/\s+/).map(w => w.replace(/[^A-Za-z'-]/g, '')).filter(w => w.length >= 2);
+        if (!parts.length) return null;
+        // A first name or surname shared with another shooter doesn't count on its own.
+        const others = m.shooters.filter(x => x !== s).map(x => String(x.name || '').toLowerCase());
+        const keys = [s.name, ...parts.filter(w => !others.some(o => new RegExp(`\\b${reEsc(w.toLowerCase())}\\b`).test(o)))];
+        // Short names ("Jo", "Al") only count when capitalised, so ordinary words don't match.
+        return noteSentences(m.data).find(t => keys.some(k => new RegExp(`\\b${reEsc(k)}\\b`, k.length <= 3 ? '' : 'i').test(t))) || null;
+    }
+    const NOTE_TOPICS = [
+        { re: /\b(trap|traps|machine|trapper)\b.*\b(broke|broken|jam|jammed|fault|failed|down|stuck)\b|\b(broke|broken|jammed)\b.*\btrap/i,
+          lines: ['Trap trouble made the round notes. Very convenient for some.', 'A misbehaving trap is on record. Excuses now officially available.', 'The notes blame the machinery. The machinery has no right of reply.'] },
+        { re: /\bnew (gun|shotgun|cartridges?|carts|choke|chokes|stock|glasses|vest|jacket)\b/i,
+          lines: ['New kit gets a mention in the notes. Teething problems, or a fresh excuse?', 'Something new in the bag, say the notes. The clays were not impressed.', 'New gear noted. Results to be blamed on it accordingly.'] },
+        { re: /\b(first (time|round|shoot|go)|debut|beginner|novice|never shot)\b/i,
+          lines: ['A debut is noted. Welcome to the habit.', 'Somebody\'s first time, say the notes. The clays didn\'t go easy.', 'A first outing on record. It only gets more expensive from here.'] },
+        { re: /\bbirthday\b/i,
+          lines: ['A birthday on the card. The clays didn\'t bring presents.', 'Birthday noted. The clays did not sing.'] },
+        { re: /\b(forgot|forgotten|left (his|her|their|my) )\b/i,
+          lines: ['Something got forgotten, say the notes. Classic.', 'The notes record a memory lapse. Not naming names. (The notes might.)'] },
+        { re: /\b(late|traffic|delayed|delay)\b/i,
+          lines: ['A late start is on record. Some were still warming up at the last stand.', 'Delays noted. Patience tested, clays waiting.'] },
+        { re: /\b(lunch|bacon|breakfast|cake|coffee|tea|pub|beer|pint|bar)\b/i,
+          lines: ['Refreshments made the notes. Priorities clearly in order.', 'Food and drink got a mention. Possibly the highlight for some.'] },
+        { re: /\b(squad|group)\s+(behind|ahead|waiting|queue)|\bqueue|\bbusy\b/i,
+          lines: ['A busy ground, say the notes. Plenty of time to overthink each stand.', 'Queues noted. Standing about is a skill too.'] },
+        { re: /\b(sun|glare|wind|windy|rain|wet|cold|freezing|hot|fog|mud|muddy)\b/i,
+          lines: ['The conditions got a mention in the notes. They always do.', 'The notes have opinions about the weather. So do the scores.'] },
+        { re: /\b(competition|comp|registered|shoot[- ]off|league|championship)\b/i,
+          lines: ['A competitive edge, per the notes. Nerves explain a lot.', 'Silverware on the line, say the notes. Pressure: applied.'] },
+        { re: /\b(practice|lesson|coach|coaching|instructor)\b/i,
+          lines: ['Coaching gets a mention. Whether it worked is in the scores.', 'Practice, say the notes. The clays treated it as the real thing.'] }
+    ];
+    function notesClosing(m) {
+        const all = noteSentences(m.data);
+        if (!all.length) return '';
+        const text = all.join(' ');
+        const topic = NOTE_TOPICS.find(t => t.re.test(text));
+        if (topic) return pick(m, 'notes:topic', topic.lines);
+        const first = clip(all[0]);
+        return pick(m, 'notes:quote', [`From the round notes: "${first}"`, `For the record, the notes say: "${first}"`, `Scorer's footnote: "${first}"`]);
+    }
+
     // ---------------------------------------------------------------- one overall roast per slide
 
     const slideRoast = (text) => (text ? `<div class="dk-roast dk-slide-roast">${esc(text)}</div>` : '');
@@ -649,7 +701,7 @@
                     `<div>${s.shot}${s.unshot ? ` <span class="dk-dim">(${s.unshot} not shot)</span>` : ''}</div>`,
                     showGun && `<div>${esc(s.gun || '–')}</div>`,
                     showCart && `<div>${esc(s.cartridges || '–')}</div>`,
-                    `<div class="dk-roast">${esc(squadRoast(m, s))}</div>`
+                    `<div class="dk-roast">${esc(squadRoast(m, s))}${(() => { const t = noteAbout(m, s); return t ? ` <span class="dk-note-quote">${esc(pick(m, `notes:${s.name}`, ['Notes say:', 'On the record:', 'The notes add:']))} “${esc(clip(t, 90))}”</span>` : ''; })()}</div>`
                 ].filter(Boolean).join('')).join('')}
             </div>
             ${compareNote}`,
@@ -896,9 +948,11 @@
         // 13. Closing
         add('dk-orange', `
             <h2 class="dk-h dk-close-h">Final scores</h2>
-            <div class="dk-final">${m.ranked.map((s, i) => `<div><span class="dk-final-rank">${i + 1}</span> <span class="dk-final-name">${esc(s.name)}</span> <span class="dk-final-score">${s.hits}/${s.shot} · ${fmtPct(s.rate)}</span></div>`).join('')}</div>
-            <div class="dk-gag dk-close-gag">${esc(closingGag(m))}</div>`,
-            m.ranked.map((s, i) => `${i + 1}. ${s.name} ${s.hits}/${s.shot} (${fmtPct(s.rate)})`).join('\n'));
+            <div class="dk-final${m.ranked.length > 6 ? ' dk-final-tight' : ''}">${m.ranked.map((s, i) => `<div><span class="dk-final-rank">${i + 1}</span> <span class="dk-final-name">${esc(s.name)}</span> <span class="dk-final-score">${s.hits}/${s.shot} · ${fmtPct(s.rate)}</span></div>`).join('')}</div>
+            <div class="dk-gag dk-close-gag">${esc(closingGag(m))}</div>
+            ${(() => { const t = notesClosing(m); return t ? `<div class="dk-close-notes">${esc(t)}</div>` : ''; })()}`,
+            m.ranked.map((s, i) => `${i + 1}. ${s.name} ${s.hits}/${s.shot} (${fmtPct(s.rate)})`).join('\n')
+            + (D.notes ? `\nRound notes: ${D.notes}` : ''));
 
         return slides;
     }
@@ -1008,6 +1062,8 @@
         .dk-strong { font-weight: 700; }
         .dk-dim { color: #b8a596; font-weight: 400; }
         .dk-roast { color: #fde68a; font-style: italic; }
+        .dk-note-quote { color: #fcd9a8; font-style: normal; }
+        .dk-close-notes { margin-top: 14px; font-size: 30px; color: #1a0f08; font-style: italic; max-width: 1600px; }
         .dk-slide-roast { font-size: 30px; margin: 6px 0 18px; max-width: 1700px; }
         .dk-types-gag { margin-top: 18px; font-size: 30px; }
         .dk-good { color: #4ade80; } .dk-bad { color: #fb7185; }
@@ -1046,6 +1102,7 @@
         .dk-award-who { font-weight: 700; text-align: right; }
         .dk-close-h { color: #1a0f08; font-size: 96px; }
         .dk-final { display: grid; gap: 10px; margin: 20px 0 34px; font-size: 44px; }
+        .dk-final.dk-final-tight { gap: 2px; margin: 10px 0 20px; font-size: 38px; }
         .dk-final-rank { font-family: 'Oswald', sans-serif; font-weight: 700; display: inline-block; width: 64px; }
         .dk-final-name { font-weight: 700; } .dk-final-score { margin-left: 18px; }
         .dk-close-gag { color: #1a0f08; font-weight: 700; font-size: 44px; }
