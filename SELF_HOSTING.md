@@ -89,6 +89,16 @@ Without a key, the page says the feature isn't set up. Everything else works as 
 - **Model.** The default is `claude-opus-5-5`; set `SCORECARD_MODEL` to change it. If that model is unavailable, the API may fall back to another Claude model automatically.
 - **Testing.** `SCORECARD_READER_MOCK=1` returns made-up cards without calling the API.
 
+## Presentation "Write with AI"
+
+The Presentation deck can have Claude write its titles, gags and roasts (Export › Show presentation › **Write with AI**, with a Gentle / Cheeky / Savage tone). It uses the same `ANTHROPIC_API_KEY` as the scorecard photo import; without a key the deck uses its built-in lines and the button doesn't appear.
+
+- **Model.** `PRESENTATION_MODEL`, default `claude-sonnet-5-5`. Server-side fallbacks are on, so if the model declines, the API may retry on another Claude model.
+- **Cost.** One request per write-up. A test round (4 shooters, 10 stands, weather and notes) used about 4,400 input and 1,500 output tokens, around $0.02 at Sonnet 5.5 prices ($2 / $10 per million tokens). See [pricing](https://www.anthropic.com/pricing).
+- **Who and how often.** Signed-in users only, `PRESENTATION_WRITES_PER_HOUR` per user (default 30).
+- **Privacy.** The round's shooter names, scores, gun and cartridge details, weather and notes go to Anthropic. The result is stored with the round, not on the server.
+- **Testing.** `PRESENTATION_WRITER_MOCK=1` returns canned lines without calling the API.
+
 ## Moving existing rounds
 
 **From the old Firebase cloud sync:** sign in to this server (Account & users), then open
@@ -130,3 +140,5 @@ The app's service worker picks up new versions when `CACHE_NAME` in `service_wor
 | `ANTHROPIC_API_KEY` | —      | Enables scorecard photo import |
 | `SCORECARD_READS_PER_HOUR` | `30` | Photo reads per user per hour |
 | `SCORECARD_MODEL` | `claude-opus-5-5` | Claude model used to read scorecards |
+| `PRESENTATION_MODEL` | `claude-sonnet-5-5` | Claude model for the deck's Write with AI |
+| `PRESENTATION_WRITES_PER_HOUR` | `30` | AI write-ups per user per hour |

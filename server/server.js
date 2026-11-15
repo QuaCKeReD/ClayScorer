@@ -1,6 +1,7 @@
 /* ClayScorer self-hosted server.
  *
- * One Node process (its only dependency is the Anthropic SDK, for scorecard photos) that:
+ * One Node process (its only dependency is the Anthropic SDK, for scorecard photos and the
+ * Presentation deck's "Write with AI") that:
  *   - serves the static app (APP_DIR),
  *   - stores signed-in users' round history in SQLite (DATA_DIR/clayscorer.db),
  *   - manages users (username + scrypt password hash, role 'admin' | 'user').
@@ -16,6 +17,7 @@ import { readFile, stat, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readScorecards, scorecardReaderAvailable, ScorecardError } from './scorecards.js';
+import { writePresentation, presentationWriterAvailable, PresentationError } from './presentation.js';
 
 const scrypt = promisify(scryptCb);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -31,6 +33,7 @@ const COOKIE = 'cs_session';
 const MAX_BODY = 2 * 1024 * 1024;
 const MAX_SCORECARD_BODY = 40 * 1024 * 1024;      // up to 12 downscaled photos
 const SCORECARD_READS_PER_HOUR = Number(process.env.SCORECARD_READS_PER_HOUR || 30);
+const PRESENTATION_WRITES_PER_HOUR = Number(process.env.PRESENTATION_WRITES_PER_HOUR || 30);
 const DISCIPLINES = new Set(['sporting', 'sportrap', 'compak', 'skeet']);
 const USERNAME_RE = /^[a-z0-9._-]{3,32}$/i;
 const MIN_PASSWORD = 8;
@@ -218,6 +221,8 @@ function validateDiscipline(d) {
 
 // Per-user timestamps of scorecard reads in the last hour (each read is a paid API call).
 const scorecardReads = new Map();
+// Same for the Presentation deck's "Write with AI".
+const presentationWrites = new Map();
 
 async function handleApi(req, res, url) {
     const { pathname } = url;
@@ -287,6 +292,27 @@ async function handleApi(req, res, url) {
             return sendJson(res, 200, await readScorecards({ discipline, images }));
         } catch (err) {
             if (err instanceof ScorecardError) throw new HttpError(err.status, err.message);
+            throw err;
+        }
+    }
+
+    // --- Presentation deck: "Write with AI" (signed-in users only) ---
+    if (pathname === '/api/presentation/status' && method === 'GET') {
+        return sendJson(res, 200, { available: presentationWriterAvailable(), signedIn: !!currentUser(req) });
+    }
+    if (pathname === '/api/presentation/write' && method === 'POST') {
+        const user = requireUser(req);
+        if (!presentationWriterAvailable()) throw new HttpError(503, 'Writing with AI isn’t set up on this server (no ANTHROPIC_API_KEY).');
+        const now = Date.now();
+        const recent = (presentationWrites.get(user.id) || []).filter(t => now - t < 3600_000);
+        if (recent.length >= PRESENTATION_WRITES_PER_HOUR) throw new HttpError(429, 'Too many AI write-ups this hour. Try again later.');
+        const { facts, tone } = await readJson(req);
+        recent.push(now);
+        presentationWrites.set(user.id, recent);
+        try {
+            return sendJson(res, 200, await writePresentation({ facts, tone }));
+        } catch (err) {
+            if (err instanceof PresentationError) throw new HttpError(err.status, err.message);
             throw err;
         }
     }

@@ -240,8 +240,7 @@ Tap **History** in the header. Every round with a ground or event name is kept h
 | **Open** | Switches to that round (the current round stays in History) |
 | Bin icon | Deletes that round, after asking. When signed in, it is deleted from the server too |
 | **+ New round** | Starts a fresh round; the current one stays in History |
-| **Import photos** | Opens the scorecard photo import with this discipline chosen (see below) |
-| **Photos into this round** | Fills in the open round from scorecard photos. Only shown while it has no scores (see below) |
+| **Import photos into this round** | On its own line below. Fills in the open round from scorecard photos. Only shown while it has no scores (see below) |
 | **Import CSV** | Loads a round from a CSV exported by ClayScorer (see below) |
 | **Delete all history** | Removes every saved round for this discipline, after asking |
 
@@ -256,7 +255,7 @@ A round's identity is its **ground + date + event**. If you change any of these,
 
 ### Importing scorecard photos
 
-Paper scorecards can be turned into a round. Open **Import scorecard photos** from the home page, or **History › Import photos** on a discipline page. You need to be signed in, and the server's administrator has to have set the feature up.
+Paper scorecards can be turned into a round. Open **Import scorecard photos** from the home page. You need to be signed in, and the server's administrator has to have set the feature up.
 
 <img src="guide/import-photos.png" width="300" alt="Choosing the discipline and adding scorecard photos">
 
@@ -282,7 +281,7 @@ Each card then shows what was read:
 
 Tap **Create round**. The discipline page opens with the new round, which is also saved in History. If a round with the same ground, date and event already exists, you're asked before it is replaced.
 
-**Into a round you've already set up.** You may have set up a round before shooting, with the squad and clay presentations entered, and kept score on paper. You can fill it in from the scorecards as long as it has no scores yet. Tap **Fill in this round from scorecard photos** under the squad in **Round setup**, or **History › Photos into this round**.
+**Into a round you've already set up.** You may have set up a round before shooting, with the squad and clay presentations entered, and kept score on paper. You can fill it in from the scorecards as long as it has no scores yet. Tap **Fill in this round from scorecard photos** under the squad in **Round setup**, or **History › Import photos into this round**.
 
 <img src="guide/import-into.png" width="300" alt="Importing into the open round">
 
@@ -337,6 +336,10 @@ See [example-outputs.pdf](example-outputs.pdf) for full examples of every discip
 <img src="guide/presentation-picker.png" width="300" alt="Choosing a presentation title">
 
 1. **Pick a title.** The app suggests three. Each starts with the date and names the ground or event, mixed with the squad hit rate, who won and by how much, and the weather if recorded (e.g. *20261108 Kelly-Smith Beats the Wind at Winter League*). Tap **More ideas** for another three, or type your own. The title you choose is remembered with the round.
+   - **Tone and Write with AI** (when signed in, and if the server has an Anthropic API key): choose a **Tone** (Gentle, Cheeky or Savage) and tap **Write with AI**. After a few seconds the title ideas, cover gag, roasts, slide verdicts, award names and closing lines are written by Claude for this round. They're stored with the round, so the slideshow, Share, Save and Print all match and it works offline afterwards. **Rewrite with AI** gets a fresh set (for example after changing the tone), and **Use built-in jokes** switches back to the app's own lines at any time. If you change the scores or notes afterwards, the deck goes back to the built-in jokes until you write again.
+
+<img src="guide/presentation-ai.png" width="300" alt="Choosing a tone and writing the jokes with AI">
+
 2. **Show slides** opens a full-screen slideshow. Swipe, or use **Prev** / **Next**, to move between slides; on a computer the arrow keys work too. **Notes** shows the speaker notes for each slide, with the raw numbers behind it. The slides are easier to read with the phone turned sideways.
 3. **Share** sends the deck as a 16:9 `.pdf` file, one slide per page. On a computer, **Save** downloads that file. **Print** prints it one slide per page; choose *Save as PDF* in the print dialog for a sharper file.
 
@@ -368,6 +371,7 @@ See [example-outputs.pdf](example-outputs.pdf) for full examples of every discip
 - **One overall roast per slide.** The kit, Milestones, Barrel by barrel, Streaks and slumps, Stand stories and Awards each have a one-line verdict under the heading, built from that slide's numbers (e.g. who led wire to wire, which barrel let the squad down, who left the awards empty-handed).
 - **Round notes join in.** A sentence in the round's **Notes** that names a shooter is quoted after their roast on the squad slide. The final slide adds a line about the notes: a joke if they mention something it recognises (trap trouble, new kit, a debut, a birthday, something forgotten, a late start, food and drink, a busy ground, the conditions, a competition, coaching), otherwise a quote of the first sentence. The notes are only quoted or matched on keywords; nothing is read into them.
 - **The jokes vary.** Each situation has several possible lines. The mix depends on the round and the title, so the same deck always reads the same on screen, in the PDF and when printed. Pick a different title to get a different set. No two shooters on the squad slide get the same line.
+- **AI-written jokes are checked.** Claude is only given the round's numbers, names, weather, clay descriptions and notes, and told to stick to them. Any line with a number, percentage or stand that isn't in the round is dropped and the built-in line is used instead. The round's names, scores, weather and notes are sent to Anthropic to do this.
 - **The jokes come only from the numbers.** Weather lines only use the weather recorded in Round notes, and clay-type lines only use the clay descriptions. Nothing is invented.
 
 <img src="guide/presentation-slide.png" width="600" alt="Stand-by-stand slide">

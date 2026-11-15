@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-15 (round notes in roasts)';
+    const SCORER_BUILD = 'scorer 2026-11-15 (Write with AI)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -2451,11 +2451,12 @@
                             <i data-lucide="upload" class="w-3.5 h-3.5"></i> Import CSV
                             <input type="file" accept=".csv,text/csv" onchange="handleImportChange(this)" style="display:none">
                         </label>
-                        <a href="import.html?discipline=${D.id}" class="${BTN_SMALL} bg-white text-slate-700 border-slate-300 inline-flex items-center gap-1"><i data-lucide="camera" class="w-3.5 h-3.5"></i> Import photos</a>
-                        ${!state.isLocked && !state.shooters.some(sh => shooterHasScores(sh.id)) ? `<a href="import.html?discipline=${D.id}&into=1" class="${BTN_SMALL} bg-white text-slate-700 border-slate-300 inline-flex items-center gap-1"><i data-lucide="camera" class="w-3.5 h-3.5"></i> Photos into this round</a>` : ''}
                         <button onclick="closeHeaderMenus(); newRound()" class="${BTN_SMALL} bg-slate-900 text-white border-slate-900">+ New round</button>
                     </div>
                 </div>
+                ${!state.isLocked && !state.shooters.some(sh => shooterHasScores(sh.id)) ? `<div class="flex justify-end mt-1.5">
+                    <a href="import.html?discipline=${D.id}&into=1" class="${BTN_SMALL} bg-white text-slate-700 border-slate-300 inline-flex items-center gap-1"><i data-lucide="camera" class="w-3.5 h-3.5"></i> Import photos into this round</a>
+                </div>` : ''}
                 ${emptyHint}
             </div>
             ${entries.length ? `<div class="max-h-72 overflow-y-auto">${rows}</div>` : ''}
@@ -3062,6 +3063,8 @@
                 shooters,
                 deckTitle: state.deckTitle || '',
                 notes: state.notes || '',
+                deckTone: state.deckTone || '',
+                deckAi: state.deckAi || null,
                 weather: window.ClayWeather ? ClayWeather.summary(state.weather) : '',
                 weatherEntries: window.ClayWeather && state.weather?.entries ? state.weather.entries.map(e => ClayWeather.norm(e)) : [],
                 filenameStem: filenameStem()
@@ -3070,6 +3073,15 @@
         setDeckTitle(title) {
             const t = String(title || '').trim();
             if (t) state.deckTitle = t; else delete state.deckTitle;
+            save();
+        },
+        // Presentation tone and "Write with AI" lines: stored with the round only once set.
+        setDeckTone(tone) {
+            if (['cheeky', 'savage'].includes(tone)) state.deckTone = tone; else delete state.deckTone;
+            save();
+        },
+        setDeckAi(ai) {
+            if (ai && ai.text) state.deckAi = ai; else delete state.deckAi;
             save();
         },
         notify: (m, tone) => notify(m, tone),

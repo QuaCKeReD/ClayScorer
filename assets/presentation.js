@@ -500,6 +500,135 @@
         return pick(m, 'notes:quote', [`From the round notes: "${first}"`, `For the record, the notes say: "${first}"`, `Scorer's footnote: "${first}"`]);
     }
 
+    // ---------------------------------------------------------------- "Write with AI"
+
+    // The facts sent to the server for Claude to write from: only numbers and text the deck
+    // already shows (or the round already holds), so every AI line can be checked against them.
+    function deckFacts(m) {
+        const D = m.data;
+        m.wx = weatherFacts(D);
+        const P = (r) => (r === null || r === undefined ? null : Math.round(r * 100));
+        const standOf = (s, si) => ({ stand: m.standName(si), pct: P(s.standPcts[si]), hits: s.perStand[si].hits, shot: s.perStand[si].shot });
+        const shooters = m.shooters.map(s => {
+            const valid = m.stands.map((_, si) => si).filter(si => s.perStand[si].shot > 0);
+            const b = valid.slice().sort((a, c) => s.standPcts[c] - s.standPcts[a])[0];
+            const w = valid.slice().sort((a, c) => s.standPcts[a] - s.standPcts[c])[0];
+            const ext = typeExtremes(s);
+            const out = {
+                name: s.name, rank: m.ranked.indexOf(s) + 1, hits: s.hits, shot: s.shot, misses: s.misses, ratePct: P(s.rate),
+                bestStand: b !== undefined ? standOf(s, b) : null, worstStand: w !== undefined ? standOf(s, w) : null,
+                hitStreak: s.hitStreak.len, missStreak: s.missStreak.len
+            };
+            if (s.gun) out.gun = s.gun;
+            if (s.cartridges) out.cartridges = s.cartridges;
+            if (m.pairsExist) out.barrels = { firstPct: P(pct(s.barrel.b1h, s.barrel.b1n)), secondPct: P(pct(s.barrel.b2h, s.barrel.b2n)), doubles: s.barrel.doubles, blanks: s.barrel.blanks };
+            if (ext) { out.favouriteClay = { type: ext.fav.type, hits: ext.fav.hits, shot: ext.fav.shot, pct: P(ext.fav.rate) }; out.worstClay = { type: ext.nem.type, hits: ext.nem.hits, shot: ext.nem.shot, pct: P(ext.nem.rate) }; }
+            const note = noteAbout(m, s);
+            if (note) out.notesMention = note;
+            return out;
+        });
+        const n = m.ranked.length;
+        const c = m.contrast;
+        m.factsMode = true;
+        const { bests, worsts } = awards(m);
+        m.factsMode = false;
+        const award = (a, kind) => ({ base: a.base, kind, defaultName: a.name, winners: a.who.map(s => s.name), stat: a.stat });
+        return {
+            discipline: D.discipline.name, ground: D.ground || '', event: D.event || '', date: D.date || '', standLabel: m.SL, standCount: m.nStands,
+            squad: { hits: m.squad.hits, shot: m.squad.shot, misses: m.squad.misses, ratePct: P(m.squad.rate) },
+            podium: n > 1 ? { winner: m.ranked[0].name, runnerUp: m.ranked[1].name, marginPoints: ptsGap(m.ranked[0].rate, m.ranked[1].rate), last: m.ranked[n - 1].name } : { winner: m.ranked[0]?.name || '', solo: true },
+            shooters,
+            standStories: m.best !== undefined ? {
+                best: { stand: m.standName(m.best), squadPct: P(m.squad.perStand[m.best].rate) },
+                worst: { stand: m.standName(m.worst), squadPct: P(m.squad.perStand[m.worst].rate) },
+                contrast: c ? { stand: m.standName(c.si), high: { name: c.hi.name, pct: P(c.hi.standPcts[c.si]) }, low: { name: c.lo.name, pct: P(c.lo.standPcts[c.si]) }, gapPoints: ptsGap(c.hi.standPcts[c.si], c.lo.standPcts[c.si]) } : null
+            } : null,
+            milestones: m.milestones.length ? m.milestones.map(ms => ({ firstClaysOfEachStand: ms.k, clays: ms.scope, leaders: ms.leaders.map(s => s.name), leaderPct: P(ms.rows[ms.leaders[0].k].rate) })) : null,
+            barrels: m.pairsExist ? { firstPct: P(pct(m.squad.barrel.b1h, m.squad.barrel.b1n)), secondPct: P(pct(m.squad.barrel.b2h, m.squad.barrel.b2n)), doubles: m.squad.barrel.doubles, blanks: m.squad.barrel.blanks, pairs: m.squad.barrel.pairs } : null,
+            clayTypes: m.types.length ? m.types.map(t => ({ type: t, hits: m.squad.byType[t].hits, shot: m.squad.byType[t].shot, squadPct: P(pct(m.squad.byType[t].hits, m.squad.byType[t].shot)) })) : null,
+            distances: m.ranges.length ? m.ranges.map(r => ({ range: r, hits: m.squad.byRange[r].hits, shot: m.squad.byRange[r].shot, squadPct: P(pct(m.squad.byRange[r].hits, m.squad.byRange[r].shot)) })) : null,
+            weather: D.weather || null,
+            notes: D.notes || null,
+            kit: shooters.some(s => s.gun || s.cartridges) ? shooters.filter(s => s.gun || s.cartridges).map(s => ({ name: s.name, gun: s.gun || '', cartridges: s.cartridges || '' })) : null,
+            awards: [...bests.map(a => award(a, 'best')), ...worsts.map(a => award(a, 'worst'))]
+        };
+    }
+    const factsKey = (facts) => hashStr(JSON.stringify(facts)).toString(36);
+
+    // Numbers an AI line may use: every number that appears anywhere in the facts, plus 0–3
+    // (for "one miss", "two barrels"…). A line with any other number is dropped for a pool line.
+    function allowedNumbers(facts) {
+        const set = new Set(['0', '1', '2', '3']);
+        const walk = (v) => {
+            if (v === null || v === undefined) return;
+            if (typeof v === 'number') set.add(String(v));
+            else if (typeof v === 'string') (v.match(/\d+(?:\.\d+)?/g) || []).forEach(x => set.add(String(Number(x))));
+            else if (Array.isArray(v)) v.forEach(walk);
+            else if (typeof v === 'object') Object.values(v).forEach(walk);
+        };
+        walk(facts);
+        return set;
+    }
+
+    // Percentages the facts actually contain (fields named …pct / …Pct, and "N%" in text).
+    function allowedPercents(facts) {
+        const set = new Set(['0', '100']);
+        const walk = (v, key) => {
+            if (v === null || v === undefined) return;
+            if (typeof v === 'number') { if (/pct/i.test(key || '')) set.add(String(v)); }
+            else if (typeof v === 'string') (v.match(/\d+(?=\s*%)/g) || []).forEach(x => set.add(String(Number(x))));
+            else if (Array.isArray(v)) v.forEach(x => walk(x, key));
+            else if (typeof v === 'object') Object.entries(v).forEach(([k, x]) => walk(x, k));
+        };
+        walk(facts, '');
+        return set;
+    }
+
+    // Check and tidy the AI's lines against the facts. Returns lookup maps for buildSlides.
+    // A line is dropped (the deck uses its own line instead) if it contains a number the facts
+    // don't, a percentage that isn't one of the facts' percentages, or a stand that doesn't exist.
+    function checkAi(text, facts) {
+        if (!text || typeof text !== 'object') return null;
+        const nums = allowedNumbers(facts);
+        const pcts = allowedPercents(facts);
+        const standRe = new RegExp(`\\b${facts.standLabel}\\s+(\\d+)`, 'gi');
+        const names = new Set(facts.shooters.map(s => s.name));
+        const ok = (t, max = 200) => {
+            const line = String(t || '').replace(/\s+/g, ' ').trim();
+            if (!line || line.length > max) return '';
+            const bad = (line.match(/\d+(?:\.\d+)?/g) || []).some(x => !nums.has(String(Number(x))))
+                || (line.match(/\d+(?:\.\d+)?(?=\s*%)/g) || []).some(x => !pcts.has(String(Number(x))))
+                || [...line.matchAll(standRe)].some(mt => Number(mt[1]) < 1 || Number(mt[1]) > facts.standCount);
+            return bad ? '' : line;
+        };
+        const byName = (list, field) => {
+            const out = {};
+            (Array.isArray(list) ? list : []).forEach(e => { if (e && names.has(e.name) && !out[e.name]) { const l = ok(e[field], 220); if (l) out[e.name] = l; } });
+            return out;
+        };
+        const bases = new Set((facts.awards || []).map(a => a.base));
+        const awardNames = {};
+        (Array.isArray(text.awardNames) ? text.awardNames : []).forEach(e => { if (e && bases.has(e.base)) { const l = ok(e.name, 48); if (l) awardNames[e.base] = l; } });
+        const st = text.stories || {};
+        return {
+            titles: (Array.isArray(text.titles) ? text.titles : []).map(t => ok(t, 60)).filter(Boolean).slice(0, 5),
+            cover: ok(text.cover), weather: facts.weather ? ok(text.weather) : '',
+            squad: byName(text.squad, 'roast'), verdicts: byName(text.streakVerdicts, 'verdict'),
+            kit: ok(text.kit), milestones: ok(text.milestones), barrels: ok(text.barrels), types: ok(text.types),
+            streaks: ok(text.streaks), storiesOverall: ok(st.overall), storyBest: ok(st.best), storyWorst: ok(st.worst), storyContrast: ok(st.contrast),
+            awards: ok(text.awards), awardNames, notes: facts.notes ? ok(text.notes) : '', closing: ok(text.closing)
+        };
+    }
+
+    // The AI lines stored with the round, if they were written for exactly these facts.
+    function activeAi(m) {
+        const saved = m.data.deckAi;
+        if (!saved || saved.use === false || !saved.text) return null;
+        const facts = deckFacts(m);
+        if (saved.key !== factsKey(facts)) return null;
+        return checkAi(saved.text, facts);
+    }
+
     // ---------------------------------------------------------------- one overall roast per slide
 
     const slideRoast = (text) => (text ? `<div class="dk-roast dk-slide-roast">${esc(text)}</div>` : '');
@@ -670,6 +799,9 @@
         m.wx = weatherFacts(D);
         m.seed = roundSeed(m, title);
         m.used = {};
+        m.ai = activeAi(m);
+        const A = m.ai;
+        const say = (slot, fallback) => (A && A[slot]) || fallback();
         const meta = [D.discipline.name, D.ground, D.event, ukDate(D.date)].filter(Boolean).map(esc).join(' · ');
         const incomplete = m.shooters.filter(s => s.unshot > 0);
         const fewer = m.shooters.filter(s => s.shot < Math.max(...m.shooters.map(x => x.shot)));
@@ -679,7 +811,7 @@
         add('dk-cover', `
             <div class="dk-kicker">${esc(D.discipline.code)} · ${meta}</div>
             <h1 class="dk-title">${esc(title)}</h1>
-            <div class="dk-gag">${esc([coverGag(m), weatherGag(m)].filter(Boolean).join(' '))}</div>
+            <div class="dk-gag">${esc([say('cover', () => coverGag(m)), say('weather', () => weatherGag(m))].filter(Boolean).join(' '))}</div>
             ${D.weather ? `<div class="dk-weather">Conditions: ${esc(D.weather)}</div>` : ''}`,
             `Squad: ${m.shooters.length} shooters, ${m.squad.shot} clays shot, ${m.squad.hits} hits (${fmtPct(m.squad.rate)}), ${m.squad.misses} misses.${D.weather ? `\nWeather: ${D.weather}` : ''}`);
 
@@ -701,7 +833,7 @@
                     `<div>${s.shot}${s.unshot ? ` <span class="dk-dim">(${s.unshot} not shot)</span>` : ''}</div>`,
                     showGun && `<div>${esc(s.gun || '–')}</div>`,
                     showCart && `<div>${esc(s.cartridges || '–')}</div>`,
-                    `<div class="dk-roast">${esc(squadRoast(m, s))}${(() => { const t = noteAbout(m, s); return t ? ` <span class="dk-note-quote">${esc(pick(m, `notes:${s.name}`, ['Notes say:', 'On the record:', 'The notes add:']))} “${esc(clip(t, 90))}”</span>` : ''; })()}</div>`
+                    `<div class="dk-roast">${esc(A?.squad[s.name] || squadRoast(m, s))}${(() => { const t = A?.squad[s.name] ? null : noteAbout(m, s); return t ? ` <span class="dk-note-quote">${esc(pick(m, `notes:${s.name}`, ['Notes say:', 'On the record:', 'The notes add:']))} “${esc(clip(t, 90))}”</span>` : ''; })()}</div>`
                 ].filter(Boolean).join('')).join('')}
             </div>
             ${compareNote}`,
@@ -712,7 +844,7 @@
             add('dk-alt', `
                 <h2 class="dk-h">The kit</h2>
                 <div class="dk-sub">Guns and cartridges</div>
-                ${slideRoast(kitRoast(m, kit))}
+                ${slideRoast(say('kit', () => kitRoast(m, kit)))}
                 <div class="dk-grid dk-tight" style="grid-template-columns:max-content ${hasGun ? '1fr ' : ''}${hasCart ? '1.8fr' : ''}">
                     <div class="dk-hd">Shooter</div>${hasGun ? '<div class="dk-hd">Gun</div>' : ''}${hasCart ? '<div class="dk-hd">Cartridges</div>' : ''}
                     ${kit.map(s => `<div class="dk-strong dk-nowrap">${who(s)}</div>${hasGun ? `<div>${esc(s.gun || '–')}</div>` : ''}${hasCart ? `<div>${esc(s.cartridges || '–')}</div>` : ''}`).join('')}
@@ -747,7 +879,7 @@
             add('dk-alt', `
                 <h2 class="dk-h">Milestones</h2>
                 <div class="dk-sub">"First 6" = the first 6 clays of every ${SL.toLowerCase()}, not clay 6 in card order</div>
-                ${slideRoast(milestoneRoast(m))}
+                ${slideRoast(say('milestones', () => milestoneRoast(m)))}
                 <div class="dk-grid${tight}" style="grid-template-columns:${mcols}">
                     <div class="dk-hd">Shooter</div>
                     ${m.milestones.map(ms => `<div class="dk-hd dk-c dk-stack"><span>First ${ms.scope}</span><span class="dk-dim">first ${ms.k} / ${SL.toLowerCase()}</span></div>`).join('')}
@@ -842,7 +974,7 @@
             }[D.discipline.id] || 'Pairs only; singles are not counted.';
             add('dk-alt', `
                 <h2 class="dk-h">Barrel by barrel</h2>
-                ${slideRoast(barrelRoast(m))}
+                ${slideRoast(say('barrels', () => barrelRoast(m)))}
                 <div class="dk-grid${tight}" style="grid-template-columns:1.4fr repeat(3,0.8fr) repeat(3,0.8fr) 0.9fr 0.9fr">
                     <div class="dk-hd">Shooter</div><div class="dk-hd dk-c">1st hit</div><div class="dk-hd dk-c">1st miss</div><div class="dk-hd dk-c">1st %</div>
                     <div class="dk-hd dk-c">2nd hit</div><div class="dk-hd dk-c">2nd miss</div><div class="dk-hd dk-c">2nd %</div><div class="dk-hd dk-c">Doubles</div><div class="dk-hd dk-c">Blanks</div>
@@ -860,7 +992,7 @@
             const toughest = m.types.filter(t => m.squad.byType[t].shot >= MIN_TYPE_SHOTS).sort((a, b) => pct(m.squad.byType[a].hits, m.squad.byType[a].shot) - pct(m.squad.byType[b].hits, m.squad.byType[b].shot))[0];
             const easiest = m.types.filter(t => m.squad.byType[t].shot >= MIN_TYPE_SHOTS).sort((a, b) => pct(m.squad.byType[b].hits, m.squad.byType[b].shot) - pct(m.squad.byType[a].hits, m.squad.byType[a].shot))[0];
             const r = (t) => fmtPct(pct(m.squad.byType[t].hits, m.squad.byType[t].shot));
-            const gag = toughest && easiest && toughest !== easiest ? typesGag(m, easiest, toughest, r) : '';
+            const gag = say('types', () => (toughest && easiest && toughest !== easiest ? typesGag(m, easiest, toughest, r) : ''));
             const cols = `1.2fr repeat(${m.shooters.length + 1}, 1fr)`;
             const shown = m.types.slice(0, m.ranges.length ? 7 : 10);
             add('dk-alt', `
@@ -881,13 +1013,13 @@
         add('', `
             <h2 class="dk-h">Streaks and slumps</h2>
             <div class="dk-sub">In card order, running across ${SL.toLowerCase()}s</div>
-            ${slideRoast(streaksOverall(m))}
+            ${slideRoast(say('streaks', () => streaksOverall(m)))}
             <div class="dk-grid${tight}" style="grid-template-columns:max-content max-content max-content 1fr;${m.shooters.some(s => s.name.length > 14) || m.shooters.length > 6 ? ' font-size:24px;' : ''}">
                 <div class="dk-hd">Shooter</div><div class="dk-hd">Longest hit streak</div><div class="dk-hd">Longest miss streak</div><div class="dk-hd">Verdict</div>
                 ${m.shooters.map(s => `<div class="dk-strong dk-nowrap">${who(s)}</div>
                     <div class="dk-nowrap"><strong class="dk-good">${s.hitStreak.len}</strong> ${s.hitStreak.len ? `<span class="dk-dim">${esc(posText(m, s.hitStreak.from))} → ${esc(posText(m, s.hitStreak.to))}</span>` : ''}</div>
                     <div class="dk-nowrap"><strong class="dk-bad">${s.missStreak.len}</strong> ${s.missStreak.len ? `<span class="dk-dim">${esc(posText(m, s.missStreak.from))} → ${esc(posText(m, s.missStreak.to))}</span>` : ''}</div>
-                    <div class="dk-roast">${esc(streakRoast(m, s))}</div>`).join('')}
+                    <div class="dk-roast">${esc(A?.verdicts[s.name] || streakRoast(m, s))}</div>`).join('')}
             </div>`,
             m.shooters.map(s => `${s.name}: hits ${s.hitStreak.len} (${posText(m, s.hitStreak.from)} to ${posText(m, s.hitStreak.to)}), misses ${s.missStreak.len} (${posText(m, s.missStreak.from)} to ${posText(m, s.missStreak.to)})`).join('\n')
             + (D.optionLabel ? '\nThe option target is placed at the end of the station it was taken on.' : ''));
@@ -902,14 +1034,14 @@
             const c = m.contrast;
             add('dk-alt', `
                 <h2 class="dk-h">${SL} stories</h2>
-                ${slideRoast(storiesOverall(m))}
+                ${slideRoast(say('storiesOverall', () => storiesOverall(m)))}
                 <div class="dk-stories">
-                    ${card('Best', m.best, storyLine(m, 'best'), 'good')}
-                    ${card('Worst', m.worst, storyLine(m, 'worst'), 'bad')}
+                    ${card('Best', m.best, say('storyBest', () => storyLine(m, 'best')), 'good')}
+                    ${card('Worst', m.worst, say('storyWorst', () => storyLine(m, 'worst')), 'bad')}
                     ${c ? `<div class="dk-story blue"><div class="dk-story-label">Same ${SL.toLowerCase()}, different planet</div>
                         <div class="dk-story-title">${esc(m.standName(c.si))}</div>
                         <div><div class="dk-line">${who(c.hi)} ${c.hi.perStand[c.si].hits}/${c.hi.perStand[c.si].shot} · ${fmtPct(c.hi.standPcts[c.si])}</div><div class="dk-line">${who(c.lo)} ${c.lo.perStand[c.si].hits}/${c.lo.perStand[c.si].shot} · ${fmtPct(c.lo.standPcts[c.si])}</div></div>
-                        <div class="dk-roast">${esc(storyLine(m, 'contrast', ptsGap(c.hi.standPcts[c.si], c.lo.standPcts[c.si])))}</div></div>` : ''}
+                        <div class="dk-roast">${esc(say('storyContrast', () => storyLine(m, 'contrast', ptsGap(c.hi.standPcts[c.si], c.lo.standPcts[c.si]))))}</div></div>` : ''}
                 </div>`,
                 `Best: ${m.standName(m.best)} ${m.squad.perStand[m.best].hits}/${m.squad.perStand[m.best].shot}. Worst: ${m.standName(m.worst)} ${m.squad.perStand[m.worst].hits}/${m.squad.perStand[m.worst].shot}.`
                 + (c ? ` Contrast: ${m.standName(c.si)} ${c.hi.name} ${fmtPct(c.hi.standPcts[c.si])} vs ${c.lo.name} ${fmtPct(c.lo.standPcts[c.si])}.` : ''));
@@ -921,7 +1053,7 @@
             const list = (items, cls) => items.map(a => `<div class="dk-award ${cls}"><div class="dk-award-name">${esc(a.name)}</div><div class="dk-award-who">${esc(joinNames(a.who.map(s => s.name)))}</div><div class="dk-dim">${esc(a.stat)}</div></div>`).join('');
             add('', `
                 <h2 class="dk-h">Awards</h2>
-                ${slideRoast(awardsRoast(m, bests, worsts))}
+                ${slideRoast(say('awards', () => awardsRoast(m, bests, worsts)))}
                 <div class="dk-awards"><div><div class="dk-hd dk-good">The bests</div>${list(bests, 'good')}</div><div><div class="dk-hd dk-bad">The worsts</div>${list(worsts, 'bad')}</div></div>`,
                 [...bests, ...worsts].map(a => `${a.name}: ${a.who.map(s => s.name).join(' & ')} — ${a.stat}`).join('\n'));
         }
@@ -949,8 +1081,8 @@
         add('dk-orange', `
             <h2 class="dk-h dk-close-h">Final scores</h2>
             <div class="dk-final${m.ranked.length > 6 ? ' dk-final-tight' : ''}">${m.ranked.map((s, i) => `<div><span class="dk-final-rank">${i + 1}</span> <span class="dk-final-name">${esc(s.name)}</span> <span class="dk-final-score">${s.hits}/${s.shot} · ${fmtPct(s.rate)}</span></div>`).join('')}</div>
-            <div class="dk-gag dk-close-gag">${esc(closingGag(m))}</div>
-            ${(() => { const t = notesClosing(m); return t ? `<div class="dk-close-notes">${esc(t)}</div>` : ''; })()}`,
+            <div class="dk-gag dk-close-gag">${esc(say('closing', () => closingGag(m)))}</div>
+            ${(() => { const t = say('notes', () => notesClosing(m)); return t ? `<div class="dk-close-notes">${esc(t)}</div>` : ''; })()}`,
             m.ranked.map((s, i) => `${i + 1}. ${s.name} ${s.hits}/${s.shot} (${fmtPct(s.rate)})`).join('\n')
             + (D.notes ? `\nRound notes: ${D.notes}` : ''));
 
@@ -971,7 +1103,8 @@
         'Second Barrel Snooze': ['Second Barrel Snooze', 'Plan B Failed', 'One-Barrel Wonder'],
         'Fade Away': ['Fade Away', 'Ran Out of Steam', 'Early Peaker']
     };
-    const awardName = (m, base) => pick(m, `award:${base}`, AWARD_NAMES[base] || [base]);
+    // AI-written name if there is one, the plain base name when building facts, else a pool pick.
+    const awardName = (m, base, pool) => (m.factsMode ? (pool ? pool[0] : base) : (m.ai?.awardNames?.[base] || pick(m, `award:${base}`, pool || AWARD_NAMES[base] || [base])));
 
     function awards(m) {
         const S = m.shooters.filter(s => s.shot > 0);
@@ -983,31 +1116,31 @@
         const thirds = Math.max(1, Math.floor(m.nStands / 3));
         const rangeRate = (s, a, b) => { const h = sum(s.perStand.slice(a, b).map(p => p.hits)), n = sum(s.perStand.slice(a, b).map(p => p.shot)); return pct(h, n); };
 
-        let w = top(s => s.rate); bests.push({ name: awardName(m, 'Top Gun'), who: w, stat: `${fmtPct(w[0].rate)} hit rate` });
-        w = top(s => s.hitStreak.len); if (w[0].hitStreak.len) bests.push({ name: awardName(m, 'The Unstoppable'), who: w, stat: `${w[0].hitStreak.len} hits in a row` });
+        let w = top(s => s.rate); bests.push({ base: 'Top Gun', name: awardName(m, 'Top Gun'), who: w, stat: `${fmtPct(w[0].rate)} hit rate` });
+        w = top(s => s.hitStreak.len); if (w[0].hitStreak.len) bests.push({ base: 'The Unstoppable', name: awardName(m, 'The Unstoppable'), who: w, stat: `${w[0].hitStreak.len} hits in a row` });
         if (standBest.length) {
             const hi = Math.max(...standBest.map(x => x.p)); const xs = standBest.filter(x => x.p === hi);
-            bests.push({ name: pick(m, 'award:slayer', [`${m.SL} Slayer`, `${m.SL} Destroyer`, `Owner of ${m.standName(xs[0].si)}`]), who: [...new Set(xs.map(x => x.s))], stat: `${fmtPct(hi)} on ${[...new Set(xs.map(x => x.si))].sort((a, b) => a - b).slice(0, 3).map(m.standName).join(', ')}` });
+            bests.push({ base: 'Stand Slayer', name: awardName(m, 'Stand Slayer', [`${m.SL} Slayer`, `${m.SL} Destroyer`, `Owner of ${m.standName(xs[0].si)}`]), who: [...new Set(xs.map(x => x.s))], stat: `${fmtPct(hi)} on ${[...new Set(xs.map(x => x.si))].sort((a, b) => a - b).slice(0, 3).map(m.standName).join(', ')}` });
         }
         if (m.types.length) {
             // Specialist: best hit rate on the squad's most-shot clay type.
             const t = m.types[0];
             const rateOn = (s) => (s.byType[t] && s.byType[t].shot >= MIN_TYPE_SHOTS ? pct(s.byType[t].hits, s.byType[t].shot) : null);
-            w = top(rateOn); if (w.length && rateOn(w[0]) !== null) bests.push({ name: pick(m, 'award:spec', [`${t} Specialist`, `${t} Whisperer`, `${t} Assassin`]), who: w, stat: `${fmtPct(rateOn(w[0]))} on ${typePlural(t)} (${w[0].byType[t].hits}/${w[0].byType[t].shot})` });
+            w = top(rateOn); if (w.length && rateOn(w[0]) !== null) bests.push({ base: 'Clay Specialist', name: awardName(m, 'Clay Specialist', [`${t} Specialist`, `${t} Whisperer`, `${t} Assassin`]), who: w, stat: `${fmtPct(rateOn(w[0]))} on ${typePlural(t)} (${w[0].byType[t].hits}/${w[0].byType[t].shot})` });
         }
         if (m.pairsExist) {
-            w = top(s => pct(s.barrel.b2h, s.barrel.b2n)); if (w.length && w[0].barrel.b2n) bests.push({ name: awardName(m, 'Second Barrel Hero'), who: w, stat: `${fmtPct(pct(w[0].barrel.b2h, w[0].barrel.b2n))} with the 2nd barrel` });
-            w = top(s => s.barrel.doubles); if (w[0].barrel.doubles) bests.push({ name: awardName(m, 'Double Act'), who: w, stat: plural(w[0].barrel.doubles, 'double') });
+            w = top(s => pct(s.barrel.b2h, s.barrel.b2n)); if (w.length && w[0].barrel.b2n) bests.push({ base: 'Second Barrel Hero', name: awardName(m, 'Second Barrel Hero'), who: w, stat: `${fmtPct(pct(w[0].barrel.b2h, w[0].barrel.b2n))} with the 2nd barrel` });
+            w = top(s => s.barrel.doubles); if (w[0].barrel.doubles) bests.push({ base: 'Double Act', name: awardName(m, 'Double Act'), who: w, stat: plural(w[0].barrel.doubles, 'double') });
         }
         if (m.nStands >= 3) {
-            w = top(s => rangeRate(s, m.nStands - thirds, m.nStands)); if (w.length) bests.push({ name: awardName(m, 'Strong Finisher'), who: w, stat: `${fmtPct(rangeRate(w[0], m.nStands - thirds, m.nStands))} ${thirds === 1 ? `on the last ${m.SL.toLowerCase()}` : `over the last ${thirds} ${m.SL.toLowerCase()}s`}` });
+            w = top(s => rangeRate(s, m.nStands - thirds, m.nStands)); if (w.length) bests.push({ base: 'Strong Finisher', name: awardName(m, 'Strong Finisher'), who: w, stat: `${fmtPct(rangeRate(w[0], m.nStands - thirds, m.nStands))} ${thirds === 1 ? `on the last ${m.SL.toLowerCase()}` : `over the last ${thirds} ${m.SL.toLowerCase()}s`}` });
         }
 
-        if (S.length > 1) { w = bottom(s => s.rate); worsts.push({ name: awardName(m, 'Clay Conservation Society'), who: w, stat: `${fmtPct(w[0].rate)} — the most clays spared` }); }
-        w = top(s => s.missStreak.len); if (w[0].missStreak.len >= 2) worsts.push({ name: awardName(m, 'The Long Drought'), who: w, stat: `${w[0].missStreak.len} misses in a row` });
+        if (S.length > 1) { w = bottom(s => s.rate); worsts.push({ base: 'Clay Conservation Society', name: awardName(m, 'Clay Conservation Society'), who: w, stat: `${fmtPct(w[0].rate)} — the most clays spared` }); }
+        w = top(s => s.missStreak.len); if (w[0].missStreak.len >= 2) worsts.push({ base: 'The Long Drought', name: awardName(m, 'The Long Drought'), who: w, stat: `${w[0].missStreak.len} misses in a row` });
         if (standBest.length) {
             const lo = Math.min(...standBest.map(x => x.p)); const xs = standBest.filter(x => x.p === lo);
-            if (lo < 1) worsts.push({ name: awardName(m, 'Black Hole'), who: [...new Set(xs.map(x => x.s))], stat: `${fmtPct(lo)} on ${[...new Set(xs.map(x => x.si))].sort((a, b) => a - b).slice(0, 3).map(m.standName).join(', ')}` });
+            if (lo < 1) worsts.push({ base: 'Black Hole', name: awardName(m, 'Black Hole'), who: [...new Set(xs.map(x => x.s))], stat: `${fmtPct(lo)} on ${[...new Set(xs.map(x => x.si))].sort((a, b) => a - b).slice(0, 3).map(m.standName).join(', ')}` });
         }
         {
             // Nemesis: the lowest hit rate anyone had on one clay type.
@@ -1015,17 +1148,17 @@
             if (nems.length) {
                 const lo = Math.min(...nems.map(x => x.e.nem.rate));
                 const xs = nems.filter(x => x.e.nem.rate === lo);
-                worsts.push({ name: awardName(m, 'Nemesis'), who: xs.map(x => x.s), stat: `${xs[0].e.nem.type}: ${xs[0].e.nem.hits}/${xs[0].e.nem.shot} (${fmtPct(lo)})` });
+                worsts.push({ base: 'Nemesis', name: awardName(m, 'Nemesis'), who: xs.map(x => x.s), stat: `${xs[0].e.nem.type}: ${xs[0].e.nem.hits}/${xs[0].e.nem.shot} (${fmtPct(lo)})` });
             }
         }
         if (m.pairsExist) {
-            w = top(s => s.barrel.blanks); if (w[0].barrel.blanks) worsts.push({ name: awardName(m, 'Blank Cheque'), who: w, stat: `${plural(w[0].barrel.blanks, 'pair')} missed with both barrels` });
-            w = bottom(s => pct(s.barrel.b2h, s.barrel.b2n)); if (w.length && w[0].barrel.b2n && pct(w[0].barrel.b2h, w[0].barrel.b2n) < 1) worsts.push({ name: awardName(m, 'Second Barrel Snooze'), who: w, stat: `${fmtPct(pct(w[0].barrel.b2h, w[0].barrel.b2n))} with the 2nd barrel` });
+            w = top(s => s.barrel.blanks); if (w[0].barrel.blanks) worsts.push({ base: 'Blank Cheque', name: awardName(m, 'Blank Cheque'), who: w, stat: `${plural(w[0].barrel.blanks, 'pair')} missed with both barrels` });
+            w = bottom(s => pct(s.barrel.b2h, s.barrel.b2n)); if (w.length && w[0].barrel.b2n && pct(w[0].barrel.b2h, w[0].barrel.b2n) < 1) worsts.push({ base: 'Second Barrel Snooze', name: awardName(m, 'Second Barrel Snooze'), who: w, stat: `${fmtPct(pct(w[0].barrel.b2h, w[0].barrel.b2n))} with the 2nd barrel` });
         }
         if (m.nStands >= 4) {
             const half = Math.floor(m.nStands / 2);
             const drop = (s) => { const a = rangeRate(s, 0, half), b = rangeRate(s, half, m.nStands); return a === null || b === null ? null : a - b; };
-            w = top(drop); if (w.length && drop(w[0]) > 0) worsts.push({ name: awardName(m, 'Fade Away'), who: w, stat: `${fmtPct(rangeRate(w[0], 0, half))} first half → ${fmtPct(rangeRate(w[0], half, m.nStands))} second half` });
+            w = top(drop); if (w.length && drop(w[0]) > 0) worsts.push({ base: 'Fade Away', name: awardName(m, 'Fade Away'), who: w, stat: `${fmtPct(rangeRate(w[0], 0, half))} first half → ${fmtPct(rangeRate(w[0], half, m.nStands))} second half` });
         }
         return { bests: bests.slice(0, 6), worsts: worsts.slice(0, 6) };
     }
@@ -1130,6 +1263,14 @@
         #deck-picker label.dkp-opt { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; margin-bottom: 8px; font-size: 15px; font-weight: 600; }
         #deck-picker label.dkp-opt:has(input:checked) { border-color: #f97316; background: #fff7ed; }
         #deck-picker input[type=text] { width: 100%; height: 42px; border: 1px solid #94a3b8; border-radius: 8px; padding: 0 10px; font-size: 15px; font-weight: 600; }
+        #deck-picker .dkp-ai { margin-top: 6px; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; background: #f8fafc; font-size: 14px; color: #334155; display: grid; gap: 8px; }
+        #deck-picker .dkp-tone { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+        #deck-picker .dkp-tone select { height: 38px; border: 1px solid #94a3b8; border-radius: 8px; padding: 0 8px; font-size: 15px; font-weight: 600; background: #fff; }
+        #deck-picker button.dkp-ai-btn { background: #f97316; color: #fff; border-color: #f97316; }
+        #deck-picker button.dkp-ai-btn:disabled { opacity: 0.45; }
+        #deck-picker button.dkp-link { border: 0; padding: 0; background: none; color: #9a3412; text-decoration: underline; font-size: 14px; }
+        #deck-picker .dkp-ai-hint { font-size: 13px; color: #64748b; }
+        #deck-picker .dkp-ai-error { font-size: 13px; color: #b91c1c; font-weight: 600; }
         #deck-picker button.dkp-more { width: 100%; margin-bottom: 8px; border-style: dashed; color: #9a3412; }
         #deck-picker .dkp-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; flex-wrap: wrap; }
         #deck-picker button { font-size: 14px; font-weight: 700; padding: 10px 14px; border-radius: 10px; border: 1px solid #cbd5e1; background: #fff; color: #0f172a; }
@@ -1205,13 +1346,38 @@
             window.ClayScorerDeck.notify('Score some targets first — the presentation is built from the round\'s scores.', 'error');
             return;
         }
+        const bridge = window.ClayScorerDeck;
         const saved = m.data.deckTitle;
+        const date = yyyymmdd(m.data.date);
         let roll = 0;
         let options = [];
+        let aiStatus = null;          // { available, signedIn } from the server, or null (unknown / no server)
+        let busy = false, aiError = '';
+        const tone = () => m.data.deckTone || 'gentle';
+        const ai = () => activeAi(m);
         const optionsHtml = () => {
-            const suggestions = titleSuggestions(m, roll);
+            const a = roll === 0 ? ai() : null;
+            const suggestions = a && a.titles.length ? a.titles.slice(0, 4).map(t => (date ? `${date} ${t}` : t)) : titleSuggestions(m, roll);
             options = saved && !suggestions.includes(saved) ? [saved, ...suggestions] : suggestions;
             return options.map((t, i) => `<label class="dkp-opt"><input type="radio" name="dkp-title" value="${esc(t)}" ${(saved && roll === 0 ? t === saved : i === (saved ? 1 : 0)) ? 'checked' : ''}> ${esc(t)}</label>`).join('');
+        };
+        const aiHtml = () => {
+            const st = aiStatus;
+            const stored = m.data.deckAi;
+            const a = ai();
+            const toneSel = `<label class="dkp-tone">Tone <select id="dkp-tone">${['gentle', 'cheeky', 'savage'].map(t => `<option value="${t}" ${tone() === t ? 'selected' : ''}>${cap(t)}</option>`).join('')}</select></label>`;
+            let line;
+            if (busy) line = '<span>Writing the jokes… this takes a few seconds.</span>';
+            else if (a) line = `<span><strong>Using AI-written jokes</strong> (${esc(cap(stored.tone || 'gentle'))}${stored.tone && stored.tone !== tone() ? ` — Rewrite to use ${esc(cap(tone()))}` : ''}).</span> <button type="button" data-act="builtin" class="dkp-link">Use built-in jokes</button>`;
+            else if (stored && stored.use === false && stored.key === factsKey(deckFacts(m))) line = '<span>Using the built-in jokes.</span> <button type="button" data-act="useai" class="dkp-link">Use the AI-written ones</button>';
+            else if (stored && stored.text) line = '<span>The scores or notes have changed since the AI wrote the jokes, so the built-in ones are used. Write again to update.</span>';
+            else line = '<span>Built-in jokes, or have AI write ones for this round.</span>';
+            const canWrite = st && st.available && st.signedIn && !busy;
+            const btnLabel = a || (stored && stored.text) ? 'Rewrite with AI' : 'Write with AI';
+            const hint = !st ? '' : !st.available ? '<div class="dkp-ai-hint">Writing with AI isn’t set up on this server.</div>' : !st.signedIn ? '<div class="dkp-ai-hint">Sign in (cloud button) to write with AI.</div>' : '';
+            return `${st && st.available ? toneSel : ''}<div class="dkp-ai-line">${line}</div>
+                ${st && st.available ? `<button type="button" data-act="ai" class="dkp-ai-btn" ${canWrite ? '' : 'disabled'}>${btnLabel}</button>` : ''}
+                ${hint}${aiError ? `<div class="dkp-ai-error">${esc(aiError)}</div>` : ''}`;
         };
         const picker = document.createElement('div');
         picker.id = 'deck-picker';
@@ -1223,16 +1389,53 @@
             <div class="dkp-list">${optionsHtml()}</div>
             <button type="button" data-act="more" class="dkp-more">More ideas</button>
             <label class="dkp-opt"><input type="radio" name="dkp-title" value="__custom"> <input type="text" id="dkp-custom" placeholder="Your own title" value=""></label>
+            <div class="dkp-ai">${aiHtml()}</div>
             <div class="dkp-actions">
                 <button type="button" data-act="cancel">Cancel</button>
                 <button type="button" data-act="view" class="dkp-primary">Show slides</button>
             </div></div>`;
         document.body.appendChild(picker);
+        const refresh = (titlesToo) => {
+            picker.querySelector('.dkp-ai').innerHTML = aiHtml();
+            if (titlesToo) { roll = 0; picker.querySelector('.dkp-list').innerHTML = optionsHtml(); }
+        };
+        // Is "Write with AI" available here? (No server → no AI controls; the deck still works.)
+        fetch('/api/presentation/status', { credentials: 'same-origin' })
+            .then(r => (r.ok ? r.json() : null)).catch(() => null)
+            .then(st => { aiStatus = st && typeof st.available === 'boolean' ? st : null; if (document.body.contains(picker)) refresh(false); });
         const custom = picker.querySelector('#dkp-custom');
         custom.addEventListener('focus', () => { picker.querySelector('input[value="__custom"]').checked = true; });
+        picker.addEventListener('change', (e) => {
+            if (e.target.id !== 'dkp-tone') return;
+            m.data.deckTone = e.target.value;
+            bridge.setDeckTone(e.target.value);
+            refresh(false);
+        });
         const chosen = () => {
             const sel = picker.querySelector('input[name="dkp-title"]:checked');
             return sel && sel.value === '__custom' ? (custom.value.trim() || options[0]) : (sel ? sel.value : options[0]);
+        };
+        const writeWithAi = async () => {
+            busy = true; aiError = ''; refresh(false);
+            try {
+                const facts = deckFacts(m);
+                const res = await fetch('/api/presentation/write', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json', 'X-ClayScorer': '1' },
+                    body: JSON.stringify({ facts, tone: tone() })
+                });
+                let data = null;
+                try { data = await res.json(); } catch (e) {}
+                if (!res.ok || !data || !data.text) throw new Error(data?.error || `Server error (${res.status})`);
+                const stored = { key: factsKey(facts), tone: data.tone || tone(), model: data.model || '', at: Date.now(), text: data.text };
+                m.data.deckAi = stored;
+                bridge.setDeckAi(stored);
+            } catch (err) {
+                aiError = `${err.message || 'The AI writer failed.'} The built-in jokes still work.`;
+            } finally {
+                busy = false;
+                if (document.body.contains(picker)) refresh(true);
+            }
         };
         picker.addEventListener('click', (e) => {
             if (e.target === picker) return picker.remove();
@@ -1240,8 +1443,15 @@
             if (!act) return;
             if (act === 'cancel') return picker.remove();
             if (act === 'more') { roll++; picker.querySelector('.dkp-list').innerHTML = optionsHtml(); return; }
+            if (act === 'ai') return writeWithAi();
+            if (act === 'builtin' || act === 'useai') {
+                const stored = { ...m.data.deckAi, use: act === 'useai' };
+                m.data.deckAi = stored;
+                bridge.setDeckAi(stored);
+                return refresh(true);
+            }
             const title = chosen();
-            window.ClayScorerDeck.setDeckTitle(title);
+            bridge.setDeckTitle(title);
             picker.remove();
             view(m, title);
             // Re-fit once the slide fonts have loaded (their widths decide what fits).
@@ -1398,5 +1608,5 @@
         window.print();
     }
 
-    window.ClayScorerPresentation = { open, analyse, titleSuggestions, buildSlides, _fit: fitSlides, _view: view, _print: printDeck, _share: shareDeck, _model: model };
+    window.ClayScorerPresentation = { open, analyse, titleSuggestions, buildSlides, _fit: fitSlides, _ai: { deckFacts, factsKey, checkAi }, _view: view, _print: printDeck, _share: shareDeck, _model: model };
 })();

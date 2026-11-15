@@ -26,7 +26,7 @@ trap cleanup EXIT
 docker build -q -t clayscorer:docs . >/dev/null
 docker network create "$NET" >/dev/null
 docker run -d --name "$APP" --network "$NET" --user 1000:1000 --tmpfs /data:uid=1000,gid=1000 \
-  -e ADMIN_USERNAME="$ADMIN_USERNAME" -e ADMIN_PASSWORD="$ADMIN_PASSWORD" -e SCORECARD_READER_MOCK=1 clayscorer:docs >/dev/null
+  -e ADMIN_USERNAME="$ADMIN_USERNAME" -e ADMIN_PASSWORD="$ADMIN_PASSWORD" -e SCORECARD_READER_MOCK=1 -e PRESENTATION_WRITER_MOCK=1 clayscorer:docs >/dev/null
 sleep 3
 
 cp docs/tools/generate-examples.js docs/tools/generate-guide-screenshots.js "$WORK/"

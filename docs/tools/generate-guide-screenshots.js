@@ -242,6 +242,16 @@ const SQUAD = [
   await p.goto(`${B}/import.html?discipline=sporting&into=1`); await p.waitForTimeout(1000);
   await el('section:has([data-act="newRound"])', 'import-into');
 
+  // 13. Presentation picker when signed in: tone + "Write with AI" (the docs container runs the writer in mock mode)
+  await p.goto(`${B}/sporting.html`); await p.waitForTimeout(900);
+  await scoreStand(1, ['HHMHHH', 'HMHHHM', 'MHHHHH']);
+  await scoreStand(2, ['HHHHMH', 'HHMHHH', 'HMHMHH']);
+  await p.evaluate(() => { window.scrollTo(0, 0); ClayScorerPresentation.open(); });
+  await p.waitForSelector('#deck-picker button[data-act="ai"]:not([disabled])', { timeout: 10000 });
+  await p.selectOption('#dkp-tone', 'cheeky');
+  await shot('presentation-ai');
+  await p.locator('#deck-picker button[data-act="cancel"]').click();
+
   console.log('screenshots done, errors:', JSON.stringify(errs));
   await b.close();
 })();
