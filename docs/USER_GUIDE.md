@@ -162,7 +162,7 @@ Tap a clay to open its description window:
 
 | Field | Options | Notes |
 |---|---|---|
-| Presentation | Crosser, Teal, Crow, Driven, Looper, Battue, Rabbit, Rabbue, Quartering | |
+| Presentation | Crosser, Teal, Crow, Driven, Overhead, Looper, Battue, Rabbit, Rabbue, Quartering | |
 | Direction | **L → R** or **R → L**, and **Away** or **Towards** | Pick up to one from each group. Picking one of each describes the clay as *quartering away* or *quartering towards* |
 | Distance (metres) | Close: 0–5, 5–10 · Medium: 10–15, 15–20 · Far: 20–30, 30+ | |
 | Starting | Low, Mid, High | Default **Low** |

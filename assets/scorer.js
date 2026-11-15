@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-15 (scorecard photos into a round)';
+    const SCORER_BUILD = 'scorer 2026-11-15 (Overhead presentation)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -39,7 +39,7 @@
     const STAND_ROTATION_DEFAULT_VERSION = 1;
     const SPORTRAP_STAND_FORMAT_DEFAULT_VERSION = 1;
     const CLAY_META_OPTIONS = {
-        presentation: ['Crosser', 'Teal', 'Crow', 'Driven', 'Looper', 'Battue', 'Rabbit', 'Rabbue', 'Quartering'],
+        presentation: ['Crosser', 'Teal', 'Crow', 'Driven', 'Overhead', 'Looper', 'Battue', 'Rabbit', 'Rabbue', 'Quartering'],
         direction: ['LR', 'RL', 'Away', 'Towards'],
         starting: ['Low', 'Mid', 'High'],
         travelling: ['Up', 'Level', 'Down'],
@@ -58,8 +58,8 @@
     const clayDistanceText = (v) => `${v.replace('-', '–')} m`;
     // Presentation choices are laid out over two rows in the clay dialog.
     const CLAY_PRESENTATION_ROWS = [
-        ['Crosser', 'Teal', 'Crow', 'Driven', 'Looper'],
-        ['Battue', 'Rabbit', 'Rabbue', 'Quartering']
+        ['Crosser', 'Teal', 'Crow', 'Driven', 'Overhead'],
+        ['Looper', 'Battue', 'Rabbit', 'Rabbue', 'Quartering']
     ];
     // Pre-selected in the dialog for a clay nobody has described yet, and stored on its first edit.
     const CLAY_META_DEFAULTS = {
