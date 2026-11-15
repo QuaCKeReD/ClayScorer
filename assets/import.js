@@ -10,15 +10,19 @@
  * 4. "Create round" leaves the reviewed data in localStorage ('clayscorer:pending-import') and
  *    opens the discipline page, which builds the round (scorer.js applyPendingImport). English
  *    Sporting stands get the highest clay count seen on any card for that stand.
+ * 5. "Into this round" (import.html?discipline=…&into=1, linked from a discipline page whose live
+ *    round has no scores): the cards fill that round instead. Its ground/date/event, shooters and
+ *    clay presentations stay; cards are matched to the round's shooters first, and English Sporting
+ *    stands take the clay counts from the cards.
  */
 (function () {
     'use strict';
 
     const DISCIPLINES = [
-        { id: 'sporting', code: 'ESP', name: 'English Sporting', stand: 'Stand', fixed: null },
-        { id: 'sportrap', code: 'STR', name: 'Sportrap', stand: 'Round', fixed: [5, 5, 5, 5, 5] },
-        { id: 'compak', code: 'CSP', name: 'Compak Sporting', stand: 'Round', fixed: [5, 5, 5, 5, 5] },
-        { id: 'skeet', code: 'ESK', name: 'English Skeet', stand: 'Station', fixed: [4, 4, 2, 4, 2, 4, 4], option: true }
+        { id: 'sporting', code: 'ESP', name: 'English Sporting', stand: 'Stand', fixed: null, key: 'clayscorer_esp' },
+        { id: 'sportrap', code: 'STR', name: 'Sportrap', stand: 'Round', fixed: [5, 5, 5, 5, 5], key: 'clayscorer_str' },
+        { id: 'compak', code: 'CSP', name: 'Compak Sporting', stand: 'Round', fixed: [5, 5, 5, 5, 5], key: 'clayscorer_csp' },
+        { id: 'skeet', code: 'ESK', name: 'English Skeet', stand: 'Station', fixed: [4, 4, 2, 4, 2, 4, 4], option: true, key: 'clayscorer_esk' }
     ];
     const MAX_SHOOTERS = 10;
     const MAX_PHOTOS = 12;
@@ -38,7 +42,10 @@
         error: '',
         notes: '',
         cards: null,                // review data
-        regulars: []
+        regulars: [],
+        into: new URLSearchParams(location.search).get('into') === '1',
+        target: null,               // into mode: { key, state } of the discipline's live round
+        intoNote: ''
     };
     if (!DISCIPLINES.some(d => d.id === S.discipline)) S.discipline = '';
 
@@ -72,10 +79,11 @@
     // Match a name read from a card to a regular: exact (ignoring case and punctuation), then
     // "initial + surname" / "first name + surname initial", then a unique surname or first name.
     const normName = (s) => String(s || '').toLowerCase().replace(/[.,']/g, ' ').replace(/\s+/g, ' ').trim();
-    function matchRegular(name) {
+    const matchRegular = (name) => matchName(name, S.regulars);
+    function matchName(name, list) {
         const n = normName(name);
         if (!n) return null;
-        const regs = S.regulars.map(r => ({ r, n: normName(r.name), t: normName(r.name).split(' ') }));
+        const regs = list.map(r => ({ r, n: normName(r.name), t: normName(r.name).split(' ') }));
         const exact = regs.filter(x => x.n === n);
         if (exact.length === 1) return exact[0].r;
         const t = n.split(' ');
@@ -94,6 +102,40 @@
             if (unique(byFirst)) return unique(byFirst);
         }
         return null;
+    }
+
+    // ---------------------------------------------------------------- into an existing round
+
+    const roundKeyOf = (st) => `${String(st.ground || '').trim().toLowerCase()}|${st.date || ''}|${String(st.event || '').trim().toLowerCase()}`;
+    const isPlaceholder = (sh) => /^Shooter \d+$/.test(sh.name || '') && !sh.cpsa && !sh.gun && !sh.cartridges;
+    const roundShooters = () => (S.target ? (S.target.state.shooters || []).filter(sh => String(sh.name || '').trim() && !isPlaceholder(sh)) : []);
+    function hasScores(st) {
+        const shot = (v) => v === true || v === false;
+        return Object.values(st.hits || {}).some(per => Object.values(per || {}).some(a => Array.isArray(a) && a.some(shot)))
+            || Object.values(st.optionHits || {}).some(o => o && shot(o.hit));
+    }
+    // Into mode: read the discipline's live round. It must have no scores yet.
+    function loadTarget() {
+        S.target = null; S.intoNote = '';
+        const d = disc();
+        if (!S.into || !d) return;
+        let st = null;
+        try { st = JSON.parse(localStorage.getItem(d.key) || 'null'); } catch (e) {}
+        if (!st || !Array.isArray(st.stands)) { S.into = false; S.intoNote = `There’s no ${d.name} round open on this device, so the cards will make a new round.`; return; }
+        if (hasScores(st)) { S.into = false; S.intoNote = `The open ${d.name} round already has scores, so the cards will make a new round.`; return; }
+        S.target = { key: roundKeyOf(st), state: st };
+        S.ground = st.ground || ''; S.event = st.event || ''; if (st.date) S.date = st.date;
+    }
+    function intoSummaryHtml() {
+        const st = S.target.state, d = disc();
+        const [y, m, dd] = String(st.date || '').split('-');
+        const title = [st.ground, st.event].map(x => String(x || '').trim()).filter(Boolean).join(' · ') || 'Unnamed round';
+        const names = roundShooters().map(sh => sh.name);
+        return `<div class="rounded-lg border-2 border-orange-300 bg-orange-50 p-3 text-sm text-slate-800 space-y-1">
+            <div class="font-bold">Into this round: ${esc(title)}${y ? ` <span class="font-semibold text-slate-600">· ${dd}/${m}/${y}</span>` : ''}</div>
+            <div>${st.stands.length} ${d.stand.toLowerCase()}${st.stands.length === 1 ? '' : 's'}${names.length ? ` · squad: ${esc(names.join(', '))}` : ''}. The round’s details, shooters and clay presentations are kept${d.fixed ? '' : `; each ${d.stand.toLowerCase()}’s number of clays is set from the cards`}.</div>
+            <button type="button" data-act="newRound" class="text-sm font-bold underline text-orange-800">Make a new round instead</button>
+        </div>`;
     }
 
     // ---------------------------------------------------------------- photos
@@ -133,17 +175,18 @@
             await loadRegulars();
             S.notes = result.notes || '';
             S.cards = (result.cards || []).map(c => {
-                const reg = matchRegular(c.shooter_name);
+                const inRound = matchName(c.shooter_name, roundShooters());
+                const reg = inRound ? null : matchRegular(c.shooter_name);
                 const amb = {};
                 (c.ambiguous || []).forEach(a => { amb[`${a.stand}-${a.clay}`] = a.reason || 'Unclear mark'; });
                 const stands = (c.stands || []).slice().sort((a, b) => a.stand - b.stand).map(s => ({ marks: (s.marks || []).map(m => (m === 'H' || m === 'M' ? m : '-')), written: String(s.written_score || '').trim() }));
                 return {
                     include: true, image: c.image, readName: c.shooter_name || '', cardNumber: c.card_number || '',
                     writtenTotal: String(c.written_total || '').trim(), writtenSub: String(c.written_subtotals || '').trim(),
-                    stands, amb, regularId: reg ? reg.id : '', newName: c.shooter_name || '', autoMatched: !!reg
+                    stands, amb, roundId: inRound ? inRound.id : '', regularId: reg ? reg.id : '', newName: c.shooter_name || '', autoMatched: !!(inRound || reg)
                 };
             });
-            if (!S.ground && result.cards?.[0]?.ground) S.ground = result.cards[0].ground;
+            if (!S.target && !S.ground && result.cards?.[0]?.ground) S.ground = result.cards[0].ground;
             if (!S.cards.length) S.error = 'No scorecards were found in these photos.';
         } catch (err) {
             S.error = err.message || 'Something went wrong reading the scorecards.';
@@ -172,14 +215,17 @@
         const warnings = [];
         let summary;
         if (!d.fixed) {
+            const before = S.target ? S.target.state.stands : null;
             const parts = counts.map((n, i) => {
                 const extra = n % 2 === 1, t = extra ? n - 1 : n;
+                const was = before?.[i] ? before[i].targets + (before[i].extraClay ? 1 : 0) : null;
                 if (n && t < ESP_MIN) warnings.push(`${d.stand} ${i + 1}: only ${n} clay${n === 1 ? '' : 's'} on the cards — the round will have ${ESP_MIN} (the rest left unshot).`);
                 if (t > ESP_MAX) warnings.push(`${d.stand} ${i + 1}: ${n} clays is more than the app supports (${ESP_MAX}+1); the extra clays won't be imported.`);
-                return `<span class="inline-block rounded-md bg-slate-100 border border-slate-300 px-2 py-1 m-0.5 text-sm"><strong>${i + 1}</strong>: ${n}${extra ? ` <span class="text-slate-500">(${t / 2} pairs +1)</span>` : ` <span class="text-slate-500">(${t / 2} pairs)</span>`}</span>`;
+                return `<span class="inline-block rounded-md bg-slate-100 border border-slate-300 px-2 py-1 m-0.5 text-sm"><strong>${i + 1}</strong>: ${n}${extra ? ` <span class="text-slate-500">(${t / 2} pairs +1)</span>` : ` <span class="text-slate-500">(${t / 2} pairs)</span>`}${was !== null && was !== n ? ` <span class="text-orange-700 font-semibold">was ${was}</span>` : ''}${before && !before[i] ? ' <span class="text-orange-700 font-semibold">new</span>' : ''}</span>`;
             });
+            if (before && before.length > counts.length) warnings.push(before.length - counts.length === 1 ? `${d.stand} ${before.length} isn’t on the cards and stays as it is.` : `${d.stand}s ${counts.length + 1}–${before.length} aren’t on the cards and stay as they are.`);
             if (counts.length > 20) warnings.push('More than 20 stands — only the first 20 will be imported.');
-            summary = `<div class="text-sm text-slate-700 mb-1">${counts.length} ${d.stand.toLowerCase()}${counts.length === 1 ? '' : 's'} — clays per ${d.stand.toLowerCase()} (the highest on any card):</div><div>${parts.join('')}</div>`;
+            summary = `<div class="text-sm text-slate-700 mb-1">${counts.length} ${d.stand.toLowerCase()}${counts.length === 1 ? '' : 's'} — clays per ${d.stand.toLowerCase()} (the highest on any card)${S.target ? ', compared with the round' : ''}:</div><div>${parts.join('')}</div>`;
         } else {
             summary = `<div class="text-sm text-slate-700">${d.name} uses a fixed layout: ${d.fixed.length} ${d.stand.toLowerCase()}s of ${[...new Set(d.fixed)].join('/')} targets${d.option ? ' plus the option target' : ''}.</div>`;
             included().forEach(c => {
@@ -200,8 +246,13 @@
         const counted = c.stands.reduce((a, s) => a + hits(s.marks), 0);
         const wTotal = toInt(c.writtenTotal);
         const totalOk = wTotal === null ? null : wTotal === counted;
-        const used = new Set((S.cards || []).filter((x, j) => j !== ci && x.include && x.regularId).map(x => x.regularId));
-        const options = S.regulars.map(r => `<option value="${esc(r.id)}" ${c.regularId === r.id ? 'selected' : ''} ${used.has(r.id) ? 'disabled' : ''}>${esc(r.name)}${used.has(r.id) ? ' — on another card' : ''}</option>`).join('');
+        const others = (S.cards || []).filter((x, j) => j !== ci && x.include);
+        const used = new Set(others.filter(x => x.regularId).map(x => x.regularId));
+        const usedRound = new Set(others.filter(x => x.roundId).map(x => String(x.roundId)));
+        const regOpts = S.regulars.map(r => `<option value="reg:${esc(r.id)}" ${!c.roundId && c.regularId === r.id ? 'selected' : ''} ${used.has(r.id) ? 'disabled' : ''}>${esc(r.name)}${used.has(r.id) ? ' — on another card' : ''}</option>`).join('');
+        const rs = roundShooters();
+        const roundOpts = rs.map(sh => `<option value="round:${esc(sh.id)}" ${String(c.roundId) === String(sh.id) ? 'selected' : ''} ${usedRound.has(String(sh.id)) ? 'disabled' : ''}>${esc(sh.name)}${usedRound.has(String(sh.id)) ? ' — on another card' : ''}</option>`).join('');
+        const options = rs.length ? `<optgroup label="In this round">${roundOpts}</optgroup>${regOpts ? `<optgroup label="Regular shooters">${regOpts}</optgroup>` : ''}` : regOpts;
         const ambCount = Object.keys(c.amb).length;
         return `<section class="bg-white rounded-xl shadow border ${c.include ? 'border-slate-300' : 'border-slate-200 opacity-60'} p-3 space-y-2" data-card="${ci}">
             <div class="flex items-center justify-between gap-2">
@@ -214,7 +265,8 @@
                     <select data-act="regular" class="block w-full h-11 bg-white border border-slate-400 rounded-lg px-2 text-sm font-semibold">
                         <option value="">New shooter (not a regular)</option>${options}
                     </select></label>
-                ${c.regularId ? `<div class="text-sm self-end pb-2 ${c.autoMatched ? 'text-emerald-700' : 'text-slate-700'}">${c.autoMatched ? '✓ Matched to a regular shooter' : 'Regular shooter chosen'} — CPSA no., class and gear come from the regular.</div>`
+                ${c.roundId ? `<div class="text-sm self-end pb-2 ${c.autoMatched ? 'text-emerald-700' : 'text-slate-700'}">${c.autoMatched ? '✓ Matched to a shooter in this round' : 'Shooter in this round chosen'} — their details stay as set in the round.</div>`
+                    : c.regularId ? `<div class="text-sm self-end pb-2 ${c.autoMatched ? 'text-emerald-700' : 'text-slate-700'}">${c.autoMatched ? '✓ Matched to a regular shooter' : 'Regular shooter chosen'} — CPSA no., class and gear come from the regular.</div>`
                     : `<label class="block space-y-1"><span class="block text-xs font-semibold text-slate-800">Name for the round</span><input type="text" data-act="newName" value="${esc(c.newName)}" maxlength="40" class="block w-full h-11 bg-white border border-slate-400 rounded-lg px-2 text-sm font-semibold"></label>`}
             </div>
             <div class="space-y-1.5">${c.stands.map((s, si) => {
@@ -275,11 +327,12 @@
             </section>
             <section class="${card}">
                 <div class="${head}">3. Round</div>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                ${S.intoNote ? `<p class="mb-2 text-sm text-amber-800">⚠ ${esc(S.intoNote)}</p>` : ''}
+                ${S.target ? intoSummaryHtml() : `<div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <label class="block space-y-1"><span class="block text-xs font-semibold text-slate-800">Shooting ground</span><input type="text" data-act="ground" value="${esc(S.ground)}" placeholder="e.g. West Wycombe" class="${field}"></label>
                     <label class="block space-y-1"><span class="block text-xs font-semibold text-slate-800">Date</span><input type="date" data-act="date" value="${esc(S.date)}" class="${field}"></label>
                     <label class="block space-y-1"><span class="block text-xs font-semibold text-slate-800">Event name</span><input type="text" data-act="event" value="${esc(S.event)}" placeholder="e.g. Club Championship" class="${field}"></label>
-                </div>
+                </div>`}
                 <button type="button" data-act="read" ${ready ? '' : 'disabled'} class="mt-3 w-full h-12 rounded-xl bg-orange-500 text-white text-sm font-bold disabled:opacity-40">${S.reading ? 'Reading scorecards… (this can take a minute)' : (S.cards ? 'Read the photos again' : 'Read scorecards')}</button>
                 ${S.error ? `<p class="mt-2 text-sm font-semibold text-red-700">${esc(S.error)}</p>` : ''}
             </section>
@@ -292,7 +345,7 @@
                 </section>
                 ${S.cards.map(cardHtml).join('')}
                 <section class="${card}">
-                    <button type="button" data-act="create" class="w-full h-12 rounded-xl bg-slate-900 text-white text-sm font-bold">Create ${d ? d.name : ''} round from ${Math.min(included().length, MAX_SHOOTERS)} card${included().length === 1 ? '' : 's'}</button>
+                    <button type="button" data-act="create" class="w-full h-12 rounded-xl bg-slate-900 text-white text-sm font-bold">${S.target ? 'Add' : `Create ${d ? d.name : ''} round from`} ${Math.min(included().length, MAX_SHOOTERS)} card${included().length === 1 ? '' : 's'}${S.target ? ' to this round' : ''}</button>
                     <p class="mt-2 text-xs text-slate-500">You can still change anything in the round afterwards.</p>
                 </section>
             </div>` : ''}`;
@@ -304,10 +357,11 @@
         const d = disc();
         const cards = included().slice(0, MAX_SHOOTERS);
         if (!cards.length) return toast('Include at least one card.', 'error');
-        if (!S.ground.trim() && !S.event.trim()) { toast('Enter a ground or event name for the round.', 'error'); document.querySelector('[data-act="ground"]')?.focus(); return; }
+        if (!S.target && !S.ground.trim() && !S.event.trim()) { toast('Enter a ground or event name for the round.', 'error'); document.querySelector('[data-act="ground"]')?.focus(); return; }
         const regById = Object.fromEntries(S.regulars.map(r => [r.id, r]));
         const conv = (m) => (m === 'H' ? true : m === 'M' ? false : null);
         const shooters = cards.map((c, i) => {
+            if (S.target && c.roundId) return { roundShooterId: c.roundId, stands: c.stands.map(s => s.marks.map(conv)) };
             const reg = c.regularId ? regById[c.regularId] : null;
             return {
                 name: reg ? reg.name : (c.newName.trim() || c.readName.trim() || `Shooter ${i + 1}`),
@@ -321,6 +375,7 @@
             standClays: d.fixed ? d.fixed.slice() : standClays(),
             shooters, createdAt: Date.now()
         };
+        if (S.target) payload.into = { key: S.target.key };
         try { localStorage.setItem('clayscorer:pending-import', JSON.stringify(payload)); }
         catch (e) { return toast('Couldn’t save the import on this device.', 'error'); }
         location.href = `${d.id}.html`;
@@ -332,7 +387,8 @@
         const el = e.target.closest('[data-act]');
         if (!el) return;
         const act = el.dataset.act;
-        if (act === 'discipline') { S.discipline = el.dataset.id; S.cards = null; S.error = ''; render(); }
+        if (act === 'discipline') { S.discipline = el.dataset.id; S.cards = null; S.error = ''; S.into = false; S.target = null; S.intoNote = ''; render(); }
+        else if (act === 'newRound') { S.into = false; S.target = null; S.ground = ''; S.event = ''; S.date = todayIso(); if (S.cards) S.cards.forEach(c => { c.roundId = ''; c.regularId = matchRegular(c.readName)?.id || ''; c.autoMatched = !!c.regularId; }); render(); }
         else if (act === 'remove') {
             const p = S.photos.find(x => x.id === el.dataset.id);
             if (p) URL.revokeObjectURL(p.url);
@@ -357,7 +413,12 @@
         const ci = el.closest('[data-card]') ? Number(el.closest('[data-card]').dataset.card) : -1;
         if (act === 'files') { addFiles(el.files); el.value = ''; }
         else if (act === 'include') { S.cards[ci].include = el.checked; render(); }
-        else if (act === 'regular') { S.cards[ci].regularId = el.value; S.cards[ci].autoMatched = false; render(); }
+        else if (act === 'regular') {
+            const c = S.cards[ci], v = el.value;
+            c.roundId = v.startsWith('round:') ? (roundShooters().find(sh => String(sh.id) === v.slice(6))?.id ?? '') : '';
+            c.regularId = v.startsWith('reg:') ? v.slice(4) : '';
+            c.autoMatched = false; render();
+        }
         else if (act === 'newName') S.cards[ci].newName = el.value;
         else if (act === 'ground' || act === 'event' || act === 'date') S[act] = el.value;
     }
@@ -387,6 +448,7 @@
         render();
         try { S.status = await api('GET', '/api/scorecards/status'); }
         catch (e) { S.status = { available: false, signedIn: false }; }
+        loadTarget();
         await loadRegulars();
         render();
     });

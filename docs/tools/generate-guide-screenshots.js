@@ -230,6 +230,13 @@ const SQUAD = [
   await el('#review > section:nth-child(1)', 'import-layout');
   await el('#review > section:nth-child(2)', 'import-card');
 
+  // 12b. Into an existing round that has no scores yet
+  await p.goto(`${B}/sporting.html`); await p.evaluate(() => localStorage.removeItem(window.DISCIPLINE.storageKey)); await p.reload(); await p.waitForTimeout(900);
+  await fillRound('Example Shooting Ground', 'Club Sporting', '2026-11-08');
+  await p.evaluate(() => { toggleClayMeta(0, 'presentation', 'Crosser'); toggleClayMeta(0, 'direction', 'LR'); document.getElementById('setup-panel').open = true; });
+  await p.goto(`${B}/import.html?discipline=sporting&into=1`); await p.waitForTimeout(1000);
+  await el('section:has([data-act="newRound"])', 'import-into');
+
   console.log('screenshots done, errors:', JSON.stringify(errs));
   await b.close();
 })();

@@ -21,7 +21,7 @@
 
     // Bump this string when you ship a change so it's easy to confirm from DevTools
     // that a page has picked up the new build (rather than serving from SW cache).
-    const SCORER_BUILD = 'scorer 2026-11-15 (scorecard photo import)';
+    const SCORER_BUILD = 'scorer 2026-11-15 (scorecard photos into a round)';
     console.info('%c[ClayScorer] %s', 'color:#f97316;font-weight:bold', SCORER_BUILD);
 
     const D = window.DISCIPLINE;
@@ -1553,6 +1553,7 @@
         try { p = JSON.parse(localStorage.getItem(PENDING_IMPORT_KEY) || 'null'); } catch (e) {}
         if (!p || p.discipline !== D.id) return;
         try { localStorage.removeItem(PENDING_IMPORT_KEY); } catch (e) {}
+        if (p.into) return applyImportIntoCurrent(p);
         const st = makeDefaultState();
         st.ground = String(p.ground || '').trim();
         st.event = String(p.event || '').trim();
@@ -1604,6 +1605,72 @@
         writeHistory(store);
         window.loadRound(key);
         notify(`Imported ${st.shooters.length} scorecard${st.shooters.length === 1 ? '' : 's'}. Check the scores, then carry on as normal.`, 'success');
+    }
+
+    // Scorecards imported into the open round (import.html?into=1). Only while it has no scores:
+    // ground/date/event, notes, weather and clay presentations stay; cards matched to the round's
+    // shooters keep that shooter (id, details, stand assignments); English Sporting stands take
+    // their clay counts from the cards (stands not on the cards are left as they are).
+    function applyImportIntoCurrent(p) {
+        if (roundKey(state) !== p.into.key) { notify('The open round changed since the photos were read, so nothing was imported. Try again from this round.', 'error'); return; }
+        if (state.isLocked) { notify('This round is locked. Unlock it, then import the scorecards again.', 'error'); return; }
+        if (state.shooters.some(sh => shooterHasScores(sh.id))) { notify('This round already has scores, so the scorecards weren’t added.', 'error'); return; }
+        if (!D.fixedStands) {
+            const opts = D.targetOptions || [4, 6, 8, 10, 12];
+            const minT = Math.min(...opts), maxT = Math.max(...opts);
+            (p.standClays || []).slice(0, 20).forEach((n, i) => {
+                if (!n) return;
+                const extraClay = n % 2 === 1;
+                const targets = Math.max(minT, Math.min(maxT, extraClay ? n - 1 : n));
+                let stand = state.stands[i];
+                if (!stand) {
+                    stand = { id: Math.max(0, ...state.stands.map(x => x.id)) + 1, targets, extraClay, description: '', clayMeta: [] };
+                    state.stands.push(stand);
+                }
+                stand.targets = targets;
+                stand.extraClay = extraClay;
+                stand.clayMeta = normalizeClayMeta(stand.clayMeta, presentationCountForStand(stand));
+            });
+        }
+        const baseId = Date.now();
+        const byId = new Map(state.shooters.map(sh => [String(sh.id), sh]));
+        const used = new Set();
+        const entries = (p.shooters || []).slice(0, MAX_SHOOTERS).map((sh, i) => {
+            const existing = sh.roundShooterId != null ? byId.get(String(sh.roundShooterId)) : null;
+            if (existing && !used.has(existing)) { used.add(existing); return { shooter: existing, stands: sh.stands }; }
+            const out = { id: baseId + i, name: String(sh.name || `Shooter ${i + 1}`).slice(0, 40), cpsa: sh.cpsa || '', class: sh.class || 'U' };
+            if (sh.gun) out.gun = sh.gun;
+            if (sh.cartridges) out.cartridges = sh.cartridges;
+            return { shooter: out, stands: sh.stands };
+        });
+        if (!entries.length) { notify('No scorecards to import.', 'error'); return; }
+        // Named shooters in the round without a card stay (no scores); untouched placeholders go.
+        state.shooters.forEach(sh => {
+            if (used.has(sh) || entries.length >= MAX_SHOOTERS) return;
+            if (/^Shooter \d+$/.test(sh.name || '') && !sh.cpsa && !sh.gun && !sh.cartridges) return;
+            entries.push({ shooter: sh, stands: [] });
+        });
+        history = null;
+        state.shooters = entries.map(e => e.shooter);
+        state.hits = {};
+        state.optionHits = {};
+        entries.forEach(({ shooter, stands: src }) => {
+            state.hits[shooter.id] = {};
+            state.stands.forEach((stand, si) => {
+                const total = standTargets(stand);
+                const marks = Array.isArray(src?.[si]) ? src[si] : [];
+                state.hits[shooter.id][stand.id] = Array.from({ length: total }, (_, k) => (marks[k] === true || marks[k] === false ? marks[k] : null));
+                if (OPTION && marks.length > total && !state.optionHits[shooter.id]) {
+                    const extra = marks.slice(total).find(m => m === true || m === false);
+                    if (extra !== undefined) state.optionHits[shooter.id] = { standId: stand.id, hit: extra };
+                }
+            });
+        });
+        state.activeIdx = 0;
+        normalizeState();
+        render(); save();
+        const added = entries.filter(e => e.stands.length).length;
+        notify(`Added ${added} scorecard${added === 1 ? '' : 's'} to this round. Check the scores, then carry on as normal.`, 'success');
     }
 
     function generateExportGrid(tid) {
@@ -2168,6 +2235,7 @@
                             <span>#</span><span>Name</span><span>CPSA no.</span><span>Class</span><span></span>
                         </div>
                         <div id="squad-list" class="space-y-2"></div>
+                        <a id="import-into-link" href="import.html?discipline=${D.id}&into=1" class="hidden mt-2 inline-flex items-center gap-1.5 text-sm font-bold text-orange-700 underline"><i data-lucide="camera" class="w-4 h-4"></i> Fill in this round from scorecard photos</a>
                     </div>
 
                     ${HAS_PRESENTATION_MAP ? `
@@ -2357,6 +2425,7 @@
                             <input type="file" accept=".csv,text/csv" onchange="handleImportChange(this)" style="display:none">
                         </label>
                         <a href="import.html?discipline=${D.id}" class="${BTN_SMALL} bg-white text-slate-700 border-slate-300 inline-flex items-center gap-1"><i data-lucide="camera" class="w-3.5 h-3.5"></i> Import photos</a>
+                        ${!state.isLocked && !state.shooters.some(sh => shooterHasScores(sh.id)) ? `<a href="import.html?discipline=${D.id}&into=1" class="${BTN_SMALL} bg-white text-slate-700 border-slate-300 inline-flex items-center gap-1"><i data-lucide="camera" class="w-3.5 h-3.5"></i> Photos into this round</a>` : ''}
                         <button onclick="closeHeaderMenus(); newRound()" class="${BTN_SMALL} bg-slate-900 text-white border-slate-900">+ New round</button>
                     </div>
                 </div>
@@ -2568,6 +2637,8 @@
             document.getElementById('field-format').innerText = `${state.stands.length} ${ROUND_LABEL.toLowerCase()}s · ${totalTargets} targets`;
         }
         const anyShot = sTotalShot > 0;
+        const intoLink = document.getElementById('import-into-link');
+        if (intoLink) intoLink.classList.toggle('hidden', anyShot || !!state.isLocked || state.shooters.some(sh => shooterHasScores(sh.id)));
         const setupPanel = document.getElementById('setup-panel');
         if (anyShot !== lastAnyShot) {
             setupPanel.open = !anyShot;

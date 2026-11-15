@@ -237,6 +237,7 @@ Tap **History** in the header. Every round with a ground or event name is kept h
 | Bin icon | Deletes that round, after asking. When signed in, it is deleted from the server too |
 | **+ New round** | Starts a fresh round; the current one stays in History |
 | **Import photos** | Opens the scorecard photo import with this discipline chosen (see below) |
+| **Photos into this round** | Fills in the open round from scorecard photos. Only shown while it has no scores (see below) |
 | **Import CSV** | Loads a round from a CSV exported by ClayScorer (see below) |
 | **Delete all history** | Removes every saved round for this discipline, after asking |
 
@@ -276,6 +277,17 @@ Each card then shows what was read:
 <img src="guide/import-card.png" width="300" alt="Checking one card: matched regular, clays, doubtful mark">
 
 Tap **Create round**. The discipline page opens with the new round, which is also saved in History. If a round with the same ground, date and event already exists, you're asked before it is replaced.
+
+**Into a round you've already set up.** You may have set up a round before shooting, with the squad and clay presentations entered, and kept score on paper. You can fill it in from the scorecards as long as it has no scores yet. Tap **Fill in this round from scorecard photos** under the squad in **Round setup**, or **History › Photos into this round**.
+
+<img src="guide/import-into.png" width="300" alt="Importing into the open round">
+
+- **What's kept.** The round keeps its ground, date, event, notes, weather and clay presentations, so you don't enter them again.
+- **Shooters.** Cards are matched to the round's shooters first, then to your regulars. A matched shooter keeps their details from the round. Shooters without a card stay in the squad with no scores, and unused "Shooter N" rows are removed.
+- **Clays per stand.** For English Sporting, each stand's number of clays is set from the cards, again the highest on any card. The summary shows **was 6** where a stand changes. Stands not on the cards stay as they were.
+- **Changed your mind?** Tap **Make a new round instead** to import the cards as a separate round.
+
+Tap **Add … cards to this round** to finish. If the round was scored or changed in the meantime, nothing is imported and you're told why.
 
 ---
 
