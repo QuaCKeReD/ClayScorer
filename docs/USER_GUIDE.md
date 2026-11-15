@@ -335,7 +335,7 @@ See [example-outputs.pdf](example-outputs.pdf) for full examples of every discip
 
 <img src="guide/presentation-picker.png" width="300" alt="Choosing a presentation title">
 
-1. **Pick a title.** The app suggests three, made from the date, the ground and how the shoot went (e.g. *20261103 The Wergs Wobble*), or you can type your own. The title you choose is remembered with the round.
+1. **Pick a title.** The app suggests three. Each starts with the date and names the ground or event, mixed with the squad hit rate, who won and by how much, and the weather if recorded (e.g. *20261108 Kelly-Smith Beats the Wind at Winter League*). Tap **More ideas** for another three, or type your own. The title you choose is remembered with the round.
 2. **Show slides** opens a full-screen slideshow. Swipe, or use **Prev** / **Next**, to move between slides; on a computer the arrow keys work too. **Notes** shows the speaker notes for each slide, with the raw numbers behind it. The slides are easier to read with the phone turned sideways.
 3. **Share** sends the deck as a 16:9 `.pdf` file, one slide per page. **Print** prints it one slide per page; choose *Save as PDF* in the print dialog for a sharper file.
 
@@ -364,6 +364,7 @@ See [example-outputs.pdf](example-outputs.pdf) for full examples of every discip
 - **Long text is fitted to the slide.** If a table would run off the bottom, its text is made smaller until it fits.
 - **Everyone is compared by hit rate**, so a shooter with fewer clays isn't penalised.
 - **Unscored clays are left out** of every rate rather than counted as misses.
+- **The jokes vary.** Each situation has several possible lines. The mix depends on the round and the title, so the same deck always reads the same on screen, in the PDF and when printed. Pick a different title to get a different set. No two shooters on the squad slide get the same line.
 - **The jokes come only from the numbers.** Weather lines only use the weather recorded in Round notes, and clay-type lines only use the clay descriptions. Nothing is invented.
 
 <img src="guide/presentation-slide.png" width="600" alt="Stand-by-stand slide">

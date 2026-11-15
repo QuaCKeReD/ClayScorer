@@ -190,6 +190,31 @@
 
     const posText = (m, e) => (e ? (e.clay === 'OPT' ? `${m.standName(e.si)} option` : `${m.standName(e.si)} clay ${e.clay}`) : '');
 
+    // ---------------------------------------------------------------- picking lines
+
+    // Lines are chosen from pools with a hash of the round (and the chosen title), so the same
+    // deck always reads the same in the viewer, the PDF and print, while a new title or another
+    // round gives a different mix. Every template only uses numbers and facts from the round.
+    const hashStr = (str) => { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+    const roundSeed = (m, extra) => [m.data.discipline.id, m.data.ground, m.data.date, m.data.event, `${m.squad.hits}/${m.squad.shot}`, extra].join('|');
+    // pick(m, key, pool[, usedKey]): one entry; with usedKey, avoids repeating an entry already
+    // picked under that key in this deck (so the squad slide doesn't say the same thing twice).
+    function pick(m, key, pool, usedKey) {
+        const list = pool.filter(Boolean);
+        if (!list.length) return '';
+        let i = hashStr(`${m.seed || ''}|${key}`) % list.length;
+        if (usedKey) {
+            m.used = m.used || {};
+            const used = (m.used[usedKey] = m.used[usedKey] || new Set());
+            for (let k = 0; k < list.length && used.has(list[i]); k++) i = (i + 1) % list.length;
+            used.add(list[i]);
+        }
+        return list[i];
+    }
+    const cap = (t) => String(t).charAt(0).toUpperCase() + String(t).slice(1);
+    // Short name for titles: the surname (last word), or the only word.
+    const shortName = (name) => String(name || '').trim().split(/\s+/).pop().replace(/^[^A-Za-z]+|[^A-Za-z'-]+$/g, '') || String(name || '');
+
     // ---------------------------------------------------------------- titles
 
     const VENUE_STOP = new Set(['the', 'shooting', 'ground', 'grounds', 'club', 'school', 'estate', 'clay', 'clays', 'sporting', 'centre', 'center', 'range', 'ranges', 'ltd', 'limited', 'and', '&', 'of', 'gun', 'guns', 'target', 'targets']);
@@ -200,21 +225,63 @@
         return w.charAt(0).toUpperCase() + w.slice(1);
     }
 
-    function titleSuggestions(m) {
-        const v = venueWord(m.data);
+    // Weather as title words: adjective ("Windy") and noun ("Wind").
+    function weatherWords(wx) {
+        if (!wx) return null;
+        if (wx.wet) return /snow/i.test(wx.wet) ? { adj: 'Snowy', noun: 'Snow' } : /sleet/i.test(wx.wet) ? { adj: 'Sleety', noun: 'Sleet' } : /thunder/i.test(wx.wet) ? { adj: 'Stormy', noun: 'Storm' } : { adj: 'Wet', noun: 'Rain' };
+        if ((wx.maxGust ?? 0) >= 20 || (wx.maxWind ?? 0) >= 12) return { adj: (wx.maxGust ?? 0) >= 25 ? 'Blustery' : 'Windy', noun: 'Wind' };
+        if (wx.minTemp !== null && wx.minTemp <= 5) return { adj: 'Frosty', noun: 'Cold' };
+        if (wx.maxTemp !== null && wx.maxTemp >= 25) return { adj: 'Sweltering', noun: 'Heat' };
+        if (wx.fog) return { adj: 'Foggy', noun: 'Fog' };
+        if (wx.sunny) return { adj: 'Sunny', noun: 'Sun' };
+        if (isCalm(wx)) return { adj: 'Still', noun: 'Calm' };
+        return null;
+    }
+
+    // Three title ideas, each naming the ground or event and mixing in the squad hit rate, the
+    // podium result and the weather. `roll` gives a fresh set ("More ideas").
+    function titleSuggestions(m, roll = 0) {
+        const D = m.data;
+        const V = venueWord(D);
+        const ev = String(D.event || '').trim();
+        const E = ev && ev.length <= 26 ? ev.replace(/\b\w/g, c => c.toUpperCase()) : '';
+        const P = E || V;                                  // the place-or-event to name
+        const R = Math.round((m.squad.rate ?? 0) * 100);
         const r = m.squad.rate ?? 0;
-        const date = yyyymmdd(m.data.date);
-        let pool;
-        if (r >= 0.8) pool = [`${v} Massacre`, `The ${v} Clean Sweep`, `Smoke on the ${v}`, `${v}: No Clay Left Behind`];
-        else if (r >= 0.65) pool = [`${v} of Fury`, `The ${v} Strikes Back`, `Mostly Harmless at ${v}`, `${v} Rising`];
-        else if (r >= 0.5) pool = [`The ${v} Wobble`, `${v}: A Game of Two Barrels`, `Half Measures at ${v}`, `${v} Coin Toss`];
-        else pool = [`The ${v} Clay Sanctuary`, `${v} Survivors' Club`, `Carnage at ${v}`, `${v}: The Clays Strike Back`];
-        if (m.ranked.length > 1) {
-            const gap = ptsGap(m.ranked[0].rate, m.ranked[1].rate);
-            if (gap <= 2) pool = [`Photo Finish at ${v}`, ...pool];
-            else if (gap >= 15) pool = [`The ${v} Walkover`, ...pool];
-        }
-        return [...new Set(pool)].slice(0, 3).map(t => (date ? `${date} ${t}` : t));
+        const wxw = weatherWords(weatherFacts(D));
+        const n = m.ranked.length;
+        const W = n ? shortName(m.ranked[0].name) : '';
+        const W2 = n > 1 ? shortName(m.ranked[1].name) : '';
+        const gap = n > 1 ? ptsGap(m.ranked[0].rate, m.ranked[1].rate) : null;
+        const date = yyyymmdd(D.date);
+        const sm = { ...m, seed: roundSeed(m, `titles:${roll}`) };
+
+        const rateBand = r >= 0.8 ? [`${V} Massacre`, `The ${V} Clean Sweep`, `Smoke on the ${V}`, `${P}: No Clay Left Behind`, `${R}% at ${V}: Clay Carnage`, `${P}: A ${R}% Demolition`]
+            : r >= 0.65 ? [`${V} of Fury`, `The ${V} Strikes Back`, `${V} Rising`, `${P} at ${R}%: Mostly Harmless`, `${R}% and Counting at ${V}`, `${P}: The ${R}% Job`]
+            : r >= 0.5 ? [`The ${V} Wobble`, `${P}: A Game of Two Barrels`, `Half Measures at ${V}`, `${V} Coin Toss`, `${P}: ${R}% and a Prayer`, `${R}% at ${V}: Honours Even`]
+            : [`The ${V} Clay Sanctuary`, `${V} Survivors' Club`, `${P}: The Clays Strike Back`, `${R}% at ${V}: Clays 1, Squad 0`, `${P}: A ${R}% Rescue Mission`, `The ${V} Great Escape`];
+        let podium;
+        if (n < 2) podium = W ? [`${W} Goes Solo at ${V}`, `${W} vs the Clays at ${P}`, `${W}'s ${R}% at ${V}`] : [];
+        else if (gap === 0) podium = [`Dead Heat at ${V}`, `${W} and ${W2} Share ${P}`, `${P}: Nothing to Split ${W} and ${W2}`];
+        else if (gap <= 2) podium = [`Photo Finish at ${V}`, `${W} Edges ${W2} at ${V}`, `${W} by a Whisker at ${P}`, `${P}: ${W} Pips ${W2}`];
+        else if (gap >= 15) podium = [`The ${V} Walkover`, `${W} Runs Away With ${P}`, `${W}'s ${V} Masterclass`, `${P}: ${W} by a Country Mile`];
+        else podium = [`${W} Takes ${P}`, `${W} Rules the ${V} Roost`, `${W} Tops ${P} at ${R}%`, `${P}: ${W} Comes Out on Top`];
+        const weather = wxw ? [
+            `A ${wxw.adj} Day at ${V}`, `${wxw.adj} ${P}`, `${V} in the ${wxw.noun}`, `${R}% in the ${wxw.noun} at ${V}`,
+            W ? `${W} Beats the ${wxw.noun} at ${P}` : null, W ? `${W} Wins a ${wxw.adj} ${P}` : null,
+            W && n > 1 ? `${P}: ${W} on Top, ${R}% in the ${wxw.noun}` : null
+        ] : [];
+        const fit = (t) => t && t.length <= 52;
+        const chosen = [];
+        const take = (key, pool) => {
+            const list = pool.filter(fit).filter(t => !chosen.includes(t));
+            if (list.length) chosen.push(pick(sm, key, list));
+        };
+        take('podium', podium);
+        take('weather', weather.length ? weather : rateBand);
+        take('rate', rateBand);
+        take('extra', [...podium, ...weather, ...rateBand]);
+        return chosen.slice(0, 3).map(t => (date ? `${date} ${t}` : t));
     }
 
     // ---------------------------------------------------------------- humour (data-driven only)
@@ -237,84 +304,148 @@
         };
     }
     const isCalm = (wx) => !!wx && !wx.wet && wx.maxWind !== null && wx.maxWind <= 5 && (wx.maxGust === null || wx.maxGust <= 10);
-    // The most notable thing to blame, as a noun phrase ("18 mph gusts"), or null.
-    function weatherExcuse(wx) {
+    // The most notable weather, as { kind, ...values }, or null.
+    function weatherKind(wx) {
         if (!wx) return null;
-        if (wx.wet) return `the ${wx.wet.toLowerCase()}`;
-        if (wx.maxGust !== null && wx.maxGust >= 20) return `${wx.maxGust} mph gusts`;
-        if (wx.maxWind !== null && wx.maxWind >= 12) return `a ${wx.maxWind} mph wind`;
-        if (wx.minTemp !== null && wx.minTemp <= 5) return `${wx.minTemp} °C cold fingers`;
-        if (wx.maxTemp !== null && wx.maxTemp >= 25) return `${wx.maxTemp} °C heat`;
-        if (wx.fog) return 'the fog';
-        if (wx.sunny) return 'the sun in their eyes';
+        if (wx.wet) return { kind: 'wet', w: wx.wet.toLowerCase(), W: wx.wet };
+        if (wx.maxGust !== null && wx.maxGust >= 20) return { kind: 'gust', g: wx.maxGust };
+        if (wx.maxWind !== null && wx.maxWind >= 12) return { kind: 'wind', v: wx.maxWind };
+        if (wx.minTemp !== null && wx.minTemp <= 5) return { kind: 'cold', t: wx.minTemp };
+        if (wx.maxTemp !== null && wx.maxTemp >= 25) return { kind: 'hot', t: wx.maxTemp };
+        if (wx.fog) return { kind: 'fog' };
+        if (wx.sunny) return { kind: 'sunny' };
+        if (isCalm(wx)) return { kind: 'calm' };
         return null;
     }
-    function weatherGag(wx) {
-        if (!wx) return '';
-        if (wx.wet) return `Shot in ${wx.wet.toLowerCase()}: dedication, or poor judgement.`;
-        if (wx.maxGust !== null && wx.maxGust >= 20) return `Gusts of ${wx.maxGust} mph. Some clays took the scenic route.`;
-        if (wx.maxWind !== null && wx.maxWind >= 12) return `A ${wx.maxWind} mph wind gave everyone a ready-made excuse.`;
-        if (wx.minTemp !== null && wx.minTemp <= 5) return `${wx.minTemp} °C. Gloves on, excuses ready.`;
-        if (wx.maxTemp !== null && wx.maxTemp >= 25) return `${wx.maxTemp} °C. Sun cream and sweaty palms.`;
-        if (wx.fog) return 'Fog on the ground. Some clays were heard, not seen.';
-        if (isCalm(wx)) return 'Barely a breath of wind. No excuses today.';
-        return '';
+    // Something to blame, as a noun phrase ("18 mph gusts"), or null. Calm days have no excuse.
+    function weatherExcuse(m, key) {
+        const k = weatherKind(m.wx);
+        if (!k) return null;
+        const pools = {
+            wet: [`the ${k.w}`, `a soggy day of ${k.w}`, `the ${k.w}, obviously`],
+            gust: [`${k.g} mph gusts`, `the ${k.g} mph gusts`, `gusts of ${k.g} mph`],
+            wind: [`a ${k.v} mph wind`, `the ${k.v} mph breeze`, `${k.v} mph of wind`],
+            cold: [`${k.t} °C cold fingers`, `numb fingers at ${k.t} °C`, `a ${k.t} °C chill`],
+            hot: [`${k.t} °C heat`, `the ${k.t} °C heat`, `sweaty palms at ${k.t} °C`],
+            fog: ['the fog', 'the murk', 'the fog rolling in'],
+            sunny: ['the sun in their eyes', 'the glare', 'the low sun']
+        };
+        return pools[k.kind] ? pick(m, `excuse:${key}`, pools[k.kind]) : null;
+    }
+    function weatherGag(m) {
+        const k = weatherKind(m.wx);
+        if (!k) return '';
+        const pools = {
+            wet: [`Shot in ${k.w}: dedication, or poor judgement.`, `${k.W}. Waterproofs on, standards slipping.`, `A ${k.w} kind of day. The clays didn't mind; the shooters did.`, `${k.W} all round. Nobody stayed dry, few stayed sharp.`],
+            gust: [`Gusts of ${k.g} mph. Some clays took the scenic route.`, `${k.g} mph gusts: the clays had a tailwind and an attitude.`, `With gusts to ${k.g} mph, every clay was a surprise.`],
+            wind: [`A ${k.v} mph wind gave everyone a ready-made excuse.`, `${k.v} mph of wind. The clays went wherever they liked.`, `Breezy at ${k.v} mph. Excuses were plentiful.`],
+            cold: [`${k.t} °C. Gloves on, excuses ready.`, `${k.t} °C: fingers numb, trigger optional.`, `A brisk ${k.t} °C. Hot drinks earned, hits less so.`],
+            hot: [`${k.t} °C. Sun cream and sweaty palms.`, `${k.t} °C: the clays weren't the only thing getting baked.`, `A sweltering ${k.t} °C. Shade was in demand.`],
+            fog: ['Fog on the ground. Some clays were heard, not seen.', 'Foggy. The clays had cover; the shooters had excuses.', 'Fog: perfect for clays that like to make an entrance.'],
+            sunny: ['Sunshine all round. Glare: the excuse of the day.', 'Sunny skies, so nobody can blame the weather. Except the glare.', 'Blue skies and bright light. Sunglasses advised.'],
+            calm: ['Barely a breath of wind. No excuses today.', 'Dead calm. Every miss was all their own work.', 'No wind, no rain, no excuses.']
+        };
+        return pick(m, 'weatherGag', pools[k.kind] || []);
     }
 
     function coverGag(m) {
         const r = m.squad.rate ?? 0;
-        const escaped = plural(m.squad.misses, 'clay');
+        const hits = m.squad.hits, misses = m.squad.misses;
+        const esc_ = plural(misses, 'clay');
+        const p = fmtPct(r);
         if (!m.squad.shot) return 'No clays were harmed. Yet.';
-        if (r >= 0.8) return `The clays never stood a chance. Only ${escaped} escaped.`;
-        if (r >= 0.65) return `Most clays were harmed in the making of this shoot. ${escaped} got away.`;
-        if (r >= 0.5) return `A fair fight. The clays won ${m.squad.misses} rounds of it.`;
-        return `${escaped} escaped unharmed and are still celebrating.`;
+        if (r >= 0.8) return pick(m, 'cover', [`The clays never stood a chance. Only ${esc_} escaped.`, `Clay carnage: ${hits} broken, ${misses} survivors.`, `${p} of everything thrown came down in pieces.`, `A bad day to be a clay. Only ${esc_} made it out.`, `${hits} clays down. The survivors are in counselling.`]);
+        if (r >= 0.65) return pick(m, 'cover', [`Most clays were harmed in the making of this shoot. ${cap(esc_)} got away.`, `${p} broken. The other ${esc_} are telling their friends.`, `Solid work: ${hits} down, ${misses} still out there somewhere.`, `The clays lost ${hits}–${misses}. A respectable beating.`, `More hits than misses, by a comfortable ${hits - misses}.`]);
+        if (r >= 0.5) return pick(m, 'cover', [`A fair fight. The clays won ${misses} rounds of it.`, `${hits} hits, ${misses} misses. Honours almost even.`, `Squad ${p}: a coin toss with extra noise.`, `The clays took ${misses} off the squad. It was close.`, `Plenty broke. Plenty didn't. ${p} all told.`]);
+        return pick(m, 'cover', [`${cap(esc_)} escaped unharmed and are still celebrating.`, `The clays won ${misses}–${hits}. Rematch requested.`, `${p} squad hit rate. The clays called it an easy day.`, `A great day for clay conservation: ${misses} spared.`, `More misses than hits. The clays are calling it a home win.`]);
     }
 
     function squadRoast(m, s) {
         const n = m.ranked.length;
         const rank = m.ranked.indexOf(s);
         const p = fmtPct(s.rate);
+        const key = `squad:${s.name}`;
+        const one = (pool) => pick(m, key, pool, `squad`);
         const valid = m.stands.map((_, si) => si).filter(si => s.perStand[si].shot > 0);
         const bestSi = valid.slice().sort((a, b) => s.standPcts[b] - s.standPcts[a])[0];
         const worstSi = valid.slice().sort((a, b) => s.standPcts[a] - s.standPcts[b])[0];
-        if (!s.shot) return 'Turned up. Has not fired yet.';
-        const excuse = weatherExcuse(m.wx);
-        if (n > 1 && m.ranked.every(x => x.rate === s.rate)) return `${p}, dead level with everyone. Nobody gets bragging rights.`;
+        if (!s.shot) return one(['Turned up. Has not fired yet.', 'Present, correct, and yet to pull a trigger.', 'Warming up. Some would say for a while.']);
+        if (n > 1 && m.ranked.every(x => x.rate === s.rate)) return one([`${p}, dead level with everyone. Nobody gets bragging rights.`, `${p}, same as everyone else. A squad of clones.`, `Identical ${p} across the board. Suspiciously fair.`]);
+        const excuse = weatherExcuse(m, s.name);
+        const gun = s.gun;
+        const gap = n > 1 ? ptsGap(m.ranked[0].rate, m.ranked[1].rate) : 0;
         if (n > 1 && rank === 0) {
-            if (excuse) return `Top of the pile at ${p}, despite ${excuse}.${s.gun ? ` The ${s.gun} earned its keep.` : ''}`;
-            return s.gun ? `Top of the pile at ${p}. The ${s.gun} earned its keep.` : `Top of the pile at ${p}. Will mention it. Repeatedly.`;
+            const gunTail = gun ? pick(m, `${key}:gun`, [` The ${gun} earned its keep.`, ` The ${gun} did the talking.`, ` Credit to the ${gun}.`]) : '';
+            if (excuse) return one([`Top of the pile at ${p}, despite ${excuse}.`, `${p} and top, ${excuse} and all.`, `Shrugged off ${excuse} to top the squad at ${p}.`]) + gunTail;
+            const walk = gap >= 15 ? [`${p}, ${gap} points clear. Everyone else was shooting for second.`, `Top by ${gap} points at ${p}. Not close.`] : [];
+            if (gun) return one([...walk, `Top of the pile at ${p}. The ${gun} earned its keep.`, `${p} and top of the squad. The ${gun} gets a polish tonight.`, `Leads at ${p}. The ${gun} isn't for sale.`]);
+            return one([...walk, `Top of the pile at ${p}. Will mention it. Repeatedly.`, `Squad leader at ${p}. Expect a speech.`, `${p}: best in show. Modesty not included.`, `Top dog at ${p}. Insufferable until next week.`, `${p} and top. The bar tab is theirs. (Not confirmed.)`]);
         }
         const ext = typeExtremes(s);
         if (n > 1 && rank === n - 1) {
-            if (excuse) return `${p}. Blames ${excuse}${s.gun ? `, not the ${s.gun}` : ''}.`;
-            if (ext && ext.nem.rate <= 0.5) return `${p}. Undone by the ${typePlural(ext.nem.type)}: ${ext.nem.hits}/${ext.nem.shot}.`;
-            if (isCalm(m.wx)) return `${p} — on a still day, too. No wind to blame.`;
-            return s.gun ? `${p}. Not the ${s.gun}'s fault. Probably.` : `${p} — the clays' favourite shooter.`;
+            if (excuse) return one([`${p}. Blames ${excuse}${gun ? `, not the ${gun}` : ''}.`, `${p}. It was definitely ${excuse}.`, `${p}, and ${excuse} will be mentioned at length.`]);
+            if (ext && ext.nem.rate <= 0.5) {
+                const t = typePlural(ext.nem.type), h = ext.nem.hits, k = ext.nem.shot;
+                return one([`${p}. Undone by the ${t}: ${h}/${k}.`, `${p}. The ${t} won ${k - h}–${h}.`, `${p}. ${cap(t)}: ${h} from ${k}. Say no more.`]);
+            }
+            if (isCalm(m.wx)) return one([`${p}, on a still day, too. No wind to blame.`, `${p} with no wind to blame. Brave.`]);
+            if (gun) return one([`${p}. Not the ${gun}'s fault. Probably.`, `${p}. The ${gun} is considering its options.`, `${p}. The ${gun} wants a word.`]);
+            return one([`${p}, the clays' favourite shooter.`, `${p}. The clays send their thanks.`, `${p}. Somebody had to keep the clays company.`, `${p}. Plenty of room for improvement.`, `${p}. The only way is up.`]);
         }
         if (ext && ext.count > 1 && ext.fav.rate - ext.nem.rate >= 0.3) {
-            return `${fmtPct(ext.fav.rate)} on ${typePlural(ext.fav.type)}, ${fmtPct(ext.nem.rate)} on ${typePlural(ext.nem.type)}. The ${typePlural(ext.nem.type)} have been told.`;
+            const f = typePlural(ext.fav.type), w = typePlural(ext.nem.type), fp = fmtPct(ext.fav.rate), wp = fmtPct(ext.nem.rate);
+            return one([`${fp} on ${f}, ${wp} on ${w}. The ${w} have been told.`, `Loves ${f} (${fp}), loathes ${w} (${wp}).`, `${fp} on ${f}. ${wp} on ${w}. Picky eater.`]);
         }
         if (bestSi !== undefined && worstSi !== undefined && s.standPcts[bestSi] - s.standPcts[worstSi] >= 0.4) {
-            return `${fmtPct(s.standPcts[bestSi])} on ${m.standName(bestSi)}, ${fmtPct(s.standPcts[worstSi])} on ${m.standName(worstSi)}. Consistency is overrated.`;
+            const bp = fmtPct(s.standPcts[bestSi]), wp = fmtPct(s.standPcts[worstSi]), bs = m.standName(bestSi), ws = m.standName(worstSi);
+            return one([`${bp} on ${bs}, ${wp} on ${ws}. Consistency is overrated.`, `${bs}: ${bp}. ${ws}: ${wp}. Two different shooters, same jacket.`, `Peaked on ${bs} (${bp}), vanished on ${ws} (${wp}).`]);
         }
-        return `A tidy ${p}. Solid, unspectacular, reliable.`;
+        return one([`A tidy ${p}. Solid, unspectacular, reliable.`, `${p}. Nothing to see here, in a good way.`, `${p}: the dependable middle.`, `${p}. Quietly effective.`, `${p}. Never the headline, never the punchline.`, `${p}. Steady as you like.`]);
     }
 
-    function streakRoast(s) {
+    function streakRoast(m, s) {
         const h = s.hitStreak.len, x = s.missStreak.len;
-        const hot = h >= 15 ? 'Unplayable.' : h >= 8 ? 'Briefly unbeatable.' : h >= 4 ? 'A modest purple patch.' : 'Hot streak? Lukewarm at best.';
-        const cold = x >= 5 ? 'The clays formed a support group.' : x >= 3 ? 'A proper wobble.' : x >= 1 ? 'Barely a blip.' : 'Never missed. Suspicious.';
+        const key = `streak:${s.name}`;
+        const hot = pick(m, `${key}:hot`, h >= 15 ? ['Unplayable.', 'Machine-like.', 'On another level.']
+            : h >= 8 ? ['Briefly unbeatable.', 'Properly in the zone.', 'Hot hands.']
+            : h >= 4 ? ['A modest purple patch.', 'Warmed up nicely.', 'Flashes of form.']
+            : ['Hot streak? Lukewarm at best.', 'Streaks are for other people.', 'Never quite got going.'], 'streakHot');
+        const cold = pick(m, `${key}:cold`, x >= 5 ? ['The clays formed a support group.', 'A drought of biblical proportions.', 'Lost the plot for a while.']
+            : x >= 3 ? ['A proper wobble.', 'A brief crisis.', 'A wobble worth forgetting.']
+            : x >= 1 ? ['Barely a blip.', 'Nothing a deep breath couldn\'t fix.', 'Minor turbulence.']
+            : ['Never missed. Suspicious.', 'A clean sheet.', 'Not one miss. Show-off.'], 'streakCold');
         return `${hot} ${cold}`;
     }
 
+    const storyLine = (m, kind, gap) => pick(m, `story:${kind}`, {
+        best: ['Even the clays looked embarrassed.', 'Clays went down like dominoes.', 'Everyone looked good here.', 'The squad\'s happy place.'],
+        worst: ['Nobody wants to talk about it.', 'The less said, the better.', 'Still haunting the squad.', 'The clays\' home fortress.'],
+        contrast: [`${gap} points apart. Same traps, different planet.`, `${gap} points between them on the same targets.`, `Same clays, ${gap} points apart. Awkward.`]
+    }[kind]);
+
+    function typesGag(m, easy, tough, r) {
+        const e = typePlural(easy), t = typePlural(tough);
+        return pick(m, 'types', [
+            `The squad ate ${e} for breakfast (${r(easy)}). The ${t} fought back (${r(tough)}).`,
+            `${cap(e)}: ${r(easy)}. ${cap(t)}: ${r(tough)}. Guess which one gets talked about at the bar.`,
+            `Easy pickings: ${e} at ${r(easy)}. Hard work: ${t} at ${r(tough)}.`,
+            `The ${t} (${r(tough)}) had the squad's number; the ${e} (${r(easy)}) didn't.`
+        ]);
+    }
+
     function closingGag(m) {
-        if (m.ranked.length < 2) return m.ranked[0] ? `${m.ranked[0].name} wins. Unopposed, but a win is a win.` : '';
+        const n = m.ranked.length;
+        if (n < 2) {
+            const w = m.ranked[0]?.name;
+            return w ? pick(m, 'close', [`${w} wins. Unopposed, but a win is a win.`, `${w} takes it. Nobody else turned up to argue.`, `A one-horse race, and ${w} won it.`]) : '';
+        }
+        const W = m.ranked[0].name, W2 = m.ranked[1].name, last = m.ranked[n - 1].name;
         const gap = ptsGap(m.ranked[0].rate, m.ranked[1].rate);
-        const last = m.ranked[m.ranked.length - 1];
-        if (gap <= 2) return `Photo finish: ${gap} point${gap === 1 ? '' : 's'} in it. Appeals to the scorer will be ignored.`;
-        if (gap >= 15) return `${m.ranked[0].name} by ${gap} points — less a win, more a public service announcement.`;
-        return `${m.ranked[0].name} by ${gap} points. ${last.name}: the clays have sent a thank-you card.`;
+        const pts = `${gap} point${gap === 1 ? '' : 's'}`;
+        if (gap === 0) return pick(m, 'close', ['Dead heat at the top. Share the bragging rights.', 'Level at the top. Somebody demand a shoot-off.', 'Nothing to split them at the top. Same again next week?']);
+        if (gap <= 2) return pick(m, 'close', [`Photo finish: ${pts} in it. Appeals to the scorer will be ignored.`, `${W} by ${pts}. ${W2} will want a recount.`, `${pts} between ${W} and ${W2}. Shoot-off next time?`]);
+        if (gap >= 15) return pick(m, 'close', [`${W} by ${pts}: less a win, more a public service announcement.`, `${W} by ${pts}. Nobody else got close.`, `${W} won by ${pts} and will not be humble about it.`]);
+        return pick(m, 'close', [`${W} by ${pts}. ${last}: the clays have sent a thank-you card.`, `${W} wins by ${pts}. ${last} brought up the rear with dignity.`, `${W} by ${pts}. ${last}, there's always next week.`, `${W} takes it by ${pts}. ${last} kept the clay industry in business.`]);
     }
 
     // ---------------------------------------------------------------- SVG helpers
@@ -391,6 +522,8 @@
         const add = (cls, body, notes) => slides.push({ cls, body, notes });
         const D = m.data;
         m.wx = weatherFacts(D);
+        m.seed = roundSeed(m, title);
+        m.used = {};
         const meta = [D.discipline.name, D.ground, D.event, ukDate(D.date)].filter(Boolean).map(esc).join(' · ');
         const incomplete = m.shooters.filter(s => s.unshot > 0);
         const fewer = m.shooters.filter(s => s.shot < Math.max(...m.shooters.map(x => x.shot)));
@@ -400,7 +533,7 @@
         add('dk-cover', `
             <div class="dk-kicker">${esc(D.discipline.code)} · ${meta}</div>
             <h1 class="dk-title">${esc(title)}</h1>
-            <div class="dk-gag">${esc([coverGag(m), weatherGag(m.wx)].filter(Boolean).join(' '))}</div>
+            <div class="dk-gag">${esc([coverGag(m), weatherGag(m)].filter(Boolean).join(' '))}</div>
             ${D.weather ? `<div class="dk-weather">Conditions: ${esc(D.weather)}</div>` : ''}`,
             `Squad: ${m.shooters.length} shooters, ${m.squad.shot} clays shot, ${m.squad.hits} hits (${fmtPct(m.squad.rate)}), ${m.squad.misses} misses.${D.weather ? `\nWeather: ${D.weather}` : ''}`);
 
@@ -578,9 +711,7 @@
             const toughest = m.types.filter(t => m.squad.byType[t].shot >= MIN_TYPE_SHOTS).sort((a, b) => pct(m.squad.byType[a].hits, m.squad.byType[a].shot) - pct(m.squad.byType[b].hits, m.squad.byType[b].shot))[0];
             const easiest = m.types.filter(t => m.squad.byType[t].shot >= MIN_TYPE_SHOTS).sort((a, b) => pct(m.squad.byType[b].hits, m.squad.byType[b].shot) - pct(m.squad.byType[a].hits, m.squad.byType[a].shot))[0];
             const r = (t) => fmtPct(pct(m.squad.byType[t].hits, m.squad.byType[t].shot));
-            const gag = toughest && easiest && toughest !== easiest
-                ? `The squad ate ${typePlural(easiest)} for breakfast (${r(easiest)}). The ${typePlural(toughest)} fought back (${r(toughest)}).`
-                : '';
+            const gag = toughest && easiest && toughest !== easiest ? typesGag(m, easiest, toughest, r) : '';
             const cols = `1.2fr repeat(${m.shooters.length + 1}, 1fr)`;
             const shown = m.types.slice(0, m.ranges.length ? 7 : 10);
             add('dk-alt', `
@@ -606,7 +737,7 @@
                 ${m.shooters.map(s => `<div class="dk-strong dk-nowrap">${who(s)}</div>
                     <div class="dk-nowrap"><strong class="dk-good">${s.hitStreak.len}</strong> ${s.hitStreak.len ? `<span class="dk-dim">${esc(posText(m, s.hitStreak.from))} → ${esc(posText(m, s.hitStreak.to))}</span>` : ''}</div>
                     <div class="dk-nowrap"><strong class="dk-bad">${s.missStreak.len}</strong> ${s.missStreak.len ? `<span class="dk-dim">${esc(posText(m, s.missStreak.from))} → ${esc(posText(m, s.missStreak.to))}</span>` : ''}</div>
-                    <div class="dk-roast">${esc(streakRoast(s))}</div>`).join('')}
+                    <div class="dk-roast">${esc(streakRoast(m, s))}</div>`).join('')}
             </div>`,
             m.shooters.map(s => `${s.name}: hits ${s.hitStreak.len} (${posText(m, s.hitStreak.from)} to ${posText(m, s.hitStreak.to)}), misses ${s.missStreak.len} (${posText(m, s.missStreak.from)} to ${posText(m, s.missStreak.to)})`).join('\n')
             + (D.optionLabel ? '\nThe option target is placed at the end of the station it was taken on.' : ''));
@@ -622,12 +753,12 @@
             add('dk-alt', `
                 <h2 class="dk-h">${SL} stories</h2>
                 <div class="dk-stories">
-                    ${card('Best', m.best, 'Even the clays looked embarrassed.', 'good')}
-                    ${card('Worst', m.worst, 'Nobody wants to talk about it.', 'bad')}
+                    ${card('Best', m.best, storyLine(m, 'best'), 'good')}
+                    ${card('Worst', m.worst, storyLine(m, 'worst'), 'bad')}
                     ${c ? `<div class="dk-story blue"><div class="dk-story-label">Same ${SL.toLowerCase()}, different planet</div>
                         <div class="dk-story-title">${esc(m.standName(c.si))}</div>
                         <div><div class="dk-line">${who(c.hi)} ${c.hi.perStand[c.si].hits}/${c.hi.perStand[c.si].shot} · ${fmtPct(c.hi.standPcts[c.si])}</div><div class="dk-line">${who(c.lo)} ${c.lo.perStand[c.si].hits}/${c.lo.perStand[c.si].shot} · ${fmtPct(c.lo.standPcts[c.si])}</div></div>
-                        <div class="dk-roast">${ptsGap(c.hi.standPcts[c.si], c.lo.standPcts[c.si])} points apart. Same traps, different planet.</div></div>` : ''}
+                        <div class="dk-roast">${esc(storyLine(m, 'contrast', ptsGap(c.hi.standPcts[c.si], c.lo.standPcts[c.si])))}</div></div>` : ''}
                 </div>`,
                 `Best: ${m.standName(m.best)} ${m.squad.perStand[m.best].hits}/${m.squad.perStand[m.best].shot}. Worst: ${m.standName(m.worst)} ${m.squad.perStand[m.worst].hits}/${m.squad.perStand[m.worst].shot}.`
                 + (c ? ` Contrast: ${m.standName(c.si)} ${c.hi.name} ${fmtPct(c.hi.standPcts[c.si])} vs ${c.lo.name} ${fmtPct(c.lo.standPcts[c.si])}.` : ''));
@@ -672,6 +803,22 @@
         return slides;
     }
 
+    const AWARD_NAMES = {
+        'Top Gun': ['Top Gun', 'Deadeye', 'The Sharpshooter'],
+        'The Unstoppable': ['The Unstoppable', 'Streak Machine', 'On Fire'],
+        'Second Barrel Hero': ['Second Barrel Hero', 'Plan B Specialist', 'The Recovery Expert'],
+        'Double Act': ['Double Act', 'Two for Two', 'Pair Bonded'],
+        'Strong Finisher': ['Strong Finisher', 'Saved the Best for Last', 'The Closer'],
+        'Clay Conservation Society': ['Clay Conservation Society', 'Friend of the Clays', 'Clay Rights Activist'],
+        'The Long Drought': ['The Long Drought', 'Dry Spell', 'Lost in the Wilderness'],
+        'Black Hole': ['Black Hole', 'The Bermuda Triangle', 'Here Be Dragons'],
+        'Nemesis': ['Nemesis', 'Arch-Enemy', 'Sworn Enemy'],
+        'Blank Cheque': ['Blank Cheque', 'Double Zero', 'Two Barrels, No Bodies'],
+        'Second Barrel Snooze': ['Second Barrel Snooze', 'Plan B Failed', 'One-Barrel Wonder'],
+        'Fade Away': ['Fade Away', 'Ran Out of Steam', 'Early Peaker']
+    };
+    const awardName = (m, base) => pick(m, `award:${base}`, AWARD_NAMES[base] || [base]);
+
     function awards(m) {
         const S = m.shooters.filter(s => s.shot > 0);
         if (!S.length) return { bests: [], worsts: [] };
@@ -682,31 +829,31 @@
         const thirds = Math.max(1, Math.floor(m.nStands / 3));
         const rangeRate = (s, a, b) => { const h = sum(s.perStand.slice(a, b).map(p => p.hits)), n = sum(s.perStand.slice(a, b).map(p => p.shot)); return pct(h, n); };
 
-        let w = top(s => s.rate); bests.push({ name: 'Top Gun', who: w, stat: `${fmtPct(w[0].rate)} hit rate` });
-        w = top(s => s.hitStreak.len); if (w[0].hitStreak.len) bests.push({ name: 'The Unstoppable', who: w, stat: `${w[0].hitStreak.len} hits in a row` });
+        let w = top(s => s.rate); bests.push({ name: awardName(m, 'Top Gun'), who: w, stat: `${fmtPct(w[0].rate)} hit rate` });
+        w = top(s => s.hitStreak.len); if (w[0].hitStreak.len) bests.push({ name: awardName(m, 'The Unstoppable'), who: w, stat: `${w[0].hitStreak.len} hits in a row` });
         if (standBest.length) {
             const hi = Math.max(...standBest.map(x => x.p)); const xs = standBest.filter(x => x.p === hi);
-            bests.push({ name: `${m.SL} Slayer`, who: [...new Set(xs.map(x => x.s))], stat: `${fmtPct(hi)} on ${[...new Set(xs.map(x => x.si))].sort((a, b) => a - b).slice(0, 3).map(m.standName).join(', ')}` });
+            bests.push({ name: pick(m, 'award:slayer', [`${m.SL} Slayer`, `${m.SL} Destroyer`, `Owner of ${m.standName(xs[0].si)}`]), who: [...new Set(xs.map(x => x.s))], stat: `${fmtPct(hi)} on ${[...new Set(xs.map(x => x.si))].sort((a, b) => a - b).slice(0, 3).map(m.standName).join(', ')}` });
         }
         if (m.types.length) {
             // Specialist: best hit rate on the squad's most-shot clay type.
             const t = m.types[0];
             const rateOn = (s) => (s.byType[t] && s.byType[t].shot >= MIN_TYPE_SHOTS ? pct(s.byType[t].hits, s.byType[t].shot) : null);
-            w = top(rateOn); if (w.length && rateOn(w[0]) !== null) bests.push({ name: `${t} Specialist`, who: w, stat: `${fmtPct(rateOn(w[0]))} on ${typePlural(t)} (${w[0].byType[t].hits}/${w[0].byType[t].shot})` });
+            w = top(rateOn); if (w.length && rateOn(w[0]) !== null) bests.push({ name: pick(m, 'award:spec', [`${t} Specialist`, `${t} Whisperer`, `${t} Assassin`]), who: w, stat: `${fmtPct(rateOn(w[0]))} on ${typePlural(t)} (${w[0].byType[t].hits}/${w[0].byType[t].shot})` });
         }
         if (m.pairsExist) {
-            w = top(s => pct(s.barrel.b2h, s.barrel.b2n)); if (w.length && w[0].barrel.b2n) bests.push({ name: 'Second Barrel Hero', who: w, stat: `${fmtPct(pct(w[0].barrel.b2h, w[0].barrel.b2n))} with the 2nd barrel` });
-            w = top(s => s.barrel.doubles); if (w[0].barrel.doubles) bests.push({ name: 'Double Act', who: w, stat: plural(w[0].barrel.doubles, 'double') });
+            w = top(s => pct(s.barrel.b2h, s.barrel.b2n)); if (w.length && w[0].barrel.b2n) bests.push({ name: awardName(m, 'Second Barrel Hero'), who: w, stat: `${fmtPct(pct(w[0].barrel.b2h, w[0].barrel.b2n))} with the 2nd barrel` });
+            w = top(s => s.barrel.doubles); if (w[0].barrel.doubles) bests.push({ name: awardName(m, 'Double Act'), who: w, stat: plural(w[0].barrel.doubles, 'double') });
         }
         if (m.nStands >= 3) {
-            w = top(s => rangeRate(s, m.nStands - thirds, m.nStands)); if (w.length) bests.push({ name: 'Strong Finisher', who: w, stat: `${fmtPct(rangeRate(w[0], m.nStands - thirds, m.nStands))} ${thirds === 1 ? `on the last ${m.SL.toLowerCase()}` : `over the last ${thirds} ${m.SL.toLowerCase()}s`}` });
+            w = top(s => rangeRate(s, m.nStands - thirds, m.nStands)); if (w.length) bests.push({ name: awardName(m, 'Strong Finisher'), who: w, stat: `${fmtPct(rangeRate(w[0], m.nStands - thirds, m.nStands))} ${thirds === 1 ? `on the last ${m.SL.toLowerCase()}` : `over the last ${thirds} ${m.SL.toLowerCase()}s`}` });
         }
 
-        if (S.length > 1) { w = bottom(s => s.rate); worsts.push({ name: 'Clay Conservation Society', who: w, stat: `${fmtPct(w[0].rate)} — the most clays spared` }); }
-        w = top(s => s.missStreak.len); if (w[0].missStreak.len >= 2) worsts.push({ name: 'The Long Drought', who: w, stat: `${w[0].missStreak.len} misses in a row` });
+        if (S.length > 1) { w = bottom(s => s.rate); worsts.push({ name: awardName(m, 'Clay Conservation Society'), who: w, stat: `${fmtPct(w[0].rate)} — the most clays spared` }); }
+        w = top(s => s.missStreak.len); if (w[0].missStreak.len >= 2) worsts.push({ name: awardName(m, 'The Long Drought'), who: w, stat: `${w[0].missStreak.len} misses in a row` });
         if (standBest.length) {
             const lo = Math.min(...standBest.map(x => x.p)); const xs = standBest.filter(x => x.p === lo);
-            if (lo < 1) worsts.push({ name: 'Black Hole', who: [...new Set(xs.map(x => x.s))], stat: `${fmtPct(lo)} on ${[...new Set(xs.map(x => x.si))].sort((a, b) => a - b).slice(0, 3).map(m.standName).join(', ')}` });
+            if (lo < 1) worsts.push({ name: awardName(m, 'Black Hole'), who: [...new Set(xs.map(x => x.s))], stat: `${fmtPct(lo)} on ${[...new Set(xs.map(x => x.si))].sort((a, b) => a - b).slice(0, 3).map(m.standName).join(', ')}` });
         }
         {
             // Nemesis: the lowest hit rate anyone had on one clay type.
@@ -714,17 +861,17 @@
             if (nems.length) {
                 const lo = Math.min(...nems.map(x => x.e.nem.rate));
                 const xs = nems.filter(x => x.e.nem.rate === lo);
-                worsts.push({ name: 'Nemesis', who: xs.map(x => x.s), stat: `${xs[0].e.nem.type}: ${xs[0].e.nem.hits}/${xs[0].e.nem.shot} (${fmtPct(lo)})` });
+                worsts.push({ name: awardName(m, 'Nemesis'), who: xs.map(x => x.s), stat: `${xs[0].e.nem.type}: ${xs[0].e.nem.hits}/${xs[0].e.nem.shot} (${fmtPct(lo)})` });
             }
         }
         if (m.pairsExist) {
-            w = top(s => s.barrel.blanks); if (w[0].barrel.blanks) worsts.push({ name: 'Blank Cheque', who: w, stat: `${plural(w[0].barrel.blanks, 'pair')} missed with both barrels` });
-            w = bottom(s => pct(s.barrel.b2h, s.barrel.b2n)); if (w.length && w[0].barrel.b2n && pct(w[0].barrel.b2h, w[0].barrel.b2n) < 1) worsts.push({ name: 'Second Barrel Snooze', who: w, stat: `${fmtPct(pct(w[0].barrel.b2h, w[0].barrel.b2n))} with the 2nd barrel` });
+            w = top(s => s.barrel.blanks); if (w[0].barrel.blanks) worsts.push({ name: awardName(m, 'Blank Cheque'), who: w, stat: `${plural(w[0].barrel.blanks, 'pair')} missed with both barrels` });
+            w = bottom(s => pct(s.barrel.b2h, s.barrel.b2n)); if (w.length && w[0].barrel.b2n && pct(w[0].barrel.b2h, w[0].barrel.b2n) < 1) worsts.push({ name: awardName(m, 'Second Barrel Snooze'), who: w, stat: `${fmtPct(pct(w[0].barrel.b2h, w[0].barrel.b2n))} with the 2nd barrel` });
         }
         if (m.nStands >= 4) {
             const half = Math.floor(m.nStands / 2);
             const drop = (s) => { const a = rangeRate(s, 0, half), b = rangeRate(s, half, m.nStands); return a === null || b === null ? null : a - b; };
-            w = top(drop); if (w.length && drop(w[0]) > 0) worsts.push({ name: 'Fade Away', who: w, stat: `${fmtPct(rangeRate(w[0], 0, half))} first half → ${fmtPct(rangeRate(w[0], half, m.nStands))} second half` });
+            w = top(drop); if (w.length && drop(w[0]) > 0) worsts.push({ name: awardName(m, 'Fade Away'), who: w, stat: `${fmtPct(rangeRate(w[0], 0, half))} first half → ${fmtPct(rangeRate(w[0], half, m.nStands))} second half` });
         }
         return { bests: bests.slice(0, 6), worsts: worsts.slice(0, 6) };
     }
@@ -823,6 +970,7 @@
         #deck-picker label.dkp-opt { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; margin-bottom: 8px; font-size: 15px; font-weight: 600; }
         #deck-picker label.dkp-opt:has(input:checked) { border-color: #f97316; background: #fff7ed; }
         #deck-picker input[type=text] { width: 100%; height: 42px; border: 1px solid #94a3b8; border-radius: 8px; padding: 0 10px; font-size: 15px; font-weight: 600; }
+        #deck-picker button.dkp-more { width: 100%; margin-bottom: 8px; border-style: dashed; color: #9a3412; }
         #deck-picker .dkp-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; flex-wrap: wrap; }
         #deck-picker button { font-size: 14px; font-weight: 700; padding: 10px 14px; border-radius: 10px; border: 1px solid #cbd5e1; background: #fff; color: #0f172a; }
         #deck-picker button.dkp-primary { background: #0f172a; color: #fff; border-color: #0f172a; }
@@ -897,9 +1045,14 @@
             window.ClayScorerDeck.notify('Score some targets first — the presentation is built from the round\'s scores.', 'error');
             return;
         }
-        const suggestions = titleSuggestions(m);
         const saved = m.data.deckTitle;
-        const options = saved && !suggestions.includes(saved) ? [saved, ...suggestions] : suggestions;
+        let roll = 0;
+        let options = [];
+        const optionsHtml = () => {
+            const suggestions = titleSuggestions(m, roll);
+            options = saved && !suggestions.includes(saved) ? [saved, ...suggestions] : suggestions;
+            return options.map((t, i) => `<label class="dkp-opt"><input type="radio" name="dkp-title" value="${esc(t)}" ${(saved && roll === 0 ? t === saved : i === (saved ? 1 : 0)) ? 'checked' : ''}> ${esc(t)}</label>`).join('');
+        };
         const picker = document.createElement('div');
         picker.id = 'deck-picker';
         picker.setAttribute('role', 'dialog');
@@ -907,7 +1060,8 @@
         picker.innerHTML = `<div class="dkp-box">
             <h3>Presentation title</h3>
             <p>Pick a title for the deck, or write your own.</p>
-            ${options.map((t, i) => `<label class="dkp-opt"><input type="radio" name="dkp-title" value="${esc(t)}" ${(saved ? t === saved : i === 0) ? 'checked' : ''}> ${esc(t)}</label>`).join('')}
+            <div class="dkp-list">${optionsHtml()}</div>
+            <button type="button" data-act="more" class="dkp-more">More ideas</button>
             <label class="dkp-opt"><input type="radio" name="dkp-title" value="__custom"> <input type="text" id="dkp-custom" placeholder="Your own title" value=""></label>
             <div class="dkp-actions">
                 <button type="button" data-act="cancel">Cancel</button>
@@ -925,6 +1079,7 @@
             const act = e.target.closest('button')?.dataset.act;
             if (!act) return;
             if (act === 'cancel') return picker.remove();
+            if (act === 'more') { roll++; picker.querySelector('.dkp-list').innerHTML = optionsHtml(); return; }
             const title = chosen();
             window.ClayScorerDeck.setDeckTitle(title);
             picker.remove();
