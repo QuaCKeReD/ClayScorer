@@ -68,7 +68,7 @@ const SCHEMA = {
 
 export async function writePresentation({ facts, tone }) {
     if (!facts || typeof facts !== 'object' || !Array.isArray(facts.shooters) || !facts.shooters.length) throw new PresentationError(400, 'No round facts to write about');
-    const t = TONES[tone] ? tone : 'gentle';
+    const t = TONES[tone] ? tone : 'cheeky';   // default tone
     if (MOCK) return mockResult(facts, t);
 
     client = client || new Anthropic();

@@ -3077,7 +3077,7 @@
         },
         // Presentation tone and "Write with AI" lines: stored with the round only once set.
         setDeckTone(tone) {
-            if (['cheeky', 'savage'].includes(tone)) state.deckTone = tone; else delete state.deckTone;
+            if (['gentle', 'savage'].includes(tone)) state.deckTone = tone; else delete state.deckTone;   // cheeky = default, not stored
             save();
         },
         setDeckAi(ai) {

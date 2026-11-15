@@ -1355,7 +1355,7 @@
         let options = [];
         let aiStatus = null;          // { available, signedIn } from the server, or null (unknown / no server)
         let busy = false, aiError = '', justWrote = false;
-        const tone = () => m.data.deckTone || 'gentle';
+        const tone = () => m.data.deckTone || 'cheeky';   // Cheeky is the default tone
         const ai = () => activeAi(m);
         // With AI-written jokes in use, the first set of title ideas is the AI's; "More ideas" then
         // offers the built-in ones. Right after writing, the first AI title is pre-selected.
@@ -1377,7 +1377,7 @@
             const toneSel = `<label class="dkp-tone">Tone <select id="dkp-tone">${['gentle', 'cheeky', 'savage'].map(t => `<option value="${t}" ${tone() === t ? 'selected' : ''}>${cap(t)}</option>`).join('')}</select></label>`;
             let line;
             if (busy) line = '<span>Writing the jokes… this takes a few seconds.</span>';
-            else if (a) line = `<span><strong>Using AI-written jokes</strong> (${esc(cap(stored.tone || 'gentle'))}${stored.tone && stored.tone !== tone() ? ` — Rewrite to use ${esc(cap(tone()))}` : ''}).</span> <button type="button" data-act="builtin" class="dkp-link">Use built-in jokes</button>`;
+            else if (a) line = `<span><strong>Using AI-written jokes</strong> (${esc(cap(stored.tone || 'cheeky'))}${stored.tone && stored.tone !== tone() ? ` — Rewrite to use ${esc(cap(tone()))}` : ''}).</span> <button type="button" data-act="builtin" class="dkp-link">Use built-in jokes</button>`;
             else if (stored && stored.use === false && stored.key === factsKey(deckFacts(m))) line = '<span>Using the built-in jokes.</span> <button type="button" data-act="useai" class="dkp-link">Use the AI-written ones</button>';
             else if (stored && stored.text) line = '<span>The scores or notes have changed since the AI wrote the jokes, so the built-in ones are used. Write again to update.</span>';
             else line = '<span>Built-in jokes, or have AI write the jokes and some title ideas for this round.</span>';
