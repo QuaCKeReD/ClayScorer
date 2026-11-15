@@ -23,6 +23,14 @@
     const ukDate = (iso) => (iso && iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '');
     // Gap in percentage points between two rates, from the rounded figures shown on the slides.
     const ptsGap = (a, b) => Math.round((a ?? 0) * 100) - Math.round((b ?? 0) * 100);
+    // A gap between two scores as the deck says it. In clay shooting a "point" is a target, so when
+    // both shot the same number of clays the gap is given in targets; otherwise in percentage points.
+    function scoreGap(aHits, aShot, bHits, bShot) {
+        const pts = ptsGap(pct(aHits, aShot), pct(bHits, bShot));
+        if (aShot === bShot) { const t = aHits - bHits; return { targets: t, pct: pts, text: `${t} target${t === 1 ? '' : 's'}` }; }
+        return { targets: null, pct: pts, text: `${pts} percentage point${pts === 1 ? '' : 's'}` };
+    }
+    const podiumGap = (m) => (m.ranked.length > 1 ? scoreGap(m.ranked[0].hits, m.ranked[0].shot, m.ranked[1].hits, m.ranked[1].shot) : null);
     const joinNames = (list) => (list.length <= 1 ? list.join('') : `${list.slice(0, -1).join(', ')} & ${list[list.length - 1]}`);
 
     // ---------------------------------------------------------------- analysis
@@ -377,7 +385,8 @@
         if (n > 1 && rank === 0) {
             const gunTail = gun ? pick(m, `${key}:gun`, [` The ${gun} earned its keep.`, ` The ${gun} did the talking.`, ` Credit to the ${gun}.`]) : '';
             if (excuse) return one([`Top of the pile at ${p}, despite ${excuse}.`, `${p} and top, ${excuse} and all.`, `Shrugged off ${excuse} to top the squad at ${p}.`]) + gunTail;
-            const walk = gap >= 15 ? [`${p}, ${gap} points clear. Everyone else was shooting for second.`, `Top by ${gap} points at ${p}. Not close.`] : [];
+            const g = podiumGap(m);
+            const walk = gap >= 15 ? [`${p}, ${g.text} clear. Everyone else was shooting for second.`, `Top by ${g.text} at ${p}. Not close.`] : [];
             if (gun) return one([...walk, `Top of the pile at ${p}. The ${gun} earned its keep.`, `${p} and top of the squad. The ${gun} gets a polish tonight.`, `Leads at ${p}. The ${gun} isn't for sale.`]);
             return one([...walk, `Top of the pile at ${p}. Will mention it. Repeatedly.`, `Squad leader at ${p}. Expect a speech.`, `${p}: best in show. Modesty not included.`, `Top dog at ${p}. Insufferable until next week.`, `${p} and top. The bar tab is theirs. (Not confirmed.)`]);
         }
@@ -420,7 +429,7 @@
     const storyLine = (m, kind, gap) => pick(m, `story:${kind}`, {
         best: ['Even the clays looked embarrassed.', 'Clays went down like dominoes.', 'Everyone looked good here.', 'The squad\'s happy place.'],
         worst: ['Nobody wants to talk about it.', 'The less said, the better.', 'Still haunting the squad.', 'The clays\' home fortress.'],
-        contrast: [`${gap} points apart. Same traps, different planet.`, `${gap} points between them on the same targets.`, `Same clays, ${gap} points apart. Awkward.`]
+        contrast: [`${gap} apart. Same traps, different planet.`, `${gap} between them on the same targets.`, `Same clays, ${gap} apart. Awkward.`]
     }[kind]);
 
     function typesGag(m, easy, tough, r) {
@@ -441,7 +450,7 @@
         }
         const W = m.ranked[0].name, W2 = m.ranked[1].name, last = m.ranked[n - 1].name;
         const gap = ptsGap(m.ranked[0].rate, m.ranked[1].rate);
-        const pts = `${gap} point${gap === 1 ? '' : 's'}`;
+        const pts = podiumGap(m).text;
         if (gap === 0) return pick(m, 'close', ['Dead heat at the top. Share the bragging rights.', 'Level at the top. Somebody demand a shoot-off.', 'Nothing to split them at the top. Same again next week?']);
         if (gap <= 2) return pick(m, 'close', [`Photo finish: ${pts} in it. Appeals to the scorer will be ignored.`, `${W} by ${pts}. ${W2} will want a recount.`, `${pts} between ${W} and ${W2}. Shoot-off next time?`]);
         if (gap >= 15) return pick(m, 'close', [`${W} by ${pts}: less a win, more a public service announcement.`, `${W} by ${pts}. Nobody else got close.`, `${W} won by ${pts} and will not be humble about it.`]);
@@ -519,6 +528,7 @@
                 bestStand: b !== undefined ? standOf(s, b) : null, worstStand: w !== undefined ? standOf(s, w) : null,
                 hitStreak: s.hitStreak.len, missStreak: s.missStreak.len
             };
+            if (m.ranked[0] && m.ranked[0].shot === s.shot && m.ranked[0] !== s) out.targetsBehindWinner = m.ranked[0].hits - s.hits;
             if (s.gun) out.gun = s.gun;
             if (s.cartridges) out.cartridges = s.cartridges;
             if (m.pairsExist) out.barrels = { firstPct: P(pct(s.barrel.b1h, s.barrel.b1n)), secondPct: P(pct(s.barrel.b2h, s.barrel.b2n)), doubles: s.barrel.doubles, blanks: s.barrel.blanks };
@@ -536,12 +546,19 @@
         return {
             discipline: D.discipline.name, ground: D.ground || '', event: D.event || '', date: D.date || '', standLabel: m.SL, standCount: m.nStands,
             squad: { hits: m.squad.hits, shot: m.squad.shot, misses: m.squad.misses, ratePct: P(m.squad.rate) },
-            podium: n > 1 ? { winner: m.ranked[0].name, runnerUp: m.ranked[1].name, marginPoints: ptsGap(m.ranked[0].rate, m.ranked[1].rate), last: m.ranked[n - 1].name } : { winner: m.ranked[0]?.name || '', solo: true },
+            podium: n > 1 ? (() => {
+                const g = podiumGap(m);
+                return { winner: m.ranked[0].name, runnerUp: m.ranked[1].name, last: m.ranked[n - 1].name, everyoneShotSameNumberOfClays: m.shooters.every(s => s.shot === m.shooters[0].shot),
+                    winningMarginTargets: g.targets, winningMarginPercentagePoints: g.pct, deadHeat: g.pct === 0 };
+            })() : { winner: m.ranked[0]?.name || '', solo: true },
             shooters,
             standStories: m.best !== undefined ? {
                 best: { stand: m.standName(m.best), squadPct: P(m.squad.perStand[m.best].rate) },
                 worst: { stand: m.standName(m.worst), squadPct: P(m.squad.perStand[m.worst].rate) },
-                contrast: c ? { stand: m.standName(c.si), high: { name: c.hi.name, pct: P(c.hi.standPcts[c.si]) }, low: { name: c.lo.name, pct: P(c.lo.standPcts[c.si]) }, gapPoints: ptsGap(c.hi.standPcts[c.si], c.lo.standPcts[c.si]) } : null
+                contrast: c ? (() => {
+                    const g = scoreGap(c.hi.perStand[c.si].hits, c.hi.perStand[c.si].shot, c.lo.perStand[c.si].hits, c.lo.perStand[c.si].shot);
+                    return { stand: m.standName(c.si), high: { name: c.hi.name, hits: c.hi.perStand[c.si].hits, shot: c.hi.perStand[c.si].shot, pct: P(c.hi.standPcts[c.si]) }, low: { name: c.lo.name, hits: c.lo.perStand[c.si].hits, shot: c.lo.perStand[c.si].shot, pct: P(c.lo.standPcts[c.si]) }, gapTargets: g.targets, gapPercentagePoints: g.pct };
+                })() : null
             } : null,
             milestones: m.milestones.length ? m.milestones.map(ms => ({ firstClaysOfEachStand: ms.k, clays: ms.scope, leaders: ms.leaders.map(s => s.name), leaderPct: P(ms.rows[ms.leaders[0].k].rate) })) : null,
             barrels: m.pairsExist ? { firstPct: P(pct(m.squad.barrel.b1h, m.squad.barrel.b1n)), secondPct: P(pct(m.squad.barrel.b2h, m.squad.barrel.b2n)), doubles: m.squad.barrel.doubles, blanks: m.squad.barrel.blanks, pairs: m.squad.barrel.pairs } : null,
@@ -549,8 +566,30 @@
             distances: m.ranges.length ? m.ranges.map(r => ({ range: r, hits: m.squad.byRange[r].hits, shot: m.squad.byRange[r].shot, squadPct: P(pct(m.squad.byRange[r].hits, m.squad.byRange[r].shot)) })) : null,
             weather: D.weather || null,
             notes: D.notes || null,
-            kit: shooters.some(s => s.gun || s.cartridges) ? shooters.filter(s => s.gun || s.cartridges).map(s => ({ name: s.name, gun: s.gun || '', cartridges: s.cartridges || '' })) : null,
+            kit: shooters.some(s => s.gun || s.cartridges) ? kitFacts(shooters) : null,
             awards: [...bests.map(a => award(a, 'best')), ...worsts.map(a => award(a, 'worst'))]
+        };
+    }
+    // Kit, with the groupings worked out here (who has the same cartridges, gun or make) so the
+    // AI never has to count or compare them itself.
+    function kitFacts(shooters) {
+        const norm = (t) => String(t || '').toLowerCase().replace(/\s+/g, ' ').trim();
+        const groups = (key) => {
+            const by = {};
+            shooters.forEach(s => { const k = key(s); if (k) (by[k] = by[k] || { value: '', shooters: [] }).shooters.push(s.name); });
+            shooters.forEach(s => { const k = key(s); if (k && !by[k].value) by[k].value = k === norm(s.cartridges) ? s.cartridges : k === norm(s.gun) ? s.gun : by[k].value; });
+            return Object.values(by).filter(g => g.shooters.length >= 2).map(g => ({ value: g.value, shooters: g.shooters, count: g.shooters.length }));
+        };
+        const makeOf = (s) => (s.gun ? norm(s.gun).split(' ')[0] : '');
+        const makes = {};
+        shooters.forEach(s => { const k = makeOf(s); if (k) (makes[k] = makes[k] || []).push(s.name); });
+        return {
+            perShooter: shooters.filter(s => s.gun || s.cartridges).map(s => ({ name: s.name, gun: s.gun || '', cartridges: s.cartridges || '' })),
+            shootersWithGunListed: shooters.filter(s => s.gun).length,
+            shootersWithCartridgesListed: shooters.filter(s => s.cartridges).length,
+            identicalCartridgeGroups: groups(s => norm(s.cartridges)),
+            identicalGunGroups: groups(s => norm(s.gun)),
+            gunMakes: Object.entries(makes).map(([k, names]) => ({ make: cap(k), shooters: names, count: names.length }))
         };
     }
     const factsKey = (facts) => hashStr(JSON.stringify(facts)).toString(36);
@@ -591,6 +630,8 @@
         if (!text || typeof text !== 'object') return null;
         const nums = allowedNumbers(facts);
         const pcts = allowedPercents(facts);
+        // "N points" (a point = a target) must be one of the real target margins/gaps.
+        const targetGaps = new Set([facts.podium?.winningMarginTargets, facts.standStories?.contrast?.gapTargets, ...facts.shooters.map(x => x.targetsBehindWinner)].filter(v => Number.isFinite(v)).map(String));
         const standRe = new RegExp(`\\b${facts.standLabel}\\s+(\\d+)`, 'gi');
         const names = new Set(facts.shooters.map(s => s.name));
         const ok = (t, max = 200) => {
@@ -598,7 +639,8 @@
             if (!line || line.length > max) return '';
             const bad = (line.match(/\d+(?:\.\d+)?/g) || []).some(x => !nums.has(String(Number(x))))
                 || (line.match(/\d+(?:\.\d+)?(?=\s*%)/g) || []).some(x => !pcts.has(String(Number(x))))
-                || [...line.matchAll(standRe)].some(mt => Number(mt[1]) < 1 || Number(mt[1]) > facts.standCount);
+                || [...line.matchAll(standRe)].some(mt => Number(mt[1]) < 1 || Number(mt[1]) > facts.standCount)
+                || [...line.matchAll(/(?<!percentage[- ])\b(\d+)[- ]points?\b/gi)].some(mt => !/percentage[- ]$/i.test(line.slice(Math.max(0, mt.index - 11), mt.index)) && !targetGaps.has(String(Number(mt[1]))));
             return bad ? '' : line;
         };
         const byName = (list, field) => {
@@ -703,7 +745,7 @@
         const bp = fmtPct(m.squad.perStand[m.best].rate), wp = fmtPct(m.squad.perStand[m.worst].rate);
         const sb = m.standName(m.best), sw = m.standName(m.worst);
         const gap = ptsGap(m.squad.perStand[m.best].rate, m.squad.perStand[m.worst].rate);
-        return pick(m, 'slide:stories', [`From ${bp} on ${sb} to ${wp} on ${sw}: a ${gap}-point swing in one round.`, `${sb} was a party (${bp}); ${sw} was a wake (${wp}).`, `${gap} points between the best and worst ${m.SL.toLowerCase()}s. Variety, they call it.`, `${sb}: smiles. ${sw}: silence. ${gap} points apart.`]);
+        return pick(m, 'slide:stories', [`From ${bp} on ${sb} to ${wp} on ${sw}: a swing of ${gap} percentage points in one round.`, `${sb} was a party (${bp}); ${sw} was a wake (${wp}).`, `${gap} percentage points between the best and worst ${m.SL.toLowerCase()}s. Variety, they call it.`, `${sb}: smiles (${bp}). ${sw}: silence (${wp}).`]);
     }
 
     function awardsRoast(m, bests, worsts) {
@@ -875,7 +917,7 @@
         if (m.milestones.length) {
             const mcols = `1.3fr ${m.milestones.map(() => '1fr').join(' ')} 1fr`;
             const callouts = m.milestones.map(ms => `After the first ${ms.k} of each ${SL.toLowerCase()} (${ms.scope} clays): ${esc(joinNames(ms.leaders.map(s => s.name)))} led on ${fmtPct(ms.rows[ms.leaders[0].k].rate)}.`);
-            const finalGap = m.ranked.length > 1 ? `Final margin: ${esc(m.ranked[0].name)} ${fmtPct(m.ranked[0].rate)} vs ${esc(m.ranked[1].name)} ${fmtPct(m.ranked[1].rate)} (${ptsGap(m.ranked[0].rate, m.ranked[1].rate)} points).` : '';
+            const finalGap = m.ranked.length > 1 ? `Final margin: ${esc(m.ranked[0].name)} ${fmtPct(m.ranked[0].rate)} vs ${esc(m.ranked[1].name)} ${fmtPct(m.ranked[1].rate)} (${podiumGap(m).text}).` : '';
             add('dk-alt', `
                 <h2 class="dk-h">Milestones</h2>
                 <div class="dk-sub">"First 6" = the first 6 clays of every ${SL.toLowerCase()}, not clay 6 in card order</div>
@@ -1041,7 +1083,7 @@
                     ${c ? `<div class="dk-story blue"><div class="dk-story-label">Same ${SL.toLowerCase()}, different planet</div>
                         <div class="dk-story-title">${esc(m.standName(c.si))}</div>
                         <div><div class="dk-line">${who(c.hi)} ${c.hi.perStand[c.si].hits}/${c.hi.perStand[c.si].shot} · ${fmtPct(c.hi.standPcts[c.si])}</div><div class="dk-line">${who(c.lo)} ${c.lo.perStand[c.si].hits}/${c.lo.perStand[c.si].shot} · ${fmtPct(c.lo.standPcts[c.si])}</div></div>
-                        <div class="dk-roast">${esc(say('storyContrast', () => storyLine(m, 'contrast', ptsGap(c.hi.standPcts[c.si], c.lo.standPcts[c.si]))))}</div></div>` : ''}
+                        <div class="dk-roast">${esc(say('storyContrast', () => storyLine(m, 'contrast', scoreGap(c.hi.perStand[c.si].hits, c.hi.perStand[c.si].shot, c.lo.perStand[c.si].hits, c.lo.perStand[c.si].shot).text)))}</div></div>` : ''}
                 </div>`,
                 `Best: ${m.standName(m.best)} ${m.squad.perStand[m.best].hits}/${m.squad.perStand[m.best].shot}. Worst: ${m.standName(m.worst)} ${m.squad.perStand[m.worst].hits}/${m.squad.perStand[m.worst].shot}.`
                 + (c ? ` Contrast: ${m.standName(c.si)} ${c.hi.name} ${fmtPct(c.hi.standPcts[c.si])} vs ${c.lo.name} ${fmtPct(c.lo.standPcts[c.si])}.` : ''));
@@ -1377,7 +1419,7 @@
             const toneSel = `<label class="dkp-tone">Tone <select id="dkp-tone">${['gentle', 'cheeky', 'savage'].map(t => `<option value="${t}" ${tone() === t ? 'selected' : ''}>${cap(t)}</option>`).join('')}</select></label>`;
             let line;
             if (busy) line = '<span>Writing the jokes… this takes a few seconds.</span>';
-            else if (a) line = `<span><strong>Using AI-written jokes</strong> (${esc(cap(stored.tone || 'cheeky'))}${stored.tone && stored.tone !== tone() ? ` — Rewrite to use ${esc(cap(tone()))}` : ''}).</span> <button type="button" data-act="builtin" class="dkp-link">Use built-in jokes</button>`;
+            else if (a) line = `<span><strong>Using AI-written jokes</strong> (${esc(cap(stored.tone || 'cheeky'))}${stored.tone && stored.tone !== tone() ? ` — Rewrite to use ${esc(cap(tone()))}` : ''}).${stored.removed ? ` ${stored.removed} line${stored.removed === 1 ? '' : 's'} failed the fact check, so built-in lines are used there.` : ''}</span> <button type="button" data-act="builtin" class="dkp-link">Use built-in jokes</button>`;
             else if (stored && stored.use === false && stored.key === factsKey(deckFacts(m))) line = '<span>Using the built-in jokes.</span> <button type="button" data-act="useai" class="dkp-link">Use the AI-written ones</button>';
             else if (stored && stored.text) line = '<span>The scores or notes have changed since the AI wrote the jokes, so the built-in ones are used. Write again to update.</span>';
             else line = '<span>Built-in jokes, or have AI write the jokes and some title ideas for this round.</span>';
@@ -1437,7 +1479,7 @@
                 let data = null;
                 try { data = await res.json(); } catch (e) {}
                 if (!res.ok || !data || !data.text) throw new Error(data?.error || `Server error (${res.status})`);
-                const stored = { key: factsKey(facts), tone: data.tone || tone(), model: data.model || '', at: Date.now(), text: data.text };
+                const stored = { key: factsKey(facts), tone: data.tone || tone(), model: data.model || '', at: Date.now(), text: data.text, factChecked: true, removed: Array.isArray(data.removed) ? data.removed.length : 0 };
                 m.data.deckAi = stored;
                 bridge.setDeckAi(stored);
                 justWrote = true;

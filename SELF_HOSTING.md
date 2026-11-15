@@ -94,7 +94,8 @@ Without a key, the page says the feature isn't set up. Everything else works as 
 The Presentation deck can have Claude write its titles, gags and roasts (Export › Show presentation › **Write with AI**, with a Gentle / Cheeky / Savage tone). It uses the same `ANTHROPIC_API_KEY` as the scorecard photo import; without a key the deck uses its built-in lines and the button doesn't appear.
 
 - **Model.** `PRESENTATION_MODEL`, default `claude-sonnet-5-5`. Server-side fallbacks are on, so if the model declines, the API may retry on another Claude model.
-- **Cost.** One request per write-up. A test round (4 shooters, 10 stands, weather and notes) used about 4,400 input and 1,500 output tokens, around $0.02 at Sonnet 5.5 prices ($2 / $10 per million tokens). See [pricing](https://www.anthropic.com/pricing).
+- **Accuracy.** Each write-up is two requests: one writes the lines, a second fact-checks every line against the round and removes any it can't support (the deck then uses its built-in line there). Removed lines are logged by the server (`[presentation] fact-check removed …`).
+- **Cost.** A real 4-shooter, 10-stand round with weather and notes used about 10,100 input and 2,200 output tokens across both requests, around $0.04 at Sonnet 5.5 prices ($2 / $10 per million tokens), and took about 19 seconds. See [pricing](https://www.anthropic.com/pricing).
 - **Who and how often.** Signed-in users only, `PRESENTATION_WRITES_PER_HOUR` per user (default 30).
 - **Privacy.** The round's shooter names, scores, gun and cartridge details, weather and notes go to Anthropic. The result is stored with the round, not on the server.
 - **Testing.** `PRESENTATION_WRITER_MOCK=1` returns canned lines without calling the API.
