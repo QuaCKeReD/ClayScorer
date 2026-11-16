@@ -946,7 +946,7 @@
                 <h2 class="dk-h">${SL} by ${SL.toLowerCase()}${m.nStands > 10 ? ` <span class="dk-dim">(${start + 1}–${Math.min(start + 10, m.nStands)})</span>` : ''}</h2>
                 <div class="dk-sub">Hits / clays and hit rate for every ${SL.toLowerCase()}</div>
                 <div class="dk-grid dk-tight" style="grid-template-columns:${scols}">
-                    <div class="dk-hd">${SL}</div>${m.shooters.map(s => `<div class="dk-hd dk-c">${who(s)}</div>`).join('')}<div class="dk-hd dk-c">Squad</div>
+                    <div class="dk-hd">${SL}</div>${m.shooters.map(s => `<div class="dk-hd dk-c dk-stack dk-who-top">${chip(s)}<span>${esc(s.name)}</span></div>`).join('')}<div class="dk-hd dk-c">Squad</div>
                     ${idx.map(si => `<div class="dk-strong">${esc(m.standName(si))}</div>${m.shooters.map(s => cell(s.perStand[si].hits, s.perStand[si].shot)).join('')}${cell(m.squad.perStand[si].hits, m.squad.perStand[si].shot)}`).join('')}
                     ${last ? `<div class="dk-strong dk-total">Total</div>${m.shooters.map(s => cell(s.hits, s.shot, 'dk-total')).join('')}${cell(m.squad.hits, m.squad.shot, 'dk-total')}` : ''}
                 </div>
@@ -1244,6 +1244,8 @@
         .dk-good { color: #4ade80; } .dk-bad { color: #fb7185; }
         .dk-lead { color: #fdba74; font-weight: 700; }
         .dk-slide[data-fit] .dk-grid { font-size: var(--fit) !important; }
+        .dk-grid > div.dk-who-top { align-items: center; justify-content: flex-start; text-align: center; row-gap: 6px; }
+        .dk-grid > div.dk-who-top .dk-chip { margin-right: 0; }
         .dk-grid > div.dk-nowrap { flex-wrap: nowrap; white-space: nowrap; padding-right: 28px; }
         .dk-chip { display: inline-block; width: 24px; height: 24px; border-radius: 50%; margin-right: 12px; flex: 0 0 auto; border: 2px solid #1f1611; }
         .dk-note { margin-top: 18px; font-size: 24px; color: #d6c7b8; }
